@@ -1,0 +1,35 @@
+{
+  "name": "skillzix",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Skill 管理工具 — 跨 Claude Code / Codex / Cursor / Trae 的 skill 浏览、安装与管理",
+  "main": "dist-electron/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.node.json && tsc -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "rebuild": "electron-rebuild -f -w better-sqlite3"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "better-sqlite3": "^11.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tar": "^7.4.3"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
+    "@types/adm-zip": "^0.5.5",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^20.16.5",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^31.4.0",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.6",
+    "vite-plugin-electron": "^0.28.8",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  }
+}
