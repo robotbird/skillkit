@@ -198,6 +198,12 @@ html, body, #root {
   border-color: rgba(255, 200, 140, 0.16);
   transform: translateY(-1px);
 }
+/* 卡片本身的 backdrop-filter 会建立独立 stacking context，
+   导致弹出的 kebab 菜单被后绘制的兄弟卡片遮住。
+   当菜单打开时把整张卡抬到上层，覆盖该问题。 */
+.skill:has(.kebab.is-open) {
+  z-index: 40;
+}
 
 /* === grid 模式：竖向、极简，只显示 icon / 名称 / 描述 / 三点菜单 === */
 .skill.is-grid {
