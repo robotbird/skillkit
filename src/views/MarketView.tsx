@@ -124,7 +124,7 @@ export default function MarketView({
     <section>
       <div className="view-head">
         <div>
-          <h1 className="view-title">Skill 市场</h1>
+          <h1 className="view-title">推荐 Skill</h1>
           <p className="view-sub">来自 skills.sh · 共 <strong>{total}</strong> 个</p>
         </div>
         <div className="view-tools">

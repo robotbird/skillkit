@@ -2,7 +2,7 @@ export type TabKey = 'my' | 'market' | 'install';
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: 'my', label: '我的 Skill' },
-  { key: 'market', label: 'Skill 市场' },
+  { key: 'market', label: '推荐 Skill' },
   { key: 'install', label: '安装 Skill' },
 ];
 
