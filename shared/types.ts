@@ -63,6 +63,36 @@ export interface InstalledFilter {
   q?: string;
 }
 
+// ===== 分享 =====
+export interface ShareMeta {
+  id: string;
+  name: string;
+  description: string | null;
+  sourceTool: Tool;
+  sizeBytes: number;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface ShareCreateResult {
+  id: string;
+  url: string;
+  expiresAt: number;
+}
+
+export interface ShareSourceInfo {
+  meta: ShareMeta;
+  exists: boolean; // false 表示已过期 / 不存在
+}
+
+// 分享服务的基地址。本地测试用 127.0.0.1；上云时改这里（或读 env）
+export const SHARE_BASE_URL =
+  (typeof process !== 'undefined' && process.env?.SKILLZIX_SHARE_BASE_URL) ||
+  'http://127.0.0.1:8787';
+
+export const SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const SHARE_MAX_BYTES = 20 * 1024 * 1024;
+
 // preload 暴露在 window.skillzix 上的类型
 export interface SkillzixApi {
   scanAll(): Promise<InstalledSkill[]>;
@@ -77,6 +107,10 @@ export interface SkillzixApi {
   installFromMarket(slug: string, targets: Tool[]): Promise<InstallResult[]>;
   installFromGithub(url: string, targets: Tool[]): Promise<InstallResult[]>;
   pickAndInstallZip(targets: Tool[]): Promise<InstallResult[] | null>;
+
+  shareSkill(tool: Tool, name: string): Promise<ShareCreateResult>;
+  inspectShare(input: string): Promise<ShareSourceInfo>;
+  installFromShare(input: string, targets: Tool[]): Promise<InstallResult[]>;
 }
 
 declare global {

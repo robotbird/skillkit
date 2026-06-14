@@ -7,13 +7,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "tsx server/src/index.ts",
+    "dev:all": "concurrently -k -n app,server -c yellow,cyan \"npm run dev\" \"npm run server\"",
     "build": "tsc -p tsconfig.node.json && tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
     "rebuild": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
+    "@hono/node-server": "^1.13.7",
     "adm-zip": "^0.5.16",
     "better-sqlite3": "^11.3.0",
+    "hono": "^4.6.13",
+    "nanoid": "^5.0.9",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tar": "^7.4.3"
@@ -26,7 +31,9 @@
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^9.1.0",
     "electron": "^31.4.0",
+    "tsx": "^4.19.2",
     "typescript": "^5.5.4",
     "vite": "^5.4.6",
     "vite-plugin-electron": "^0.28.8",

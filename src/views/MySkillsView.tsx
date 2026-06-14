@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ALL_TOOLS, TOOL_LABELS, type InstalledSkill, type Tool } from '@shared/types';
 import SkillCard from '../components/SkillCard';
+import ShareDialog from '../components/ShareDialog';
 import type { ToastState } from '../components/Toast';
 import claudeIcon from '../assets/agents/claude-code.svg';
 import codexIcon from '../assets/agents/codex.svg';
@@ -28,6 +29,7 @@ export default function MySkillsView({
   const [tool, setTool] = useState<Tool | 'all'>('all');
   const [mode, setMode] = useState<ViewMode>('grid');
   const [scanning, setScanning] = useState(false);
+  const [shareSkill, setShareSkill] = useState<InstalledSkill | null>(null);
 
   async function refresh() {
     setScanning(true);
@@ -154,10 +156,17 @@ export default function MySkillsView({
               mode={mode}
               onUninstall={handleUninstall}
               onReveal={(p) => window.skillzix.revealInFinder(p)}
+              onShare={setShareSkill}
             />
           ))
         )}
       </div>
+
+      <ShareDialog
+        open={!!shareSkill}
+        skill={shareSkill}
+        onClose={() => setShareSkill(null)}
+      />
     </section>
   );
 }

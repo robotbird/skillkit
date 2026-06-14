@@ -19,6 +19,7 @@ interface Props {
   mode: 'grid' | 'list';
   onUninstall?: (tool: Tool, name: string) => void;
   onReveal?: (path: string) => void;
+  onShare?: (skill: InstalledSkill) => void;
 }
 
 function emojiFor(name: string): string {
@@ -55,10 +56,12 @@ function KebabMenu({
   canUninstall,
   onReveal,
   onUninstall,
+  onShare,
 }: {
   canUninstall: boolean;
   onReveal: () => void;
   onUninstall: () => void;
+  onShare?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -111,6 +114,23 @@ function KebabMenu({
             </svg>
             打开目录
           </button>
+          {onShare && (
+            <button
+              className="kebab-item"
+              onClick={() => {
+                setOpen(false);
+                onShare();
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M14 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1.9-5.5 4.2-10.9 11-11z"
+                />
+              </svg>
+              分享
+            </button>
+          )}
           <button
             className="kebab-item danger"
             disabled={!canUninstall}
@@ -133,9 +153,10 @@ function KebabMenu({
   );
 }
 
-export default function SkillCard({ skill, mode, onUninstall, onReveal }: Props) {
+export default function SkillCard({ skill, mode, onUninstall, onReveal, onShare }: Props) {
   const reveal = () => onReveal?.(skill.path);
   const uninstall = () => onUninstall?.(skill.tool, skill.name);
+  const share = onShare ? () => onShare(skill) : undefined;
   const canUninstall = !skill.isBuiltin;
 
   if (mode === 'grid') {
@@ -150,7 +171,7 @@ export default function SkillCard({ skill, mode, onUninstall, onReveal }: Props)
             >
               <img src={TOOL_ICON[skill.tool]} alt={TOOL_LABELS[skill.tool]} draggable={false} />
             </span>
-            <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} />
+            <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} onShare={share} />
           </div>
         </header>
         <div className="skill-name" title={skill.name}>
@@ -203,7 +224,7 @@ export default function SkillCard({ skill, mode, onUninstall, onReveal }: Props)
         </div>
       </div>
       <div className="skill-actions">
-        <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} />
+        <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} onShare={share} />
       </div>
     </article>
   );

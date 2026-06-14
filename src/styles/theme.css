@@ -697,3 +697,52 @@ html, body, #root {
 }
 
 ::selection { background: rgba(255, 177, 74, 0.3); }
+
+/* 分享对话框 */
+.share-modal {
+  width: 420px;
+}
+
+.share-error {
+  padding: 10px 14px;
+  background: rgba(255, 106, 90, 0.1);
+  border: 1px solid rgba(255, 106, 90, 0.35);
+  border-radius: 10px;
+  color: #ffb1a5;
+  font-size: 12.5px;
+  margin-bottom: 12px;
+}
+
+.share-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(20, 14, 10, 0.6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-input);
+}
+
+.share-link code {
+  flex: 1;
+  font-family: "SF Mono", Monaco, Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--ink);
+  word-break: break-all;
+  background: transparent;
+  padding: 0;
+}
+
+.muted-hint {
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+.muted-hint code {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: "SF Mono", Monaco, Consolas, monospace;
+  font-size: 11px;
+}

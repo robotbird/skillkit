@@ -6,3 +6,5 @@ out/
 *.log
 *.local
 .cache/
+server/data/*
+!server/data/README.md

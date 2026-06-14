@@ -39,6 +39,8 @@ export default function InstallView({
   const [ghUrl, setGhUrl] = useState('');
   const [ghBusy, setGhBusy] = useState(false);
   const [zipBusy, setZipBusy] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
+  const [shareBusy, setShareBusy] = useState(false);
   const [drag, setDrag] = useState(false);
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [hint, setHint] = useState<{ msg: string; error?: boolean }>({ msg: '支持 https / git@ / shorthand owner/repo / tree URL' });
@@ -102,6 +104,33 @@ export default function InstallView({
     }
   }
 
+  async function installFromShare() {
+    const url = shareUrl.trim();
+    if (!url) {
+      toast.show('请输入分享链接', 'error');
+      return;
+    }
+    if (!targets.length) {
+      toast.show('至少选择一个安装目标', 'error');
+      return;
+    }
+    setShareBusy(true);
+    try {
+      const results = await window.skillzix.installFromShare(url, targets);
+      const okAny = results.some((r) => r.ok);
+      toast.show(summarize(results), okAny ? 'info' : 'error', 4000);
+      if (okAny) {
+        pushRecent(results.find((r) => r.ok)?.path?.split('/').pop() ?? '分享链接', url);
+        setShareUrl('');
+        onInstalled();
+      }
+    } catch (e: any) {
+      toast.show(`安装失败：${e?.message ?? e}`, 'error');
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
   return (
     <section>
       <div className="view-head">
@@ -147,6 +176,28 @@ export default function InstallView({
             </button>
           </div>
           <div className={`install-hint${hint.error ? ' error' : ''}`}>{hint.msg}</div>
+        </article>
+
+        <article className="install-card">
+          <div className="install-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22">
+              <path fill="currentColor" d="M14 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1.9-5.5 4.2-10.9 11-11z"/>
+            </svg>
+          </div>
+          <h2 className="install-title">从分享链接安装</h2>
+          <p className="install-desc">粘贴其他用户分享的短链或完整 URL，即可安装 skill。</p>
+          <div className="install-input">
+            <input
+              placeholder="http://.../share/xxxxxx  或  短链 ID"
+              value={shareUrl}
+              onChange={(e) => setShareUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') installFromShare(); }}
+            />
+            <button className="btn-primary" onClick={installFromShare} disabled={shareBusy}>
+              {shareBusy ? <><span className="spinner" /> 安装中</> : '安装'}
+            </button>
+          </div>
+          <div className="install-hint">链接 7 天内有效，过期后无法安装</div>
         </article>
 
         <article className="install-card">

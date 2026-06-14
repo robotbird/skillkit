@@ -3,6 +3,7 @@ import { scanAll, listInstalled } from './scan.js';
 import { TOOLS } from './tools.js';
 import { refreshMarket, listMarketSkills, fetchMarketDetail } from './market.js';
 import { installFromMarket, installFromGithub, installFromZip, uninstall } from './installer.js';
+import { shareSkill, inspectShare, installFromShare } from './share.js';
 import type { Tool, InstalledFilter, MarketListQuery } from '../shared/types.js';
 
 export function registerIpc() {
@@ -45,6 +46,17 @@ export function registerIpc() {
     });
     if (result.canceled || !result.filePaths.length) return null;
     const r = await installFromZip(result.filePaths[0], targets);
+    scanAll();
+    return r;
+  });
+
+  // 分享
+  ipcMain.handle('share:create', async (_e, tool: Tool, name: string) =>
+    shareSkill(tool, name),
+  );
+  ipcMain.handle('share:inspect', async (_e, input: string) => inspectShare(input));
+  ipcMain.handle('share:installFromShare', async (_e, input: string, targets: Tool[]) => {
+    const r = await installFromShare(input, targets);
     scanAll();
     return r;
   });
