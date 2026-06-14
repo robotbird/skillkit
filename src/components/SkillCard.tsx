@@ -20,6 +20,7 @@ interface Props {
   onUninstall?: (tool: Tool, name: string) => void;
   onReveal?: (path: string) => void;
   onShare?: (skill: InstalledSkill) => void;
+  onCopyTo?: (skill: InstalledSkill) => void;
 }
 
 function emojiFor(name: string): string {
@@ -57,11 +58,13 @@ function KebabMenu({
   onReveal,
   onUninstall,
   onShare,
+  onCopyTo,
 }: {
   canUninstall: boolean;
   onReveal: () => void;
   onUninstall: () => void;
   onShare?: () => void;
+  onCopyTo?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -84,7 +87,7 @@ function KebabMenu({
   }, [open]);
 
   return (
-    <div className="kebab" ref={wrapRef}>
+    <div className={`kebab${open ? ' is-open' : ''}`} ref={wrapRef}>
       <button
         className="icon-btn"
         title="更多操作"
@@ -131,6 +134,23 @@ function KebabMenu({
               分享
             </button>
           )}
+          {onCopyTo && (
+            <button
+              className="kebab-item"
+              onClick={() => {
+                setOpen(false);
+                onCopyTo();
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M16 1H4a2 2 0 00-2 2v14h2V3h12V1zm3 4H8a2 2 0 00-2 2v14a2 2 0 002 2h11a2 2 0 002-2V7a2 2 0 00-2-2zm0 16H8V7h11v14z"
+                />
+              </svg>
+              复制到其他工具
+            </button>
+          )}
           <button
             className="kebab-item danger"
             disabled={!canUninstall}
@@ -153,10 +173,11 @@ function KebabMenu({
   );
 }
 
-export default function SkillCard({ skill, mode, onUninstall, onReveal, onShare }: Props) {
+export default function SkillCard({ skill, mode, onUninstall, onReveal, onShare, onCopyTo }: Props) {
   const reveal = () => onReveal?.(skill.path);
   const uninstall = () => onUninstall?.(skill.tool, skill.name);
   const share = onShare ? () => onShare(skill) : undefined;
+  const copyTo = onCopyTo ? () => onCopyTo(skill) : undefined;
   const canUninstall = !skill.isBuiltin;
 
   if (mode === 'grid') {
@@ -171,7 +192,7 @@ export default function SkillCard({ skill, mode, onUninstall, onReveal, onShare 
             >
               <img src={TOOL_ICON[skill.tool]} alt={TOOL_LABELS[skill.tool]} draggable={false} />
             </span>
-            <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} onShare={share} />
+            <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} onShare={share} onCopyTo={copyTo} />
           </div>
         </header>
         <div className="skill-name" title={skill.name}>
@@ -224,7 +245,7 @@ export default function SkillCard({ skill, mode, onUninstall, onReveal, onShare 
         </div>
       </div>
       <div className="skill-actions">
-        <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} onShare={share} />
+        <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} onShare={share} onCopyTo={copyTo} />
       </div>
     </article>
   );

@@ -99,6 +99,7 @@ export interface SkillzixApi {
   listInstalled(filter?: InstalledFilter): Promise<InstalledSkill[]>;
   uninstallSkill(tool: Tool, name: string): Promise<void>;
   revealInFinder(absPath: string): Promise<void>;
+  copyToTools(sourceTool: Tool, name: string, targets: Tool[]): Promise<InstallResult[]>;
 
   marketRefresh(force?: boolean): Promise<MarketRefreshResult>;
   marketList(query?: MarketListQuery): Promise<MarketListResult>;

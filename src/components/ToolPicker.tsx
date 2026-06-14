@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ALL_TOOLS, TOOL_LABELS, type Tool } from '@shared/types';
 import claudeIcon from '../assets/agents/claude-code.svg';
 import codexIcon from '../assets/agents/codex.svg';
@@ -17,7 +17,10 @@ interface Props {
   title?: string;
   subtitle?: string;
   defaultSelected?: Tool[];
+  excludeTools?: Tool[];
   busy?: boolean;
+  confirmLabel?: string;
+  busyLabel?: string;
   onCancel: () => void;
   onConfirm: (targets: Tool[]) => void;
 }
@@ -27,11 +30,29 @@ export default function ToolPicker({
   title = '安装到哪些工具？',
   subtitle = '至少选择一个工具，已选中的工具会各自得到一份 skill 副本。',
   defaultSelected = ['claude'],
+  excludeTools,
   busy,
+  confirmLabel = '确认安装',
+  busyLabel = '安装中',
   onCancel,
   onConfirm,
 }: Props) {
-  const [picked, setPicked] = useState<Tool[]>(defaultSelected);
+  const visibleTools = useMemo(
+    () => ALL_TOOLS.filter((t) => !excludeTools?.includes(t)),
+    [excludeTools],
+  );
+  const initial = useMemo(
+    () => defaultSelected.filter((t) => !excludeTools?.includes(t)),
+    [defaultSelected, excludeTools],
+  );
+  const [picked, setPicked] = useState<Tool[]>(initial);
+
+  // 打开 / 切换源工具时重置已选项
+  const excludeKey = (excludeTools ?? []).join(',');
+  useEffect(() => {
+    if (open) setPicked(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, excludeKey]);
 
   if (!open) return null;
 
@@ -50,7 +71,7 @@ export default function ToolPicker({
         <h3>{title}</h3>
         <p className="modal-sub">{subtitle}</p>
         <div className="opts">
-          {ALL_TOOLS.map((t) => (
+          {visibleTools.map((t) => (
             <label key={t} className={picked.includes(t) ? 'checked' : ''}>
               <input
                 type="checkbox"
@@ -72,7 +93,7 @@ export default function ToolPicker({
             onClick={() => onConfirm(picked)}
             disabled={busy || picked.length === 0}
           >
-            {busy ? <><span className="spinner" /> 安装中</> : '确认安装'}
+            {busy ? <><span className="spinner" /> {busyLabel}</> : confirmLabel}
           </button>
         </div>
       </div>

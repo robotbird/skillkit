@@ -261,6 +261,29 @@ export async function installFromZip(
   }
 }
 
+/** 把已安装的 skill 复制到其他工具：源是某个 tool 的 roots/<name>/，目标是其他 tool 的 installRoot/<name>/ */
+export function copyInstalledToTools(
+  sourceTool: Tool,
+  name: string,
+  targets: Tool[],
+): InstallResult[] {
+  const cfg = TOOLS[sourceTool];
+  let srcDir: string | null = null;
+  for (const root of cfg.roots) {
+    const candidate = path.join(root, name);
+    if (fs.existsSync(candidate) && readSkillMd(candidate)) {
+      srcDir = candidate;
+      break;
+    }
+  }
+  if (!srcDir) {
+    return targets.map((t) => ({ tool: t, ok: false, error: `未找到源 skill：${name}` }));
+  }
+  return targets
+    .filter((t) => t !== sourceTool)
+    .map((t) => installSourceToTool(srcDir!, t, `copy:${sourceTool}/${name}`));
+}
+
 /** 卸载：删除目录 */
 export function uninstall(tool: Tool, name: string): void {
   const cfg = TOOLS[tool];

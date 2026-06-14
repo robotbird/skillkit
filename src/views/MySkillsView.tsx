@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ALL_TOOLS, TOOL_LABELS, type InstalledSkill, type Tool } from '@shared/types';
 import SkillCard from '../components/SkillCard';
 import ShareDialog from '../components/ShareDialog';
+import ToolPicker from '../components/ToolPicker';
 import type { ToastState } from '../components/Toast';
 import claudeIcon from '../assets/agents/claude-code.svg';
 import codexIcon from '../assets/agents/codex.svg';
@@ -30,6 +31,8 @@ export default function MySkillsView({
   const [mode, setMode] = useState<ViewMode>('grid');
   const [scanning, setScanning] = useState(false);
   const [shareSkill, setShareSkill] = useState<InstalledSkill | null>(null);
+  const [copySkill, setCopySkill] = useState<InstalledSkill | null>(null);
+  const [copying, setCopying] = useState(false);
 
   async function refresh() {
     setScanning(true);
@@ -75,6 +78,32 @@ export default function MySkillsView({
       onChanged();
     } catch (e: any) {
       toast.show(`卸载失败：${e?.message ?? e}`, 'error');
+    }
+  }
+
+  async function handleCopy(targets: Tool[]) {
+    if (!copySkill) return;
+    setCopying(true);
+    try {
+      const results = await window.skillzix.copyToTools(copySkill.tool, copySkill.name, targets);
+      const ok = results.filter((r) => r.ok).map((r) => TOOL_LABELS[r.tool]);
+      const fail = results.filter((r) => !r.ok);
+      if (ok.length && !fail.length) {
+        toast.show(`已复制到：${ok.join('、')}`);
+      } else if (fail.length) {
+        const okPart = ok.length ? `已复制到：${ok.join('、')}` : '';
+        const failPart = fail
+          .map((r) => `${TOOL_LABELS[r.tool]}（${r.error ?? '失败'}）`)
+          .join('；');
+        toast.show([okPart, failPart].filter(Boolean).join('；'), 'error', 4000);
+      }
+      await refresh();
+      onChanged();
+      setCopySkill(null);
+    } catch (e: any) {
+      toast.show(`复制失败：${e?.message ?? e}`, 'error');
+    } finally {
+      setCopying(false);
     }
   }
 
@@ -157,6 +186,7 @@ export default function MySkillsView({
               onUninstall={handleUninstall}
               onReveal={(p) => window.skillzix.revealInFinder(p)}
               onShare={setShareSkill}
+              onCopyTo={setCopySkill}
             />
           ))
         )}
@@ -166,6 +196,27 @@ export default function MySkillsView({
         open={!!shareSkill}
         skill={shareSkill}
         onClose={() => setShareSkill(null)}
+      />
+
+      <ToolPicker
+        open={!!copySkill}
+        title={copySkill ? `复制 ${copySkill.name} 到其他工具` : '复制到其他工具'}
+        subtitle={
+          copySkill
+            ? `从 ${TOOL_LABELS[copySkill.tool]} 复制到选中的工具，目标位置已存在的同名 skill 会被覆盖（先备份再回滚）。`
+            : ''
+        }
+        defaultSelected={
+          copySkill
+            ? (ALL_TOOLS.filter((t) => t !== copySkill.tool).slice(0, 1) as Tool[])
+            : []
+        }
+        excludeTools={copySkill ? [copySkill.tool] : []}
+        busy={copying}
+        confirmLabel="确认复制"
+        busyLabel="复制中"
+        onCancel={() => !copying && setCopySkill(null)}
+        onConfirm={handleCopy}
       />
     </section>
   );

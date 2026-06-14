@@ -2,7 +2,13 @@ import { ipcMain, dialog, shell } from 'electron';
 import { scanAll, listInstalled } from './scan.js';
 import { TOOLS } from './tools.js';
 import { refreshMarket, listMarketSkills, fetchMarketDetail } from './market.js';
-import { installFromMarket, installFromGithub, installFromZip, uninstall } from './installer.js';
+import {
+  installFromMarket,
+  installFromGithub,
+  installFromZip,
+  uninstall,
+  copyInstalledToTools,
+} from './installer.js';
 import { shareSkill, inspectShare, installFromShare } from './share.js';
 import type { Tool, InstalledFilter, MarketListQuery } from '../shared/types.js';
 
@@ -21,6 +27,15 @@ export function registerIpc() {
   ipcMain.handle('installed:reveal', async (_e, p: string) => {
     shell.showItemInFolder(p);
   });
+
+  ipcMain.handle(
+    'installed:copyToTools',
+    async (_e, sourceTool: Tool, name: string, targets: Tool[]) => {
+      const r = copyInstalledToTools(sourceTool, name, targets);
+      scanAll();
+      return r;
+    },
+  );
 
   ipcMain.handle('market:refresh', async (_e, force?: boolean) => refreshMarket(!!force));
   ipcMain.handle('market:list', async (_e, q: MarketListQuery | undefined) =>

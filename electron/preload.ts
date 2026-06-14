@@ -12,6 +12,8 @@ const api: SkillzixApi = {
   uninstallSkill: (tool: Tool, name: string) =>
     ipcRenderer.invoke('installed:uninstall', tool, name),
   revealInFinder: (p: string) => ipcRenderer.invoke('installed:reveal', p),
+  copyToTools: (sourceTool: Tool, name: string, targets: Tool[]) =>
+    ipcRenderer.invoke('installed:copyToTools', sourceTool, name, targets),
 
   marketRefresh: (force?: boolean) => ipcRenderer.invoke('market:refresh', !!force),
   marketList: (q?: MarketListQuery) => ipcRenderer.invoke('market:list', q),
