@@ -2,6 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { ALL_TOOLS, TOOL_LABELS, type InstalledSkill, type Tool } from '@shared/types';
 import SkillCard from '../components/SkillCard';
 import type { ToastState } from '../components/Toast';
+import claudeIcon from '../assets/agents/claude-code.svg';
+import codexIcon from '../assets/agents/codex.svg';
+import cursorIcon from '../assets/agents/cursor.svg';
+import traeIcon from '../assets/agents/trae.svg';
+
+const TOOL_ICON: Record<Tool, string> = {
+  claude: claudeIcon,
+  codex: codexIcon,
+  cursor: cursorIcon,
+  trae: traeIcon,
+};
 
 type ViewMode = 'grid' | 'list';
 
@@ -71,12 +82,15 @@ export default function MySkillsView({
         <div>
           <h1 className="view-title">我的 Skill</h1>
           <p className="view-sub">
-            共 <strong>{items?.length ?? 0}</strong> 个 ·
-            {ALL_TOOLS.map((t) => (
-              <span key={t} style={{ marginLeft: 8 }}>
-                {TOOL_LABELS[t]} {counts[t]}
-              </span>
-            ))}
+            共 <strong>{items?.length ?? 0}</strong> 个
+            <span className="tool-counts">
+              {ALL_TOOLS.map((t) => (
+                <span key={t} className="tool-count" title={TOOL_LABELS[t]}>
+                  <img src={TOOL_ICON[t]} alt={TOOL_LABELS[t]} draggable={false} />
+                  {counts[t]}
+                </span>
+              ))}
+            </span>
           </p>
         </div>
         <div className="view-tools">
@@ -113,14 +127,15 @@ export default function MySkillsView({
           className={`chip${tool === 'all' ? ' is-active' : ''}`}
           onClick={() => setTool('all')}
         >
-          全部
+          全部（{items?.length ?? 0}）
         </button>
         {ALL_TOOLS.map((t) => (
           <button
             key={t}
-            className={`chip${tool === t ? ' is-active' : ''}`}
+            className={`chip chip-tool${tool === t ? ' is-active' : ''}`}
             onClick={() => setTool(t)}
           >
+            <img className="chip-ico" src={TOOL_ICON[t]} alt="" draggable={false} />
             {TOOL_LABELS[t]}（{counts[t]}）
           </button>
         ))}

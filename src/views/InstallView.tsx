@@ -1,6 +1,17 @@
 import { useState } from 'react';
 import { ALL_TOOLS, TOOL_LABELS, type Tool, type InstallResult } from '@shared/types';
 import type { ToastState } from '../components/Toast';
+import claudeIcon from '../assets/agents/claude-code.svg';
+import codexIcon from '../assets/agents/codex.svg';
+import cursorIcon from '../assets/agents/cursor.svg';
+import traeIcon from '../assets/agents/trae.svg';
+
+const TOOL_ICON: Record<Tool, string> = {
+  claude: claudeIcon,
+  codex: codexIcon,
+  cursor: cursorIcon,
+  trae: traeIcon,
+};
 
 interface RecentItem {
   name: string;
@@ -109,6 +120,7 @@ export default function InstallView({
               checked={targets.includes(t)}
               onChange={() => toggle(t)}
             />
+            <img className="opt-ico" src={TOOL_ICON[t]} alt="" draggable={false} />
             {TOOL_LABELS[t]}
           </label>
         ))}

@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Tool, InstalledSkill } from '@shared/types';
+import { TOOL_LABELS } from '@shared/types';
 import ToolBadge from './ToolBadge';
+import claudeIcon from '../assets/agents/claude-code.svg';
+import codexIcon from '../assets/agents/codex.svg';
+import cursorIcon from '../assets/agents/cursor.svg';
+import traeIcon from '../assets/agents/trae.svg';
+
+const TOOL_ICON: Record<Tool, string> = {
+  claude: claudeIcon,
+  codex: codexIcon,
+  cursor: cursorIcon,
+  trae: traeIcon,
+};
 
 interface Props {
   skill: InstalledSkill;
@@ -131,7 +143,15 @@ export default function SkillCard({ skill, mode, onUninstall, onReveal }: Props)
       <article className="skill is-grid">
         <header className="skill-grid-head">
           <div className="skill-ico">{emojiFor(skill.name)}</div>
-          <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} />
+          <div className="skill-grid-head-right">
+            <span
+              className="tool-badge-mini"
+              title={TOOL_LABELS[skill.tool] + (skill.isBuiltin ? ' · 内置' : '')}
+            >
+              <img src={TOOL_ICON[skill.tool]} alt={TOOL_LABELS[skill.tool]} draggable={false} />
+            </span>
+            <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} />
+          </div>
         </header>
         <div className="skill-name" title={skill.name}>
           {skill.name}

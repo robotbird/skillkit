@@ -211,6 +211,11 @@ html, body, #root {
   align-items: center;
   justify-content: space-between;
 }
+.skill-grid-head-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .skill.is-grid .skill-name {
   font-weight: 600;
   font-size: 14.5px;
@@ -343,19 +348,40 @@ html, body, #root {
 .tool-badge {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 11px;
-  padding: 3px 9px;
+  padding: 3px 9px 3px 4px;
   border-radius: 999px;
   border: 1px solid var(--line);
   color: var(--ink-soft);
   background: rgba(0, 0, 0, 0.18);
+  line-height: 1;
 }
-.tool-badge .dot {
-  width: 6px; height: 6px; border-radius: 999px; background: var(--accent);
+.tool-badge-ico {
+  display: block;
+  width: 16px; height: 16px;
+  border-radius: 4px;
+  object-fit: contain;
+  background: #000;
+  flex: 0 0 auto;
 }
-.tool-badge.tool-claude .dot { background: #ff8a3d; }
-.tool-badge.tool-cursor .dot { background: #c9b3ff; }
-.tool-badge.tool-codex .dot { background: #6cd4a3; }
-.tool-badge.tool-trae .dot { background: #6ec6ff; }
+.tool-badge.size-md { font-size: 12px; padding: 4px 12px 4px 5px; }
+.tool-badge.size-md .tool-badge-ico { width: 20px; height: 20px; border-radius: 5px; }
+
+/* 仅图标 mini badge — 给 grid 卡片右上角用 */
+.tool-badge-mini {
+  display: inline-flex;
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  background: #000;
+  border: 1px solid var(--line);
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.tool-badge-mini img {
+  display: block;
+  width: 18px; height: 18px;
+  border-radius: 4px;
+}
 
 /* 通用按钮 */
 .btn-primary {
@@ -437,6 +463,44 @@ html, body, #root {
   color: var(--pill-active-ink);
   border-color: transparent;
   font-weight: 600;
+}
+.chip-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px 5px 5px;
+}
+.chip-ico {
+  display: block;
+  width: 20px; height: 20px;
+  border-radius: 5px;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  flex: 0 0 auto;
+}
+.chip-tool.is-active .chip-ico {
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+/* 顶部计数 */
+.tool-counts {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: 14px;
+  vertical-align: middle;
+}
+.tool-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+.tool-count img {
+  width: 14px; height: 14px;
+  border-radius: 4px;
+  background: #000;
 }
 
 .tag-installed {
@@ -562,6 +626,14 @@ html, body, #root {
   border-color: rgba(255, 177, 74, 0.45);
 }
 .modal .opts input { accent-color: var(--accent); }
+.opt-ico {
+  display: block;
+  width: 18px; height: 18px;
+  border-radius: 5px;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  flex: 0 0 auto;
+}
 
 /* recent / 最近安装 */
 .recent {
