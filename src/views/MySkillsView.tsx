@@ -112,17 +112,6 @@ export default function MySkillsView({
       <div className="view-head">
         <div>
           <h1 className="view-title">我的 Skill</h1>
-          <p className="view-sub">
-            共 <strong>{items?.length ?? 0}</strong> 个
-            <span className="tool-counts">
-              {ALL_TOOLS.map((t) => (
-                <span key={t} className="tool-count" title={TOOL_LABELS[t]}>
-                  <img src={TOOL_ICON[t]} alt={TOOL_LABELS[t]} draggable={false} />
-                  {counts[t]}
-                </span>
-              ))}
-            </span>
-          </p>
         </div>
         <div className="view-tools">
           <label className="search">
