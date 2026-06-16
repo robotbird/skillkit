@@ -78,7 +78,7 @@ async function fetchWithRetry(url: string, retries = 3): Promise<string | null> 
   for (let i = 0; i < retries; i++) {
     try {
       const res = await fetch(url, {
-        headers: { 'user-agent': 'Skillzix/0.2' },
+        headers: { 'user-agent': 'Skillkit/0.2' },
         signal: AbortSignal.timeout(20000),
       });
       if (res.ok) return await res.text();
@@ -108,7 +108,7 @@ export async function fetchMarketDetail(slug: string): Promise<{ description: st
   }
 
   const url = `${BASE}/${slug}`;
-  const res = await fetch(url, { headers: { 'user-agent': 'Skillzix/0.2' } });
+  const res = await fetch(url, { headers: { 'user-agent': 'Skillkit/0.2' } });
   if (!res.ok) {
     return { description: null };
   }

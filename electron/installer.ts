@@ -59,11 +59,11 @@ export function parseGithubRef(input: string): RepoRef | null {
 async function fetchAndExtractTar(ref: RepoRef): Promise<string> {
   const branch = ref.branch ?? 'HEAD';
   const url = `https://codeload.github.com/${ref.owner}/${ref.repo}/tar.gz/${branch}`;
-  const res = await fetch(url, { headers: { 'user-agent': 'Skillzix/0.2' } });
+  const res = await fetch(url, { headers: { 'user-agent': 'Skillkit/0.2' } });
   if (!res.ok || !res.body) {
     throw new Error(`无法下载 ${url}（HTTP ${res.status}）`);
   }
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skillzix-'));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skillkit-'));
   // tar.x 接 stream
   await pipeline(Readable.fromWeb(res.body as any), tar.x({ cwd: tmpDir }));
   // tarball 内只有一个顶层目录 `<repo>-<sha>/`
@@ -230,7 +230,7 @@ export async function installFromZip(
   zipPath: string,
   targets: Tool[],
 ): Promise<InstallResult[]> {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skillzix-zip-'));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skillkit-zip-'));
   try {
     const zip = new AdmZip(zipPath);
     zip.extractAllTo(tmpDir, true);

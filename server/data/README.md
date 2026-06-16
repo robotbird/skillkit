@@ -1,4 +1,4 @@
-# Skillzix Share Server Data
+# Skillkit Share Server Data
 
 This directory stores shared skill packages and metadata.
 

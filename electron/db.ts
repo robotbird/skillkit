@@ -10,7 +10,8 @@ export function initDb(): Database.Database {
   if (db) return db;
   const dir = app.getPath('userData');
   fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, 'skillzix.db');
+  const file = path.join(dir, 'skillkit.db');
+  migrateLegacyDb(dir, file);
   db = new Database(file);
   db.pragma('journal_mode = WAL');
   migrate(db);
@@ -20,6 +21,34 @@ export function initDb(): Database.Database {
 export function getDb(): Database.Database {
   if (!db) return initDb();
   return db;
+}
+
+/**
+ * 一次性迁移：把旧版 skillzix 的 userData 目录里的数据库搬到新位置。
+ * Electron 的 userData 目录随 package.json#name 变化（skillzix → skillkit），
+ * 首次启动新版本时若新库不存在、旧库存在，则把旧库连同 WAL/SHM 一起拷过来。
+ * 幂等；任何失败都吞掉并清理半成品，保证不会让应用起不来（最坏情况是空库重启）。
+ */
+function migrateLegacyDb(newDir: string, newFile: string): void {
+  try {
+    if (fs.existsSync(newFile)) return; // 已迁移过 / 已有新库
+    const oldDir = path.resolve(newDir, '..', 'skillzix');
+    const oldDb = path.join(oldDir, 'skillzix.db');
+    if (!fs.existsSync(oldDb)) return; // 全新安装，无历史数据
+
+    fs.copyFileSync(oldDb, newFile);
+    const wal = oldDb + '-wal';
+    const shm = oldDb + '-shm';
+    if (fs.existsSync(wal)) fs.copyFileSync(wal, newFile + '-wal');
+    if (fs.existsSync(shm)) fs.copyFileSync(shm, newFile + '-shm');
+    console.log('[db] 已迁移旧版 skillzix.db → skillkit.db');
+  } catch (e) {
+    console.error('[db] 历史库迁移失败，将以空库启动：', e);
+    // 清理可能写了一半的文件，避免下次打开一个损坏的库
+    try { if (fs.existsSync(newFile)) fs.unlinkSync(newFile); } catch {}
+    try { if (fs.existsSync(newFile + '-wal')) fs.unlinkSync(newFile + '-wal'); } catch {}
+    try { if (fs.existsSync(newFile + '-shm')) fs.unlinkSync(newFile + '-shm'); } catch {}
+  }
 }
 
 function migrate(d: Database.Database) {

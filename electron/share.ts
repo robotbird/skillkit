@@ -131,7 +131,7 @@ export async function installFromShare(
     return targets.map((t) => ({ tool: t, ok: false, error: `下载失败（HTTP ${res.status}）` }));
 
   // 写到临时文件再交给 installFromZip
-  const tmpZip = path.join(os.tmpdir(), `skillzix-share-${id}.zip`);
+  const tmpZip = path.join(os.tmpdir(), `skillkit-share-${id}.zip`);
   try {
     await pipeline(Readable.fromWeb(res.body as any), fs.createWriteStream(tmpZip));
     return await installFromZip(tmpZip, targets);

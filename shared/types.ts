@@ -87,14 +87,15 @@ export interface ShareSourceInfo {
 
 // 分享服务的基地址。本地测试用 127.0.0.1；上云时改这里（或读 env）
 export const SHARE_BASE_URL =
-  (typeof process !== 'undefined' && process.env?.SKILLZIX_SHARE_BASE_URL) ||
+  (typeof process !== 'undefined' &&
+    (process.env?.SKILLKIT_SHARE_BASE_URL || process.env?.SKILLZIX_SHARE_BASE_URL)) ||
   'http://127.0.0.1:8787';
 
 export const SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const SHARE_MAX_BYTES = 20 * 1024 * 1024;
 
-// preload 暴露在 window.skillzix 上的类型
-export interface SkillzixApi {
+// preload 暴露在 window.skillkit 上的类型
+export interface SkillkitApi {
   scanAll(): Promise<InstalledSkill[]>;
   listInstalled(filter?: InstalledFilter): Promise<InstalledSkill[]>;
   uninstallSkill(tool: Tool, name: string): Promise<void>;
@@ -116,6 +117,6 @@ export interface SkillzixApi {
 
 declare global {
   interface Window {
-    skillzix: SkillzixApi;
+    skillkit: SkillkitApi;
   }
 }

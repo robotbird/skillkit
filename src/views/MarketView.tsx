@@ -59,7 +59,7 @@ export default function MarketView({
     (async () => {
       setRefreshing(true);
       try {
-        await window.skillzix.marketRefresh(false);
+        await window.skillkit.marketRefresh(false);
       } catch (e: any) {
         toast.show(`市场刷新失败：${e?.message ?? e}`, 'error');
       } finally {
@@ -71,7 +71,7 @@ export default function MarketView({
   // 加载分页
   useEffect(() => {
     (async () => {
-      const r = await window.skillzix.marketList({ q: debouncedQ || undefined, page, pageSize: PAGE_SIZE });
+      const r = await window.skillkit.marketList({ q: debouncedQ || undefined, page, pageSize: PAGE_SIZE });
       setItems(r.items);
       setTotal(r.total);
       // 懒加载没缓存的描述，并发 4
@@ -94,7 +94,7 @@ export default function MarketView({
   async function handleRefresh() {
     setRefreshing(true);
     try {
-      const r = await window.skillzix.marketRefresh(true);
+      const r = await window.skillkit.marketRefresh(true);
       toast.show(r.fetched ? `已更新市场（${r.count} 个 skill）` : `市场缓存仍是新鲜的（${r.count} 个）`);
     } catch (e: any) {
       toast.show(`市场刷新失败：${e?.message ?? e}`, 'error');
@@ -107,7 +107,7 @@ export default function MarketView({
     if (!picker) return;
     setInstalling(true);
     try {
-      const results = await window.skillzix.installFromMarket(picker.slug, targets);
+      const results = await window.skillkit.installFromMarket(picker.slug, targets);
       const { ok, fail } = summarizeResults(results, TOOL_LABELS);
       if (ok && !fail) toast.show(ok);
       else if (fail) toast.show([ok, fail].filter(Boolean).join('；'), 'error', 4000);
@@ -219,7 +219,7 @@ function pumpDetailQueue() {
   while (detailRunning < 4 && detailQueue.length) {
     const job = detailQueue.shift()!;
     detailRunning++;
-    window.skillzix
+    window.skillkit
       .marketDetail(job.slug)
       .then((r) => job.cb(job.slug, r.description))
       .catch(() => {})

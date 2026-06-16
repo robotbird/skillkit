@@ -28,7 +28,7 @@ export default function ShareDialog({ open, skill, onClose }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const r = await window.skillzix.shareSkill(skill.tool, skill.name);
+      const r = await window.skillkit.shareSkill(skill.tool, skill.name);
       setResult(r);
     } catch (e: any) {
       setError(e?.message ?? String(e));

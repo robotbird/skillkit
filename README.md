@@ -1,4 +1,4 @@
-# Skillzix v2
+# Skillkit v2
 
 Skill 管理工具 — 浏览 [skills.sh](https://www.skills.sh) 市场，跨工具（Claude Code / Codex / Cursor / Trae）安装与卸载 skill。
 
@@ -20,7 +20,7 @@ npm run dev       # vite + electron 一起起
 
 ## 数据存储
 
-- SQLite 数据库：`~/Library/Application Support/Skillzix/skillzix.db`
+- SQLite 数据库：`~/Library/Application Support/skillkit/skillkit.db`
 - 表：`installed_skills`、`market_skills`、`meta`
 
 ## 安装行为
@@ -34,7 +34,7 @@ npm run dev       # vite + electron 一起起
 ```
 electron/
   main.ts        BrowserWindow + IPC 注册
-  preload.ts     contextBridge 暴露 window.skillzix
+  preload.ts     contextBridge 暴露 window.skillkit
   db.ts          better-sqlite3 + 迁移
   tools.ts       四个工具的 root / installRoot 约定
   skill-md.ts    SKILL.md frontmatter 解析（无三方依赖）

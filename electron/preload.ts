@@ -1,12 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
-  SkillzixApi,
+  SkillkitApi,
   Tool,
   InstalledFilter,
   MarketListQuery,
 } from '../shared/types.js';
 
-const api: SkillzixApi = {
+const api: SkillkitApi = {
   scanAll: () => ipcRenderer.invoke('scan:all'),
   listInstalled: (filter?: InstalledFilter) => ipcRenderer.invoke('installed:list', filter),
   uninstallSkill: (tool: Tool, name: string) =>
@@ -32,4 +32,4 @@ const api: SkillzixApi = {
     ipcRenderer.invoke('share:installFromShare', input, targets),
 };
 
-contextBridge.exposeInMainWorld('skillzix', api);
+contextBridge.exposeInMainWorld('skillkit', api);

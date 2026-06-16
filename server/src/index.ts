@@ -28,7 +28,7 @@ app.use('*', cors());
 
 // ---------- 健康检查 ----------
 app.get('/', (c) =>
-  c.json({ ok: true, service: 'skillzix-share', version: '0.1.0' }),
+  c.json({ ok: true, service: 'skillkit-share', version: '0.1.0' }),
 );
 
 // ---------- 上传 ----------
@@ -156,7 +156,7 @@ app.get('/share/:id', async (c) => {
     const expIn = Math.max(0, Math.ceil((meta.expiresAt - Date.now()) / (24 * 3600 * 1000)));
     body = `
       <main>
-        <p class="kicker">SKILLZIX 分享</p>
+        <p class="kicker">SKILLKIT 分享</p>
         <h1>${esc(meta.name)}</h1>
         ${meta.description ? `<p class="desc">${esc(meta.description)}</p>` : ''}
         <ul class="meta">
@@ -166,12 +166,12 @@ app.get('/share/:id', async (c) => {
         </ul>
         <h3>如何安装</h3>
         <ol>
-          <li>打开 Skillzix 桌面应用 → <strong>安装 Skill</strong> 标签页</li>
+          <li>打开 Skillkit 桌面应用 → <strong>安装 Skill</strong> 标签页</li>
           <li>把下面这条链接粘进 <strong>"从分享链接安装"</strong> 输入框</li>
           <li>勾选要安装到的工具，点 <strong>安装</strong></li>
         </ol>
         <div class="link"><code id="u">${esc(fullUrl)}</code> <button onclick="copyLink()">复制</button></div>
-        <p class="muted">还没装？<a href="https://github.com/" target="_blank" rel="noopener">从这里下载 Skillzix</a></p>
+        <p class="muted">还没装？<a href="https://github.com/" target="_blank" rel="noopener">从这里下载 Skillkit</a></p>
       </main>
       <script>
         function copyLink() {
@@ -188,7 +188,7 @@ app.get('/share/:id', async (c) => {
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Skillzix Share — ${meta ? esc(meta.name) : id}</title>
+<title>Skillkit Share — ${meta ? esc(meta.name) : id}</title>
 <style>
   :root { color-scheme: dark; }
   html, body { margin: 0; padding: 0; min-height: 100%; background: #1a1410; color: #f3ece1;
@@ -248,7 +248,7 @@ const host = process.env.HOST || '127.0.0.1';
 serve(
   { fetch: app.fetch, port, hostname: host },
   (info) => {
-    console.log(`Skillzix share server on http://${info.address}:${info.port}`);
+    console.log(`Skillkit share server on http://${info.address}:${info.port}`);
   },
 );
 

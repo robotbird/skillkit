@@ -17,7 +17,7 @@ export default function TopBar({
     <header className="topbar">
       <div className="topbar-drag" />
       <nav className="tabs" role="tablist">
-        <span className="tabs-logo" title="Skillzix">
+        <span className="tabs-logo" title="Skillkit">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
             <path
               fill="currentColor"

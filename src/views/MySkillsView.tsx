@@ -37,7 +37,7 @@ export default function MySkillsView({
   async function refresh() {
     setScanning(true);
     try {
-      const r = await window.skillzix.scanAll();
+      const r = await window.skillkit.scanAll();
       setItems(r);
     } catch (e: any) {
       toast.show(`扫描失败：${e?.message ?? e}`, 'error');
@@ -72,7 +72,7 @@ export default function MySkillsView({
   async function handleUninstall(t: Tool, name: string) {
     if (!confirm(`确认卸载 ${name} 吗？这会删除 ${TOOL_LABELS[t]} 下的整个 skill 目录。`)) return;
     try {
-      await window.skillzix.uninstallSkill(t, name);
+      await window.skillkit.uninstallSkill(t, name);
       toast.show(`${name} 已卸载`);
       await refresh();
       onChanged();
@@ -85,7 +85,7 @@ export default function MySkillsView({
     if (!copySkill) return;
     setCopying(true);
     try {
-      const results = await window.skillzix.copyToTools(copySkill.tool, copySkill.name, targets);
+      const results = await window.skillkit.copyToTools(copySkill.tool, copySkill.name, targets);
       const ok = results.filter((r) => r.ok).map((r) => TOOL_LABELS[r.tool]);
       const fail = results.filter((r) => !r.ok);
       if (ok.length && !fail.length) {
@@ -184,7 +184,7 @@ export default function MySkillsView({
               skill={s}
               mode={mode}
               onUninstall={handleUninstall}
-              onReveal={(p) => window.skillzix.revealInFinder(p)}
+              onReveal={(p) => window.skillkit.revealInFinder(p)}
               onShare={setShareSkill}
               onCopyTo={setCopySkill}
             />

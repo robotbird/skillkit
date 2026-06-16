@@ -66,7 +66,7 @@ export default function InstallView({
     setHint({ msg: '支持 https / git@ / shorthand owner/repo / tree URL' });
     setGhBusy(true);
     try {
-      const results = await window.skillzix.installFromGithub(url, targets);
+      const results = await window.skillkit.installFromGithub(url, targets);
       const okAny = results.some((r) => r.ok);
       toast.show(summarize(results), okAny ? 'info' : 'error', 4000);
       if (okAny) {
@@ -89,7 +89,7 @@ export default function InstallView({
     }
     setZipBusy(true);
     try {
-      const r = await window.skillzix.pickAndInstallZip(targets);
+      const r = await window.skillkit.pickAndInstallZip(targets);
       if (!r) return; // 用户取消
       const okAny = r.some((x) => x.ok);
       toast.show(summarize(r), okAny ? 'info' : 'error', 4000);
@@ -116,7 +116,7 @@ export default function InstallView({
     }
     setShareBusy(true);
     try {
-      const results = await window.skillzix.installFromShare(url, targets);
+      const results = await window.skillkit.installFromShare(url, targets);
       const okAny = results.some((r) => r.ok);
       toast.show(summarize(results), okAny ? 'info' : 'error', 4000);
       if (okAny) {

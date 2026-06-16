@@ -1,5 +1,5 @@
 {
-  "name": "skillzix",
+  "name": "skillkit",
   "version": "0.2.0",
   "private": true,
   "description": "Skill 管理工具 — 跨 Claude Code / Codex / Cursor / Trae 的 skill 浏览、安装与管理",
