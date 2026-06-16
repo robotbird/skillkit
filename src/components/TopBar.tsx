@@ -1,3 +1,5 @@
+import logoMark from '../assets/logo-mark.png';
+
 export type TabKey = 'my' | 'market' | 'install';
 
 const tabs: { key: TabKey; label: string }[] = [
@@ -18,12 +20,7 @@ export default function TopBar({
       <div className="topbar-drag" />
       <nav className="tabs" role="tablist">
         <span className="tabs-logo" title="Skillkit">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <path
-              fill="currentColor"
-              d="M12 2.5l2.6 5.4 5.9.9-4.3 4.1 1 5.9L12 16l-5.2 2.8 1-5.9L3.5 8.8l5.9-.9L12 2.5z"
-            />
-          </svg>
+          <img src={logoMark} width={18} height={18} alt="" aria-hidden="true" />
         </span>
         {tabs.map((t) => (
           <button
