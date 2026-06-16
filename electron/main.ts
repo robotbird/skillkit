@@ -6,6 +6,9 @@ import { registerIpc } from './ipc.js';
 import { refreshMarket } from './market.js';
 import { scanAll } from './scan.js';
 
+// macOS 菜单栏 / Dock 等处显示的应用名（dev 模式下默认会显示 "Electron"）
+app.setName('Skillkit');
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // vite-plugin-electron 在 dev 时设置这两个变量
