@@ -3,6 +3,7 @@ dist/
 dist-electron/
 out/
 release/
+build/icon.iconset/
 .DS_Store
 *.log
 *.local
