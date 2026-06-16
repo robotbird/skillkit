@@ -12,7 +12,9 @@
     "dev:all": "concurrently -k -n app,server -c yellow,cyan \"npm run dev\" \"npm run server\"",
     "build": "tsc -p tsconfig.node.json && tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
-    "rebuild": "electron-rebuild -f -w better-sqlite3"
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
@@ -34,10 +36,33 @@
     "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^9.1.0",
     "electron": "^31.4.0",
+    "electron-builder": "^26.15.3",
     "tsx": "^4.19.2",
     "typescript": "^5.5.4",
     "vite": "^5.4.6",
     "vite-plugin-electron": "^0.28.8",
     "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "build": {
+    "appId": "com.skillkit.app",
+    "productName": "Skillkit",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    }
   }
 }
