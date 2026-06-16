@@ -61,7 +61,9 @@ export async function shareSkill(tool: Tool, name: string): Promise<ShareCreateR
     }
     throw new Error(`分享失败（HTTP ${res.status}）：${detail}`);
   }
-  return (await res.json()) as ShareCreateResult;
+  const data = (await res.json()) as ShareCreateResult;
+  // 链接以客户端使用的基地址为准（不依赖服务端/反代的 Host 头）
+  return { ...data, url: `${SHARE_BASE_URL}/share/${data.id}` };
 }
 
 /**

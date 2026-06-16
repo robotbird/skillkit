@@ -85,11 +85,11 @@ export interface ShareSourceInfo {
   exists: boolean; // false 表示已过期 / 不存在
 }
 
-// 分享服务的基地址。本地测试用 127.0.0.1；上云时改这里（或读 env）
+// 分享服务的基地址。默认指向云端；本地开发可用 SKILLKIT_SHARE_BASE_URL 覆盖（如 http://127.0.0.1:8787）
 export const SHARE_BASE_URL =
   (typeof process !== 'undefined' &&
     (process.env?.SKILLKIT_SHARE_BASE_URL || process.env?.SKILLZIX_SHARE_BASE_URL)) ||
-  'http://127.0.0.1:8787';
+  'http://skillkit.bjjxysbz.com';
 
 export const SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const SHARE_MAX_BYTES = 20 * 1024 * 1024;
