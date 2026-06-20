@@ -53,11 +53,13 @@ export async function shareSkill(tool: Tool, name: string): Promise<ShareCreateR
     );
   }
   if (!res.ok) {
+    // 只读一次 body:res.json() 失败后再 res.text() 会因 body 已被消耗而抛
+    // "Body has already been read",把真实的服务端错误盖掉。
     let detail = '';
     try {
-      detail = JSON.stringify(await res.json());
-    } catch {
       detail = await res.text();
+    } catch {
+      detail = '<响应体不可读>';
     }
     throw new Error(`分享失败（HTTP ${res.status}）：${detail}`);
   }

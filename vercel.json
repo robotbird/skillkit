@@ -5,7 +5,10 @@
   "outputDirectory": ".",
   "installCommand": "npm install --omit=dev --ignore-scripts --no-audit --no-fund",
   "functions": {
-    "api/[[...route]].ts": { "maxDuration": 60 }
+    "api/[[...route]].ts": {
+      "maxDuration": 60,
+      "includeFiles": ["server/src/**/*.ts", "shared/**/*.ts"]
+    }
   },
   "rewrites": [{ "source": "/", "destination": "/api" }],
   "crons": [{ "path": "/api/sweep", "schedule": "17 3 * * *" }]
