@@ -1,13 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "echo skip-app-build",
+  "buildCommand": "npm install --prefix /tmp/tsc-deps --no-save --ignore-scripts --no-audit --no-fund typescript@5.5.4 @types/node@20.16.5 && mkdir -p node_modules/@types && rm -rf node_modules/@types/node && ln -s /tmp/tsc-deps/node_modules/@types/node node_modules/@types/node && /tmp/tsc-deps/node_modules/.bin/tsc -p server/tsconfig.vercel.json",
   "outputDirectory": ".",
   "installCommand": "npm install --omit=dev --ignore-scripts --no-audit --no-fund",
   "functions": {
     "api/[[...route]].ts": {
       "maxDuration": 60,
-      "includeFiles": "{server/src,shared}/**/*.ts"
+      "includeFiles": "{server/src,shared}/**/*.js"
     }
   },
   "rewrites": [{ "source": "/", "destination": "/api" }],

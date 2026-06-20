@@ -10,3 +10,7 @@ build/icon.iconset/
 .cache/
 server/data/*
 !server/data/README.md
+
+# Vercel 函数构建产物:由 server/tsconfig.vercel.json 在部署时编译生成,不入库
+server/src/*.js
+shared/*.js
