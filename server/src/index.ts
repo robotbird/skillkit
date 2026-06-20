@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server';
-import { app } from './app.js';
-import { getStore } from './store.js';
+// app/store 现位于 api/lib/(与 Vercel 函数共用同一份源码,@vercel/node 只编译 /api 内 TS)。
+import { app } from '../../api/lib/app.js';
+import { getStore } from '../../api/lib/store.js';
 
 // 命令行:手动删除一个 share(node src/index.ts --delete <id>)
 if (process.argv[2] === '--delete' && process.argv[3]) {

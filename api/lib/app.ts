@@ -8,7 +8,7 @@ import {
   type ShareMeta,
   type ShareCreateResult,
   type Tool,
-} from '../../shared/types.js';
+} from './types.js';
 
 // 6 字符 base32(去掉容易混淆的 0/O/1/I/L)— 32^6 ≈ 1e9
 const newId = customAlphabet('23456789abcdefghijkmnpqrstuvwxyz', 6);
@@ -16,7 +16,7 @@ const newId = customAlphabet('23456789abcdefghijkmnpqrstuvwxyz', 6);
 const VALID_TOOLS: Tool[] = ['claude', 'codex', 'cursor', 'trae'];
 
 /**
- * 无副作用的 Hono app —— 阿里云(index.ts 的 serve)与 Vercel(api/[[...route]].ts 的 handle)共用。
+ * 无副作用的 Hono app —— 阿里云(server/src/index.ts 的 serve)与 Vercel(api/[[...route]].ts 的 handle)共用。
  * basePath('/api'):两条部署路径一致(/api/share 等),也是 Vercel catch-all 的标准前缀。
  * 存储由 getStore() 按 SHARE_STORE 懒加载选取,import 时不会触发任何 IO。
  */

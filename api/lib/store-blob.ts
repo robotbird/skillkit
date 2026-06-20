@@ -1,5 +1,5 @@
 import { head, put, get, del, list, BlobNotFoundError } from '@vercel/blob';
-import type { ShareMeta } from '../../shared/types.js';
+import type { ShareMeta } from './types.js';
 import type { ShareStore } from './store.js';
 
 /**

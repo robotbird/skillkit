@@ -2,10 +2,12 @@ import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ShareMeta } from '../../shared/types.js';
+import type { ShareMeta } from './types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.resolve(__dirname, '..', 'data');
+// 本文件位于 api/lib/,本地存储目录在 server/data/ → ../../server/data。
+// (仅 SHARE_STORE=local 即阿里云/本地使用;Vercel 走 BlobStore 不碰这里。)
+const DATA_DIR = path.resolve(__dirname, '..', '..', 'server', 'data');
 
 /**
  * 存储抽象 —— 两种实现共享同一接口:
