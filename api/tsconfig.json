@@ -11,5 +11,5 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["*.ts", "lib/**/*.ts"]
+  "include": ["**/*.ts"]
 }
