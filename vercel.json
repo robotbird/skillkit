@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": null,
+  "buildCommand": "echo skip-app-build",
   "installCommand": "npm install --omit=dev --ignore-scripts --no-audit --no-fund",
   "functions": {
     "api/[[...route]].ts": { "maxDuration": 60 }
