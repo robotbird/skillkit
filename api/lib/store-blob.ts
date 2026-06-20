@@ -35,7 +35,7 @@ export class BlobStore implements ShareStore {
   }
 
   async readMeta(id: string): Promise<ShareMeta | null> {
-    const r = await get(`${id}.json`);
+    const r = await get(`${id}.json`, { access: 'public' });
     if (!r || r.statusCode !== 200) return null;
     const text = await new Response(r.stream).text();
     try {
@@ -48,7 +48,7 @@ export class BlobStore implements ShareStore {
   async getZip(
     id: string,
   ): Promise<{ stream: ReadableStream<Uint8Array>; size: number } | null> {
-    const r = await get(`${id}.zip`);
+    const r = await get(`${id}.zip`, { access: 'public' });
     if (!r || r.statusCode !== 200) return null;
     return { stream: r.stream, size: r.blob.size };
   }
