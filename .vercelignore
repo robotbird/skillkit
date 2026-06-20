@@ -9,9 +9,9 @@ release/
 public/
 scripts/
 index.html
-vite.config.ts
-tsconfig.json
-tsconfig.node.json
+/vite.config.ts
+/tsconfig.json
+/tsconfig.node.json
 server/data/
 server/node_modules/
 *.log
