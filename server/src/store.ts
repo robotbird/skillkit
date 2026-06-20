@@ -36,7 +36,7 @@ function nodeStreamToWeb(stream: fsSync.ReadStream): ReadableStream<Uint8Array> 
   return new ReadableStream<Uint8Array>({
     start(controller) {
       stream.on('data', (chunk) =>
-        controller.enqueue(typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk),
+        controller.enqueue(typeof chunk === 'string' ? new TextEncoder().encode(chunk) : (chunk as Uint8Array)),
       );
       stream.on('end', () => controller.close());
       stream.on('error', (e) => controller.error(e));
@@ -58,7 +58,7 @@ export class LocalStore implements ShareStore {
   }
 
   async writeShare(meta: ShareMeta, zip: Buffer): Promise<void> {
-    await fs.writeFile(zipPath(meta.id), zip);
+    await fs.writeFile(zipPath(meta.id), zip as Uint8Array);
     await fs.writeFile(metaPath(meta.id), JSON.stringify(meta, null, 2), 'utf8');
   }
 
