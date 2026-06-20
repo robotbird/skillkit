@@ -3,10 +3,12 @@ import type { ShareMeta } from './types.js';
 import type { ShareStore } from './store.js';
 
 /**
- * Vercel Blob(私有)实现 —— 用于 Vercel serverless。
+ * Vercel Blob(public)实现 —— 用于 Vercel serverless。
  * 每个 share 存两个 blob:`<id>.json`(元数据)+ `<id>.zip`(压缩包)。
  * addRandomSuffix 保持 false(默认),pathname 恰为 `<id>.*`,便于 head/del。
- * 认证走环境变量 BLOB_READ_WRITE_TOKEN(或在 Vercel 上用 OIDC),SDK 自动读取。
+ * 用 public 访问:分享内容本就通过短链公开分享,public store 即可,无需 private store。
+ * 6 字符 ID 不可猜(32^6≈1e9),枚举仍需 BLOB_READ_WRITE_TOKEN。
+ * 写/head/del/list 走环境变量 BLOB_READ_WRITE_TOKEN(或 Vercel OIDC),SDK 自动读取。
  */
 export class BlobStore implements ShareStore {
   async has(id: string): Promise<boolean> {
@@ -21,19 +23,19 @@ export class BlobStore implements ShareStore {
 
   async writeShare(meta: ShareMeta, zip: Buffer): Promise<void> {
     await put(`${meta.id}.json`, JSON.stringify(meta, null, 2), {
-      access: 'private',
+      access: 'public',
       contentType: 'application/json',
       addRandomSuffix: false,
     });
     await put(`${meta.id}.zip`, zip, {
-      access: 'private',
+      access: 'public',
       contentType: 'application/zip',
       addRandomSuffix: false,
     });
   }
 
   async readMeta(id: string): Promise<ShareMeta | null> {
-    const r = await get(`${id}.json`, { access: 'private' });
+    const r = await get(`${id}.json`);
     if (!r || r.statusCode !== 200) return null;
     const text = await new Response(r.stream).text();
     try {
@@ -46,7 +48,7 @@ export class BlobStore implements ShareStore {
   async getZip(
     id: string,
   ): Promise<{ stream: ReadableStream<Uint8Array>; size: number } | null> {
-    const r = await get(`${id}.zip`, { access: 'private' });
+    const r = await get(`${id}.zip`);
     if (!r || r.statusCode !== 200) return null;
     return { stream: r.stream, size: r.blob.size };
   }

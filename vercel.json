@@ -5,12 +5,11 @@
   "installCommand": "npm install --omit=dev --ignore-scripts --no-audit --no-fund",
   "buildCommand": "echo \"api-only deploy: skip frontend build (tsc/vite are devDeps, not installed)\"",
   "functions": {
-    "api/[[...route]].ts": {
+    "api/[...route].ts": {
       "maxDuration": 60
     }
   },
   "rewrites": [
-    { "source": "/", "destination": "/api" },
     { "source": "/share/:path*", "destination": "/api/share/:path*" }
   ],
   "crons": [{ "path": "/api/sweep", "schedule": "17 3 * * *" }]
