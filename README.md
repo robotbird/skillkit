@@ -19,7 +19,7 @@ cd server && npm install && cd ..   # server 是独立 npm 包
 npm run dev:all   # 同时起 app(vite+electron) 与分享服务(8787)
 ```
 
-仅起分享服务：`npm run server`（默认 `127.0.0.1:8787`）。客户端默认连云端，本地联调需覆盖基地址：`SKILLKIT_SHARE_BASE_URL=http://127.0.0.1:8787 npm run dev`。
+仅起分享服务：`npm run server`（默认 `0.0.0.0:8787`）。客户端默认连 `https://skillkit.net`，本地联调需覆盖基地址：`SKILLKIT_SHARE_BASE_URL=http://127.0.0.1:8787 npm run dev`。
 
 ## 三个 tab
 
@@ -40,12 +40,24 @@ npm run dev:all   # 同时起 app(vite+electron) 与分享服务(8787)
 
 ## 分享
 
-- **创建**：在「我的 Skill」对某个 skill 点分享 → 打包成 zip 上传到分享服务，返回短链（`<BASE>/share/<id>`），任何人 7 天内可安装
+- **创建**：在「我的 Skill」对某个 skill 点分享 → 打包成 zip 上传到分享服务，返回短链（`<BASE>/api/share/<id>`），任何人 7 天内可安装
 - **安装**：「安装 Skill」粘贴短链 / 完整 URL / 裸 ID 即可安装
 - **接收页**：浏览器打开链接会看到一个说明如何安装的 HTML 页面
-- 限制：单个 skill ≤ 20MB；7 天后自动清理
+- 限制：单个 skill ≤ 4MB（受 Vercel 函数请求体上限约束）；7 天后过期（过期读时即返回 410）
 
-分享服务是 `server/` 下独立的 Hono 应用（自带 `package.json` / `node_modules`），用文件存储（`server/data/<id>.json` + `<id>.zip`），每小时清理过期项。默认连云端 `skillkit.bjjxysbz.com`；本地联调用 `SKILLKIT_SHARE_BASE_URL` 指向本地服务。常量（TTL、上限、基地址）集中在 `shared/types.ts`。
+分享服务一套代码两种运行模式（靠入口文件 + 环境变量切换，不改逻辑）：
+
+- **阿里云 / 本地**：长驻进程（`server/src/index.ts` 的 `@hono/node-server` serve），本地文件存储（`server/data/`），每小时清理过期项。`npm run server` 启动，默认 `0.0.0.0:8787`。
+- **Vercel**：serverless 函数（`api/[[...route]].ts` 用 `hono/vercel` 适配同一个 `app`），存储用 Vercel Blob（私有），每日 cron 清理。push 到 GitHub 自动部署到 `skillkit.net`。
+
+存储实现由 `SHARE_STORE` 环境变量选（默认 `local`，Vercel 设 `blob`）；常量（TTL、上限、基地址）集中在 `shared/types.ts`。客户端默认连 `https://skillkit.net`，本地联调用 `SKILLKIT_SHARE_BASE_URL` 覆盖。
+
+### Vercel 部署
+
+- Vercel 项目 Root Directory 留**仓库根**（`shared/` 是 `server/` 的兄弟目录，根设为 `server/` 会丢 `shared/`，import 断裂）
+- `vercel.json`：`framework:null` 关掉 Vite/Electron 自动识别；`installCommand` 用 `--omit=dev --ignore-scripts` 跳过 Electron/better-sqlite3 的安装后脚本（编译/下载都不需要）
+- 环境变量：`SHARE_STORE=blob`、`BLOB_READ_WRITE_TOKEN`、`CRON_SECRET`（保护 `/api/sweep`）
+- `.vercelignore` 排除 `electron/`、`src/`、`build/` 等只与桌面端相关的目录
 
 ## 目录
 
@@ -61,12 +73,17 @@ electron/
   installer.ts   tarball / zip 解 + 复制到目标工具
   share.ts       打包 / 上传 / 下载分享，对接分享服务
   ipc.ts         IPC handlers
-server/          分享服务（独立 Hono 应用）
-  src/index.ts   路由：上传 / 元数据 / 下载 zip / 接收页 HTML
-  src/store.ts   文件存储 + 过期清理
-  data/          <id>.json + <id>.zip（git 忽略）
+server/          分享服务（一套代码两种运行模式）
+  src/app.ts     无副作用 Hono app（basePath /api），所有路由
+  src/index.ts   阿里云/本地入口：serve + 每小时清理 + --delete CLI
+  src/store.ts   ShareStore 接口 + getStore() 工厂 + 本地 fs 实现
+  src/store-blob.ts  Vercel Blob（私有）实现
+  data/          本地模式的 <id>.json + <id>.zip（git 忽略）
+api/[[...route]].ts  Vercel 入口：hono/vercel handle(app)
 shared/
   types.ts       跨进程共享类型（含分享常量）
+vercel.json      Vercel 部署配置（framework/installCommand/cron）
+.vercelignore    排除桌面端目录
 src/             React 渲染端
   components/    TopBar / SkillCard / ToolBadge / ToolPicker / ShareDialog / Toast
   views/         MySkillsView / MarketView / InstallView

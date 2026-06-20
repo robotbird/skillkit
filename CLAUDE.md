@@ -47,9 +47,17 @@ The project is `"type": "module"`. TypeScript files in `electron/` and `server/`
 - **`skill-md.ts`** — dependency-free YAML frontmatter parser; reads `SKILL.md` **or** `AGENTS.md`.
 - **`share.ts`** — client side of the share feature: zip an installed skill, POST to the share server, inspect/install from a share link.
 
-### Share server (`server/`)
+### Share server (`server/` + `api/`)
 
-Standalone npm package (own `package.json`, own `node_modules`). Hono app storing each share as `<id>.json` (metadata) + `<id>.zip` in `server/data/` (gitignored except README). 6-char nanoid IDs, 7-day TTL (swept hourly + on startup), 20MB cap (constants shared from `shared/types.ts`). Serves a receiver HTML page at `/share/:id` (content is HTML-escaped — keep it that way). Default `SHARE_BASE_URL` points at the cloud host; override locally with `SKILLKIT_SHARE_BASE_URL=http://127.0.0.1:8787`.
+A Hono app that runs in **two modes off one codebase**, switched by entry file + env (not runtime branching):
+
+- `server/src/app.ts` — side-effect-free Hono `app` (`.basePath('/api')`), all routes, storage via `getStore()`. Importing it must NOT trigger `serve()`/`setInterval`/CLI/`ensureDir` (the Vercel function bundles it).
+- `server/src/index.ts` — Aliyun/local entry: `@hono/node-server` `serve()` + hourly `setInterval` sweep + `--delete <id>` CLI. Default `HOST=0.0.0.0`.
+- `api/[[...route]].ts` (repo root) — Vercel entry: `export default handle(app)` via `hono/vercel`. The `[[...route]]` optional catch-all routes **all** `/api/*` to one function — **do not add a catch-all rewrite** (it would collapse nested paths and break `c.req.param('id')`).
+
+Storage is pluggable behind a `ShareStore` interface (`server/src/store.ts`), selected by `SHARE_STORE` env: `local` (filesystem in `server/data/`, default) or `blob` (`server/src/store-blob.ts`, Vercel Blob private). `getStore()` loads BlobStore via **dynamic import**, so Aliyun never needs `@vercel/blob`. The interface is fully async. 6-char nanoid IDs, 7-day TTL, **4MB cap** (constants in `shared/types.ts` — the cap exists for Vercel's 4.5MB request-body limit; Pro does not raise it). Routes live under `/api`: `/api/share` (POST), `/api/share/:id/meta` (JSON metadata — note: not `.json`; Hono's router confuses overlapping `/share/:id` and `/share/:id.json`, so meta uses a distinct `/meta` segment), `/api/share/:id/zip`, `/api/share/:id` (HTML receiver — content is HTML-escaped, keep it). Sweep: Aliyun hourly interval; Vercel daily cron hitting `/api/sweep` (guarded by `CRON_SECRET` header). Expired shares already return 410 on read, so sweep is cost-only.
+
+Vercel deploy: Root Directory = **repo root** (so the `shared/` sibling gets bundled; rooting at `server/` drops it and breaks the `../../shared/types.js` import). `vercel.json` sets `framework:null` and an `installCommand` with `--omit=dev --ignore-scripts` to skip the Electron binary download and better-sqlite3 native compile (neither is used by the function). `.vercelignore` excludes desktop-only dirs. Env: `SHARE_STORE=blob`, `BLOB_READ_WRITE_TOKEN`, `CRON_SECRET`. Client `SHARE_BASE_URL` defaults to `https://skillkit.net` (override locally with `SKILLKIT_SHARE_BASE_URL`).
 
 ### Data locations
 

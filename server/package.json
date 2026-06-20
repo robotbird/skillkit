@@ -10,11 +10,11 @@
   "dependencies": {
     "@hono/node-server": "^1.13.7",
     "hono": "^4.6.13",
-    "nanoid": "^5.0.9"
+    "nanoid": "^5.0.9",
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
     "@types/node": "^20.16.5",
-    "tsx": "^4.19.2",
     "typescript": "^5.5.4"
   }
 }

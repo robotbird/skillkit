@@ -42,7 +42,7 @@ export async function shareSkill(tool: Tool, name: string): Promise<ShareCreateR
 
   let res: Response;
   try {
-    res = await fetch(`${SHARE_BASE_URL}/share`, {
+    res = await fetch(`${SHARE_BASE_URL}/api/share`, {
       method: 'POST',
       body: form,
       signal: AbortSignal.timeout(60000),
@@ -63,7 +63,7 @@ export async function shareSkill(tool: Tool, name: string): Promise<ShareCreateR
   }
   const data = (await res.json()) as ShareCreateResult;
   // 链接以客户端使用的基地址为准（不依赖服务端/反代的 Host 头）
-  return { ...data, url: `${SHARE_BASE_URL}/share/${data.id}` };
+  return { ...data, url: `${SHARE_BASE_URL}/api/share/${data.id}` };
 }
 
 /**
@@ -84,7 +84,7 @@ export async function inspectShare(input: string): Promise<ShareSourceInfo> {
   const id = parseShareId(input);
   let res: Response;
   try {
-    res = await fetch(`${SHARE_BASE_URL}/share/${id}.json`, {
+    res = await fetch(`${SHARE_BASE_URL}/api/share/${id}/meta`, {
       signal: AbortSignal.timeout(15000),
     });
   } catch (e: any) {
@@ -115,7 +115,7 @@ export async function installFromShare(
 
   let res: Response;
   try {
-    res = await fetch(`${SHARE_BASE_URL}/share/${id}/zip`, {
+    res = await fetch(`${SHARE_BASE_URL}/api/share/${id}/zip`, {
       signal: AbortSignal.timeout(60000),
     });
   } catch (e: any) {

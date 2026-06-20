@@ -89,10 +89,11 @@ export interface ShareSourceInfo {
 export const SHARE_BASE_URL =
   (typeof process !== 'undefined' &&
     (process.env?.SKILLKIT_SHARE_BASE_URL || process.env?.SKILLZIX_SHARE_BASE_URL)) ||
-  'http://skillkit.bjjxysbz.com';
+  'https://skillkit.net';
 
 export const SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-export const SHARE_MAX_BYTES = 20 * 1024 * 1024;
+// 4MB:适配 Vercel 函数 4.5MB 请求体硬限制(阿里云本可更大,这里取两端都安全的值)
+export const SHARE_MAX_BYTES = 4 * 1024 * 1024;
 
 // preload 暴露在 window.skillkit 上的类型
 export interface SkillkitApi {

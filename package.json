@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
+    "@vercel/blob": "^2.4.1",
     "adm-zip": "^0.5.16",
     "better-sqlite3": "^11.3.0",
     "hono": "^4.6.13",

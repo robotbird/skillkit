@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": null,
+  "installCommand": "npm install --omit=dev --ignore-scripts --no-audit --no-fund",
+  "functions": {
+    "api/[[...route]].ts": { "maxDuration": 60 }
+  },
+  "rewrites": [{ "source": "/", "destination": "/api" }],
+  "crons": [{ "path": "/api/sweep", "schedule": "17 3 * * *" }]
+}

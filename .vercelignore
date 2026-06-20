@@ -1,0 +1,18 @@
+# 只部署 Vercel 函数所需:api/ + server/src/ + shared/ + 根 package.json + vercel.json
+# 排除 Electron 桌面端 / React 渲染端 / 构建产物等
+electron/
+src/
+build/
+dist/
+dist-electron/
+release/
+public/
+scripts/
+index.html
+vite.config.ts
+tsconfig.json
+tsconfig.node.json
+server/data/
+server/node_modules/
+*.log
+.DS_Store
