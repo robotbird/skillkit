@@ -64,8 +64,8 @@ async function fetchAndExtractTar(ref: RepoRef): Promise<string> {
     throw new Error(`无法下载 ${url}（HTTP ${res.status}）`);
   }
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skillkit-'));
-  // tar.x 接 stream
-  await pipeline(Readable.fromWeb(res.body as any), tar.x({ cwd: tmpDir }));
+  // tar.x 接 stream(tar 的 Unpack 与 @types/node 的 WritableStream 签名有细微出入,这里强转)
+  await pipeline(Readable.fromWeb(res.body as any), tar.x({ cwd: tmpDir }) as unknown as NodeJS.WritableStream);
   // tarball 内只有一个顶层目录 `<repo>-<sha>/`
   const top = fs.readdirSync(tmpDir).find((n) => fs.statSync(path.join(tmpDir, n)).isDirectory());
   if (!top) throw new Error('tarball 解包后未找到顶层目录');

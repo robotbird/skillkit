@@ -1,17 +1,16 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "outputDirectory": ".",
   "installCommand": "npm install --omit=dev --ignore-scripts --no-audit --no-fund",
-  "builds": [
-    {
-      "src": "server/src/index.ts",
-      "use": "@vercel/node",
-      "config": { "maxDuration": 60 }
+  "functions": {
+    "api/[[...route]].ts": {
+      "maxDuration": 60
     }
+  },
+  "rewrites": [
+    { "source": "/", "destination": "/api" },
+    { "source": "/share/:path*", "destination": "/api/share/:path*" }
   ],
-  "routes": [
-    { "src": "/(.*)", "dest": "/server/src/index.ts" }
-  ],
-  "crons": [
-    { "path": "/sweep", "schedule": "17 3 * * *" }
-  ]
+  "crons": [{ "path": "/api/sweep", "schedule": "17 3 * * *" }]
 }

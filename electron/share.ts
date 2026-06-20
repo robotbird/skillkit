@@ -42,7 +42,7 @@ export async function shareSkill(tool: Tool, name: string): Promise<ShareCreateR
 
   let res: Response;
   try {
-    res = await fetch(`${SHARE_BASE_URL}/share`, {
+    res = await fetch(`${SHARE_BASE_URL}/api/share`, {
       method: 'POST',
       body: form,
       signal: AbortSignal.timeout(60000),
@@ -86,7 +86,7 @@ export async function inspectShare(input: string): Promise<ShareSourceInfo> {
   const id = parseShareId(input);
   let res: Response;
   try {
-    res = await fetch(`${SHARE_BASE_URL}/share/${id}/meta`, {
+    res = await fetch(`${SHARE_BASE_URL}/api/share/${id}/meta`, {
       signal: AbortSignal.timeout(15000),
     });
   } catch (e: any) {
@@ -117,7 +117,7 @@ export async function installFromShare(
 
   let res: Response;
   try {
-    res = await fetch(`${SHARE_BASE_URL}/share/${id}/zip`, {
+    res = await fetch(`${SHARE_BASE_URL}/api/share/${id}/zip`, {
       signal: AbortSignal.timeout(60000),
     });
   } catch (e: any) {

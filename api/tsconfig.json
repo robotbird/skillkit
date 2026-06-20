@@ -11,5 +11,5 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["src", "../api/lib"]
+  "include": ["*.ts", "lib/**/*.ts"]
 }
