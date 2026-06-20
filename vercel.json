@@ -7,7 +7,7 @@
   "functions": {
     "api/[[...route]].ts": {
       "maxDuration": 60,
-      "includeFiles": ["server/src/**/*.ts", "shared/**/*.ts"]
+      "includeFiles": "{server/src,shared}/**/*.ts"
     }
   },
   "rewrites": [{ "source": "/", "destination": "/api" }],
