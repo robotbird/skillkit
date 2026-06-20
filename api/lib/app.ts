@@ -16,14 +16,15 @@ const newId = customAlphabet('23456789abcdefghijkmnpqrstuvwxyz', 6);
 const VALID_TOOLS: Tool[] = ['claude', 'codex', 'cursor', 'trae'];
 
 /**
- * 无副作用的 Hono app —— 阿里云(server/src/index.ts 的 serve)与 Vercel(api/[[...route]].ts
- * 的 handle(app))共用。basePath('/api'):Vercel 函数挂在 /api/[[...route]],收到的路径带
- * /api 前缀;阿里云本地 serve 同样以 /api 为根。对外公开的干净链接 /share/<id> 由
- * vercel.json 的 rewrite(/share/:path* → /api/share/:path*)映射进来,所以下面构造 URL 时
- * 仍写 /share/<id>(不带 /api)。
+ * 无副作用的 Hono app —— 阿里云(server/src/index.ts 的 serve)与 Vercel(api/* 函数文件
+ * 的 fetch 导出)共用。**不加 basePath**:所有公开路径都是 /share/*、/sweep 这种干净形式
+ * (用户要的 https://skillkit.net/share/<id>)。Vercel 函数文件物理上在 /api/(Vercel 要求),
+ * 但由 vercel.json 的 rewrite(/share/:path* → /api/share/:path*、/sweep → /api/sweep)把公开
+ * 路径映射过去;Web API 函数收到的是**原始**路径(/share/<id>),所以 app 必须按 /share/* 路由。
+ * 阿里云本地 serve 直接收 /share/*,同样匹配。
  * 存储由 getStore() 按 SHARE_STORE 懒加载选取,import 时不会触发任何 IO。
  */
-export const app = new Hono().basePath('/api');
+export const app = new Hono();
 app.use('*', cors());
 
 // ---------- 健康检查 ----------

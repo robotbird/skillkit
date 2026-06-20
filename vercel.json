@@ -5,7 +5,8 @@
   "installCommand": "npm install --omit=dev --ignore-scripts --no-audit --no-fund",
   "buildCommand": "echo \"api-only deploy: skip frontend build (tsc/vite are devDeps, not installed)\"",
   "rewrites": [
-    { "source": "/share/:path*", "destination": "/api/share/:path*" }
+    { "source": "/share/:path*", "destination": "/api/share/:path*" },
+    { "source": "/sweep", "destination": "/api/sweep" }
   ],
-  "crons": [{ "path": "/api/sweep", "schedule": "17 3 * * *" }]
+  "crons": [{ "path": "/sweep", "schedule": "17 3 * * *" }]
 }
