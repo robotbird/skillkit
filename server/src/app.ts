@@ -16,11 +16,12 @@ const newId = customAlphabet('23456789abcdefghijkmnpqrstuvwxyz', 6);
 const VALID_TOOLS: Tool[] = ['claude', 'codex', 'cursor', 'trae'];
 
 /**
- * 无副作用的 Hono app —— 阿里云(server/src/index.ts 的 serve)与 Vercel(api/[[...route]].ts 的 handle)共用。
- * basePath('/api'):两条部署路径一致(/api/share 等),也是 Vercel catch-all 的标准前缀。
+ * 无副作用的 Hono app —— 阿里云(server/src/index.ts 的 serve)与 Vercel(同文件的
+ * handle(app) 默认导出)共用。不加 basePath:Vercel 走 legacy builds+routes catch-all,
+ * 函数收到的就是原始路径(如 /share/eweqj);阿里云本地 serve 同理。
  * 存储由 getStore() 按 SHARE_STORE 懒加载选取,import 时不会触发任何 IO。
  */
-export const app = new Hono().basePath('/api');
+export const app = new Hono();
 app.use('*', cors());
 
 // ---------- 健康检查 ----------
@@ -76,7 +77,7 @@ app.post('/share', async (c) => {
 
   const proto = c.req.header('x-forwarded-proto') ?? 'http';
   const host = c.req.header('x-forwarded-host') ?? c.req.header('host') ?? '127.0.0.1:8787';
-  const url = `${proto}://${host}/api/share/${id}`;
+  const url = `${proto}://${host}/share/${id}`;
   const result: ShareCreateResult = { id, url, expiresAt: meta.expiresAt };
   return c.json(result, 201);
 });
@@ -127,7 +128,7 @@ app.get('/share/:id', async (c) => {
 
   const fullUrl = `${c.req.header('x-forwarded-proto') ?? 'http'}://${
     c.req.header('host') ?? '127.0.0.1:8787'
-  }/api/share/${id}`;
+  }/share/${id}`;
 
   let body: string;
   if (!meta) {

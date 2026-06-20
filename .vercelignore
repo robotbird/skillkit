@@ -1,7 +1,9 @@
-# 只部署 Vercel 函数所需:api/ + server/src/ + shared/ + 根 package.json + vercel.json
+# 只部署 Vercel 函数所需:server/src/ + server/tsconfig.json + 根 package.json + vercel.json
+# 函数入口即 server/src/index.ts(legacy builds+routes),server 自包含,不再需要 api/ 或 shared/。
 # 排除 Electron 桌面端 / React 渲染端 / 构建产物等
 electron/
 src/
+shared/
 build/
 dist/
 dist-electron/

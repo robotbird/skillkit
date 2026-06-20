@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 import type { ShareMeta } from './types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// 本文件位于 api/lib/,本地存储目录在 server/data/ → ../../server/data。
+// 本文件位于 server/src/,本地存储目录在 server/data/ → ../data。
 // (仅 SHARE_STORE=local 即阿里云/本地使用;Vercel 走 BlobStore 不碰这里。)
-const DATA_DIR = path.resolve(__dirname, '..', '..', 'server', 'data');
+const DATA_DIR = path.resolve(__dirname, '..', 'data');
 
 /**
  * 存储抽象 —— 两种实现共享同一接口:

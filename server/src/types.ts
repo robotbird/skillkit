@@ -1,11 +1,12 @@
-// Vercel 函数 / 阿里云 server 共用的运行时常量与类型。
+// 分享服务运行时常量与类型(自包含副本,server 不再外部引用 shared/)。
 //
-// 注意:这是 shared/types.ts 的「函数运行时子集」副本。shared/types.ts 同时被
-// electron 主进程与 renderer 通过 @shared alias 引用,但它在 /api 之外,@vercel/node
-// 不会编译它(运行时拿不到 .js),所以函数自包含在这里。若 shared/types.ts 里的
+// 为什么不直接 import shared/types.ts:shared/types.ts 是桌面端(主进程 + renderer
+// 通过 @shared alias)的契约,但 server/ 在 Vercel 上由 @vercel/node 编译,跨目录
+// 引用 /api 外的 TS 会在运行时拿不到 .js(见 CLAUDE.md 的 ERR_MODULE_NOT_FOUND 教训)。
+// 因此 server/ 自带它需要的运行时子集。若 shared/types.ts 里的
 // SHARE_TTL_MS / SHARE_MAX_BYTES / Tool / ShareMeta / ShareCreateResult 有变动,
 // 需同步到此文件。其余符号(TOOL_LABELS、ALL_TOOLS、SHARE_BASE_URL、桌面端 API 类型等)
-// 函数运行时用不到,不在此重复。
+// server 运行时用不到,不在此重复。
 
 export type Tool = 'claude' | 'codex' | 'cursor' | 'trae';
 

@@ -11,5 +11,5 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["src", "../shared", "../api/lib"]
+  "include": ["src"]
 }
