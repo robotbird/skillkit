@@ -1,11 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "outputDirectory": ".",
+  "outputDirectory": "landing",
   "installCommand": "npm install --omit=dev --ignore-scripts --no-audit --no-fund",
   "buildCommand": "echo \"api-only deploy: skip frontend build (tsc/vite are devDeps, not installed)\"",
   "rewrites": [
-    { "source": "/", "destination": "/landing/index.html" },
     { "source": "/share/:path*", "destination": "/api/share/:path*" },
     { "source": "/sweep", "destination": "/api/sweep" }
   ],
