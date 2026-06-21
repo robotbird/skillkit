@@ -170,6 +170,25 @@
   .card h3 { font-size: 18px; margin: 0 0 8px; }
   .card p { color: var(--ink-soft); font-size: 14.5px; margin: 0; }
 
+  /* ---------- 界面预览 ---------- */
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 40px; }
+  .shot {
+    background: var(--card-bg);
+    border: 1px solid var(--card-line);
+    border-radius: var(--radius-card);
+    padding: 14px;
+    backdrop-filter: blur(12px);
+    transition: transform 0.18s ease, border-color 0.18s ease;
+    box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.7);
+  }
+  .shot:hover { transform: translateY(-3px); border-color: rgba(255, 177, 74, 0.28); }
+  .shot img { display: block; width: 100%; height: auto; border-radius: 10px; }
+  .shot .cap { color: var(--ink-soft); font-size: 14px; margin: 12px 4px 4px; }
+  .shot .cap strong { color: var(--ink); }
+  @media (max-width: 760px) {
+    .shots { grid-template-columns: 1fr; }
+  }
+
   /* ---------- AI Agent 工具 ---------- */
   .tool-card { text-align: center; padding: 28px 16px; }
   .tool-card img { width: 44px; height: 44px; margin-bottom: 12px; }
@@ -367,6 +386,25 @@
           <h3>安装 Skill</h3>
           <p>三种方式都支持:分享短链、GitHub URL(owner/repo、完整链接、tree 链接均可)、上传本地 .zip(自动找到含 SKILL.md 的目录)。</p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 界面预览 -->
+  <section id="preview">
+    <div class="wrap">
+      <p class="kicker">界面预览</p>
+      <h2>看得见的管理</h2>
+      <p class="lead">两个核心界面:统一管理已装的 skill、一键安装新的。</p>
+      <div class="shots">
+        <figure class="shot">
+          <img src="./assets/skillkit-my.png" alt="Skillkit「我的 Skill」界面:统一查看所有工具已安装的 skills" loading="lazy" />
+          <figcaption class="cap"><strong>我的 Skill</strong> · 跨工具统一查看、筛选、搜索</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="./assets/skillkit-install.png" alt="Skillkit「安装 Skill」界面:短链 / GitHub / zip 三种安装方式" loading="lazy" />
+          <figcaption class="cap"><strong>安装 Skill</strong> · 短链 / GitHub / zip 任选</figcaption>
+        </figure>
       </div>
     </div>
   </section>
