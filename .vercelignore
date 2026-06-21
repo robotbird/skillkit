@@ -8,7 +8,7 @@ dist-electron/
 release/
 public/
 scripts/
-index.html
+/index.html
 /vite.config.ts
 /tsconfig.json
 /tsconfig.node.json
