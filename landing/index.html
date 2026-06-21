@@ -2,6 +2,20 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
+    <script>
+      // 防首屏闪烁(FOUC):优先读取用户选择,否则跟随系统,在样式应用前定好 data-theme
+      (function () {
+        try {
+          var t = localStorage.getItem('theme');
+          if (t !== 'light' && t !== 'dark') {
+            t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          }
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Skillkit — AI Agent 工具的 Skills,一处搞定</title>
 <meta name="description" content="Skillkit 是一个 macOS 桌面应用,把散落在 Claude Code、Codex、Cursor、Trae 各自目录里的 skill 统一管起来。发现并推荐 skill、一键安装、短链分享,全部在本地完成。" />
@@ -51,6 +65,33 @@
     --radius-pill: 999px;
     --maxw: 1120px;
   }
+
+  /* ---------- 浅色模式 ---------- */
+  :root[data-theme="light"] {
+    --bg-0: #f5ede1;
+    --bg-1: #eee4d4;
+    --ink: #2a2018;
+    --ink-soft: rgba(42, 32, 24, 0.74);
+    --ink-mute: rgba(42, 32, 24, 0.5);
+    --line: rgba(60, 40, 20, 0.12);
+    --card-bg: rgba(255, 250, 242, 0.72);
+    --card-line: rgba(120, 80, 40, 0.16);
+    --accent: #b26612;
+    --accent-soft: rgba(178, 102, 18, 0.14);
+  }
+  /* 浅色下硬编码暖暗色覆盖 */
+  :root[data-theme="light"] .bg {
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(255, 170, 80, 0.26), transparent 60%),
+      radial-gradient(900px 520px at 100% 0%, rgba(180, 120, 60, 0.12), transparent 65%),
+      linear-gradient(180deg, #fbf3e6 0%, #f2e8d8 45%, #e9dcc8 100%);
+  }
+  :root[data-theme="light"] header.nav { background: rgba(248, 240, 228, 0.72); }
+  :root[data-theme="light"] .btn { background: rgba(255, 255, 255, 0.6); }
+  :root[data-theme="light"] .btn:hover { background: rgba(255, 255, 255, 0.92); }
+  :root[data-theme="light"] .btn-primary { box-shadow: 0 6px 18px rgba(178, 102, 18, 0.25); }
+  :root[data-theme="light"] .tool-card .path { background: rgba(60, 40, 20, 0.07); }
+  :root[data-theme="light"] .shot { box-shadow: 0 24px 60px -34px rgba(80, 55, 25, 0.32); }
 
   * { box-sizing: border-box; }
 
@@ -103,7 +144,23 @@
   .nav-links { display: flex; gap: 22px; margin-left: 8px; }
   .nav-links a { color: var(--ink-soft); font-size: 14px; }
   .nav-links a:hover { color: var(--ink); text-decoration: none; }
-  .nav-cta { margin-left: auto; }
+  .nav-cta { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .theme-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px; border-radius: var(--radius-pill);
+    border: 1px solid var(--card-line);
+    background: rgba(40, 28, 20, 0.6);
+    color: var(--ink);
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.15s ease;
+  }
+  .theme-toggle:hover { background: rgba(60, 42, 30, 0.8); transform: translateY(-1px); }
+  :root[data-theme="light"] .theme-toggle { background: rgba(255, 255, 255, 0.6); }
+  :root[data-theme="light"] .theme-toggle:hover { background: rgba(255, 255, 255, 0.92); }
+  .theme-toggle svg { width: 18px; height: 18px; stroke: var(--ink); fill: none; stroke-width: 1.8; stroke-linecap: round; }
+  .theme-toggle .ico-moon { display: none; }
+  :root[data-theme="dark"] .theme-toggle .ico-moon { display: inline; }
+  :root[data-theme="dark"] .theme-toggle .ico-sun { display: none; }
 
   .btn {
     display: inline-flex; align-items: center; gap: 8px;
@@ -303,6 +360,10 @@
       <a href="#faq">FAQ</a>
     </nav>
     <div class="nav-cta">
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换深色 / 浅色主题">
+        <svg class="ico-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.6M12 19.4V22M2 12h2.6M19.4 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+        <svg class="ico-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5z"/></svg>
+      </button>
       <a class="btn btn-primary" href="https://github.com/robotbird/skillkit/releases">下载</a>
     </div>
   </div>
@@ -540,5 +601,34 @@
   </div>
 </footer>
 
+    <script>
+      // 主题切换:点击在 light / dark 间翻转并记忆;未手动选择时跟随系统变化
+      (function () {
+        var root = document.documentElement;
+        var btn = document.getElementById('theme-toggle');
+        if (!btn) return;
+        function current() { return root.getAttribute('data-theme') === 'light' ? 'light' : 'dark'; }
+        function sync() {
+          var light = current() === 'light';
+          btn.setAttribute('aria-pressed', light ? 'true' : 'false');
+          btn.setAttribute('aria-label', light ? '切换到深色模式' : '切换到浅色模式');
+        }
+        btn.addEventListener('click', function () {
+          var next = current() === 'light' ? 'dark' : 'light';
+          try { localStorage.setItem('theme', next); } catch (e) {}
+          root.setAttribute('data-theme', next);
+          sync();
+        });
+        try {
+          var mq = window.matchMedia('(prefers-color-scheme: light)');
+          mq.addEventListener('change', function (e) {
+            if (localStorage.getItem('theme')) return; // 用户已手动选择,不再跟随系统
+            root.setAttribute('data-theme', e.matches ? 'light' : 'dark');
+            sync();
+          });
+        } catch (e) {}
+        sync();
+      })();
+    </script>
 </body>
 </html>
