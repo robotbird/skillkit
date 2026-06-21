@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Skillkit — 四个 AI 编程工具的 Skills,一处搞定</title>
+<title>Skillkit — AI Agent 工具的 Skills,一处搞定</title>
 <meta name="description" content="Skillkit 是一个 macOS 桌面应用,把散落在 Claude Code、Codex、Cursor、Trae 各自目录里的 skill 统一管起来。浏览 skills.sh 市场、一键安装、短链分享,全部在本地完成。" />
 <meta name="theme-color" content="#1a1410" />
 <link rel="canonical" href="https://www.skillkit.net/" />
@@ -12,12 +12,12 @@
 <!-- Open Graph -->
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Skillkit" />
-<meta property="og:title" content="Skillkit — 四个 AI 编程工具的 Skills,一处搞定" />
+<meta property="og:title" content="Skillkit — AI Agent 工具的 Skills,一处搞定" />
 <meta property="og:description" content="macOS 桌面应用,统一管理 Claude Code / Codex / Cursor / Trae 的 skills。浏览市场、一键安装、短链分享。" />
 <meta property="og:url" content="https://www.skillkit.net/" />
 <meta property="og:image" content="https://www.skillkit.net/assets/logo.png" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Skillkit — 四个 AI 编程工具的 Skills,一处搞定" />
+<meta name="twitter:title" content="Skillkit — AI Agent 工具的 Skills,一处搞定" />
 <meta name="twitter:description" content="macOS 桌面应用,统一管理 Claude Code / Codex / Cursor / Trae 的 skills。" />
 <meta name="twitter:image" content="https://www.skillkit.net/assets/logo.png" />
 
@@ -29,7 +29,7 @@
   "name": "Skillkit",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "macOS",
-  "description": "macOS 桌面应用,统一管理 Claude Code、Codex、Cursor、Trae 四大 AI 编程工具的 skills。浏览 skills.sh 市场、一键安装、短链分享。",
+  "description": "macOS 桌面应用,统一管理 Claude Code、Codex、Cursor、Trae 等 AI Agent 工具的 skills。浏览 skills.sh 市场、一键安装、短链分享。",
   "url": "https://www.skillkit.net/",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
 }
@@ -170,7 +170,7 @@
   .card h3 { font-size: 18px; margin: 0 0 8px; }
   .card p { color: var(--ink-soft); font-size: 14.5px; margin: 0; }
 
-  /* ---------- 四大工具 ---------- */
+  /* ---------- AI Agent 工具 ---------- */
   .tool-card { text-align: center; padding: 28px 16px; }
   .tool-card img { width: 44px; height: 44px; margin-bottom: 12px; }
   .tool-card .name { font-weight: 600; margin-bottom: 6px; }
@@ -261,6 +261,11 @@
     .download { padding: 48px 20px; }
   }
 </style>
+
+<!-- Vercel Analytics:静态 HTML 接入方式(本项目 landing 是纯静态页,不走打包,
+     无法用 @vercel/analytics 的 React/Next 组件;直接注入平台提供的 script 即可,
+     这与 React 组件底层注入的是同一个脚本) -->
+<script defer src="/_vercel/insights/script.js" data-endpoint="/_vercel/insights"></script>
 </head>
 <body>
 <div class="bg" aria-hidden="true"></div>
@@ -290,7 +295,7 @@
   <section class="hero">
     <div class="wrap">
       <p class="kicker">SKILLKIT</p>
-      <h1>四个 AI 编程工具的 Skills,一处搞定</h1>
+      <h1>AI Agent 工具的 Skills,一处搞定</h1>
       <p class="sub">
         Skillkit 是一个 macOS 桌面应用,把散落在 Claude Code、Codex、Cursor、Trae
         各自目录里的 skill 统一管起来。浏览市场、一键安装、短链分享——全部在本地完成。
@@ -350,7 +355,7 @@
         <div class="card">
           <div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
           <h3>我的 Skill</h3>
-          <p>自动扫描四个工具的全部 skills 目录。按工具筛选、关键词搜索,网格 / 列表切换。一键卸载,或复制到其他工具。</p>
+          <p>自动扫描所有工具的全部 skills 目录。按工具筛选、关键词搜索,网格 / 列表切换。一键卸载,或复制到其他工具。</p>
         </div>
         <div class="card">
           <div class="ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
@@ -366,11 +371,11 @@
     </div>
   </section>
 
-  <!-- 四大工具 -->
+  <!-- AI Agent 工具 -->
   <section id="tools">
     <div class="wrap">
       <p class="kicker">覆盖范围</p>
-      <h2>支持四大 AI 编程工具</h2>
+      <h2>支持的 AI Agent 工具</h2>
       <p class="lead">自动识别并管理以下工具的 skills 目录:</p>
       <div class="grid grid-4">
         <div class="card tool-card">
@@ -493,6 +498,7 @@
       </div>
       <div class="footer-links">
         <a href="https://github.com/robotbird/skillkit" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://x.com/PMAndDog" target="_blank" rel="noopener">X / 推特</a>
         <a href="https://www.skills.sh" target="_blank" rel="noopener">skills.sh</a>
         <a href="https://github.com/robotbird/skillkit/releases" target="_blank" rel="noopener">下载</a>
       </div>
