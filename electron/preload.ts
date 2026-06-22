@@ -30,6 +30,11 @@ const api: SkillkitApi = {
   inspectShare: (input: string) => ipcRenderer.invoke('share:inspect', input),
   installFromShare: (input: string, targets: Tool[]) =>
     ipcRenderer.invoke('share:installFromShare', input, targets),
+
+  // 分享页「从 Skillkit 打开」唤起本应用时，主进程经此通道把 share id 推给渲染进程
+  onDeepLink: (cb: (input: string) => void) => {
+    ipcRenderer.on('skillkit:deep-link', (_e, input: string) => cb(input));
+  },
 };
 
 contextBridge.exposeInMainWorld('skillkit', api);

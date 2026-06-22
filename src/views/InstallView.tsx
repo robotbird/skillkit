@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { TOOL_LABELS, type Tool, type InstallResult } from '@shared/types';
 import type { ToastState } from '../components/Toast';
 import ToolPicker from '../components/ToolPicker';
@@ -29,9 +29,13 @@ const MODE_LABELS: Record<InstallMode, string> = {
 export default function InstallView({
   toast,
   onInstalled,
+  pendingShare,
+  onPendingConsumed,
 }: {
   toast: ToastState;
   onInstalled: () => void;
+  pendingShare?: string | null;
+  onPendingConsumed?: () => void;
 }) {
   const [mode, setMode] = useState<InstallMode>('share');
   const [ghUrl, setGhUrl] = useState('');
@@ -41,6 +45,19 @@ export default function InstallView({
   const [drag, setDrag] = useState(false);
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [hint, setHint] = useState<{ msg: string; error?: boolean }>({ msg: '支持 https / git@ / shorthand owner/repo / tree URL' });
+
+  // 深链预填用的 ref：规避 setState 异步竞态，确认安装时优先取它
+  const pendingShareRef = useRef<string | null>(null);
+
+  // 分享页「从 Skillkit 打开」→ App 传入 share id：切到 share tab、预填输入框、直接弹工具选择器
+  useEffect(() => {
+    if (!pendingShare) return;
+    setMode('share');
+    setShareUrl(pendingShare);
+    pendingShareRef.current = pendingShare;
+    onPendingConsumed?.();
+    setPickerOpen(true);
+  }, [pendingShare, onPendingConsumed]);
 
   function pushRecent(name: string, source: string) {
     setRecent((arr) => [{ name, source, at: new Date().toLocaleString('zh-CN') }, ...arr].slice(0, 12));
@@ -67,7 +84,8 @@ export default function InstallView({
       let results: InstallResult[] | null = null;
 
       if (mode === 'share') {
-        const url = shareUrl.trim();
+        const url = (pendingShareRef.current ?? shareUrl).trim();
+        pendingShareRef.current = null;
         results = await window.skillkit.installFromShare(url, targets);
         const okAny = results.some((r) => r.ok);
         toast.show(summarize(results), okAny ? 'info' : 'error', 4000);

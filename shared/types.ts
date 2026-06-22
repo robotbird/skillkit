@@ -114,6 +114,9 @@ export interface SkillkitApi {
   shareSkill(tool: Tool, name: string): Promise<ShareCreateResult>;
   inspectShare(input: string): Promise<ShareSourceInfo>;
   installFromShare(input: string, targets: Tool[]): Promise<InstallResult[]>;
+
+  // 分享页深链（skillkit://share/<id>）唤起应用时，主进程通过它把 share id 推给渲染进程
+  onDeepLink(cb: (input: string) => void): void;
 }
 
 declare global {
