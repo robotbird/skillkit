@@ -1,26 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Tool, InstalledSkill } from '@shared/types';
-import { TOOL_LABELS } from '@shared/types';
-import ToolBadge from './ToolBadge';
-import claudeIcon from '../assets/agents/claude-code.svg';
-import codexIcon from '../assets/agents/codex.svg';
-import cursorIcon from '../assets/agents/cursor.svg';
-import traeIcon from '../assets/agents/trae.svg';
-
-const TOOL_ICON: Record<Tool, string> = {
-  claude: claudeIcon,
-  codex: codexIcon,
-  cursor: cursorIcon,
-  trae: traeIcon,
-};
+import type { SkillGroup } from '../lib/groupSkills';
+import ToolStack from './ToolStack';
 
 interface Props {
-  skill: InstalledSkill;
+  group: SkillGroup;
   mode: 'grid' | 'list';
-  onUninstall?: (tool: Tool, name: string) => void;
-  onReveal?: (path: string) => void;
-  onShare?: (skill: InstalledSkill) => void;
-  onCopyTo?: (skill: InstalledSkill) => void;
+  onUninstall?: (group: SkillGroup) => void;
+  onReveal?: (group: SkillGroup) => void;
+  onShare?: (group: SkillGroup) => void;
+  onCopyTo?: (group: SkillGroup) => void;
 }
 
 function emojiFor(name: string): string {
@@ -165,7 +153,7 @@ function KebabMenu({
                 d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12a2 2 0 01-2 2H9a2 2 0 01-2-2L6 9z"
               />
             </svg>
-            {canUninstall ? '卸载' : '内置不可卸载'}
+            {canUninstall ? '卸载' : '全部为内置'}
           </button>
         </div>
       )}
@@ -173,33 +161,33 @@ function KebabMenu({
   );
 }
 
-export default function SkillCard({ skill, mode, onUninstall, onReveal, onShare, onCopyTo }: Props) {
-  const reveal = () => onReveal?.(skill.path);
-  const uninstall = () => onUninstall?.(skill.tool, skill.name);
-  const share = onShare ? () => onShare(skill) : undefined;
-  const copyTo = onCopyTo ? () => onCopyTo(skill) : undefined;
-  const canUninstall = !skill.isBuiltin;
+export default function SkillCard({ group, mode, onUninstall, onReveal, onShare, onCopyTo }: Props) {
+  const { primary, tools } = group;
+  const builtinTools = tools.filter((t) => group.byTool[t]?.isBuiltin);
+  const multi = tools.length > 1;
+  // 只要有一个非内置工具就允许卸载（弹窗里再按工具勾选，内置会置灰）
+  const canUninstall = tools.some((t) => !group.byTool[t]?.isBuiltin);
+
+  const reveal = () => onReveal?.(group);
+  const uninstall = () => onUninstall?.(group);
+  const share = onShare ? () => onShare(group) : undefined;
+  const copyTo = onCopyTo ? () => onCopyTo(group) : undefined;
 
   if (mode === 'grid') {
     return (
       <article className="skill is-grid">
         <header className="skill-grid-head">
-          <div className="skill-ico">{emojiFor(skill.name)}</div>
+          <div className="skill-ico">{emojiFor(group.name)}</div>
           <div className="skill-grid-head-right">
-            <span
-              className="tool-badge-mini"
-              title={TOOL_LABELS[skill.tool] + (skill.isBuiltin ? ' · 内置' : '')}
-            >
-              <img src={TOOL_ICON[skill.tool]} alt={TOOL_LABELS[skill.tool]} draggable={false} />
-            </span>
+            <ToolStack tools={tools} builtinTools={builtinTools} />
             <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} onShare={share} onCopyTo={copyTo} />
           </div>
         </header>
-        <div className="skill-name" title={skill.name}>
-          {skill.name}
+        <div className="skill-name" title={group.name}>
+          {group.name}
         </div>
         <p className="skill-desc-grid">
-          {truncate(skill.description || '（未提供描述）', 100)}
+          {truncate(primary.description || '（未提供描述）', 100)}
         </p>
       </article>
     );
@@ -208,31 +196,32 @@ export default function SkillCard({ skill, mode, onUninstall, onReveal, onShare,
   // list mode
   return (
     <article className="skill is-list">
-      <div className="skill-ico">{emojiFor(skill.name)}</div>
+      <div className="skill-ico">{emojiFor(group.name)}</div>
       <div className="skill-body">
         <div className="skill-row1">
-          <div className="skill-name" title={skill.name}>
-            {skill.name}
+          <div className="skill-name" title={group.name}>
+            {group.name}
           </div>
-          <ToolBadge tool={skill.tool} />
-          {skill.isBuiltin && <span className="skill-tag tag-builtin">内置</span>}
+          <ToolStack tools={tools} builtinTools={builtinTools} size="md" />
+          {multi && <span className="skill-tag tag-multi">{tools.length} 个工具</span>}
+          {builtinTools.length > 0 && <span className="skill-tag tag-builtin">含内置</span>}
         </div>
-        <div className="skill-desc">{skill.description || '（未提供描述）'}</div>
+        <div className="skill-desc">{primary.description || '（未提供描述）'}</div>
         <div className="skill-meta">
-          {skill.sizeBytes != null && (
+          {primary.sizeBytes != null && (
             <>
-              <span>{formatSize(skill.sizeBytes)}</span>
+              <span>{formatSize(primary.sizeBytes)}</span>
               <span className="dot" />
             </>
           )}
-          {skill.mtime != null && (
+          {primary.mtime != null && (
             <>
-              <span>更新于 {formatTime(skill.mtime)}</span>
+              <span>更新于 {formatTime(primary.mtime)}</span>
               <span className="dot" />
             </>
           )}
           <span
-            title={skill.path}
+            title={primary.path}
             style={{
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -240,7 +229,7 @@ export default function SkillCard({ skill, mode, onUninstall, onReveal, onShare,
               maxWidth: 240,
             }}
           >
-            {skill.path.replace(/^.*\/(\.[^/]+\/)/, '~/$1')}
+            {primary.path.replace(/^.*\/(\.[^/]+\/)/, '~/$1')}
           </span>
         </div>
       </div>

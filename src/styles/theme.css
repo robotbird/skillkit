@@ -278,6 +278,7 @@ html, body, #root {
 }
 .skill-tag.tag-builtin { color: var(--accent); border-color: rgba(255,177,74,.4); }
 .skill-tag.tag-official { color: #c9b3ff; border-color: rgba(201, 179, 255, 0.4); }
+.skill-tag.tag-multi { color: #cdbfa8; border-color: rgba(255, 200, 140, 0.22); }
 .skill-desc {
   font-size: 12.5px; color: var(--ink-soft);
   line-height: 1.5;
@@ -350,43 +351,44 @@ html, body, #root {
   color: inherit;
 }
 
-/* 工具徽章 */
-.tool-badge {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 11px;
-  padding: 3px 9px 3px 4px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  color: var(--ink-soft);
-  background: rgba(0, 0, 0, 0.18);
-  line-height: 1;
-}
-.tool-badge-ico {
-  display: block;
-  width: 16px; height: 16px;
-  border-radius: 4px;
-  object-fit: contain;
-  background: #fff;
+/* 多工具 icon 叠加堆叠 —— 一个 skill 装在多个工具时用 */
+.tool-stack {
+  display: inline-flex;
+  align-items: center;
   flex: 0 0 auto;
 }
-.tool-badge.size-md { font-size: 12px; padding: 4px 12px 4px 5px; }
-.tool-badge.size-md .tool-badge-ico { width: 20px; height: 20px; border-radius: 5px; }
-
-/* 仅图标 mini badge — 给 grid 卡片右上角用 */
-.tool-badge-mini {
+.tool-stack-ico {
+  position: relative;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 22px; height: 22px;
   border-radius: 6px;
   background: #fff;
-  border: 1px solid var(--line);
-  align-items: center;
-  justify-content: center;
+  /* 深色描边：重叠时形成清晰分隔；单工具时也有一圈轮廓 */
+  border: 1.5px solid var(--bg-1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
   flex: 0 0 auto;
 }
-.tool-badge-mini img {
+.tool-stack-ico img {
   display: block;
   width: 18px; height: 18px;
   border-radius: 4px;
+  object-fit: contain;
+}
+.tool-stack-ico.is-overlap { margin-left: -8px; }
+.tool-stack.size-md .tool-stack-ico { width: 26px; height: 26px; border-radius: 7px; }
+.tool-stack.size-md .tool-stack-ico img { width: 21px; height: 21px; }
+.tool-stack.size-md .tool-stack-ico.is-overlap { margin-left: -10px; }
+/* 内置角标：该工具下的 skill 为内置（不可卸载）——右上角小圆点 */
+.tool-stack-ico.is-builtin::after {
+  content: '';
+  position: absolute;
+  top: -2px; right: -2px;
+  width: 8px; height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 1.5px solid var(--bg-1);
 }
 
 /* 通用按钮 */
@@ -404,6 +406,22 @@ html, body, #root {
 .btn-primary:hover { transform: translateY(-1px); filter: brightness(1.04); }
 .btn-primary:active { transform: translateY(0); filter: brightness(0.96); }
 .btn-primary:disabled { filter: grayscale(0.4) brightness(0.8); cursor: not-allowed; transform: none; }
+
+/* 危险态主按钮（卸载等破坏性操作） */
+.btn-danger {
+  appearance: none; border: 0;
+  font-family: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(180deg, #f07a68, #d94f3c);
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(217, 79, 60, 0.28), 0 1px 0 rgba(255, 255, 255, 0.4) inset;
+  transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+}
+.btn-danger:hover { transform: translateY(-1px); filter: brightness(1.04); }
+.btn-danger:active { transform: translateY(0); filter: brightness(0.96); }
+.btn-danger:disabled { filter: grayscale(0.4) brightness(0.8); cursor: not-allowed; transform: none; }
 
 .btn-ghost {
   appearance: none; font-family: inherit; font-size: 12.5px;
@@ -641,6 +659,14 @@ html, body, #root {
   background: #fff;
   border: 1px solid rgba(255, 255, 255, 0.06);
   flex: 0 0 auto;
+}
+/* 禁用项（如内置不可卸载） */
+.modal .opts label.is-disabled { opacity: 0.5; cursor: not-allowed; }
+.modal .opts label.is-disabled:hover { background: transparent; }
+.opt-note {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ink-mute);
 }
 
 /* recent / 最近安装 */

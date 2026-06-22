@@ -4,6 +4,7 @@ import SkillCard from '../components/SkillCard';
 import ShareDialog from '../components/ShareDialog';
 import ToolPicker from '../components/ToolPicker';
 import type { ToastState } from '../components/Toast';
+import { groupBySkill, type SkillGroup } from '../lib/groupSkills';
 import claudeIcon from '../assets/agents/claude-code.svg';
 import codexIcon from '../assets/agents/codex.svg';
 import cursorIcon from '../assets/agents/cursor.svg';
@@ -31,8 +32,10 @@ export default function MySkillsView({
   const [mode, setMode] = useState<ViewMode>('grid');
   const [scanning, setScanning] = useState(false);
   const [shareSkill, setShareSkill] = useState<InstalledSkill | null>(null);
-  const [copySkill, setCopySkill] = useState<InstalledSkill | null>(null);
+  const [copyGroup, setCopyGroup] = useState<SkillGroup | null>(null);
   const [copying, setCopying] = useState(false);
+  const [uninstallGroup, setUninstallGroup] = useState<SkillGroup | null>(null);
+  const [uninstalling, setUninstalling] = useState(false);
 
   async function refresh() {
     setScanning(true);
@@ -50,42 +53,67 @@ export default function MySkillsView({
     refresh();
   }, []);
 
+  // 扁平记录 → 按 name 合并的组（跨工具同一 skill 一组）
+  const groups = useMemo(() => (items ? groupBySkill(items) : []), [items]);
+
   const filtered = useMemo(() => {
-    if (!items) return [];
     const text = q.trim().toLowerCase();
-    return items.filter((s) => {
-      if (tool !== 'all' && s.tool !== tool) return false;
+    return groups.filter((g) => {
+      if (tool !== 'all' && !g.tools.includes(tool)) return false;
       if (!text) return true;
       return (
-        s.name.toLowerCase().includes(text) ||
-        (s.description ?? '').toLowerCase().includes(text)
+        g.name.toLowerCase().includes(text) ||
+        (g.primary.description ?? '').toLowerCase().includes(text)
       );
     });
-  }, [items, q, tool]);
+  }, [groups, q, tool]);
 
+  // 每个 chip 的计数 = 包含该工具的「组」数（而非行数）
   const counts = useMemo(() => {
     const map: Record<Tool, number> = { claude: 0, codex: 0, cursor: 0, trae: 0 };
-    if (items) for (const s of items) map[s.tool]++;
+    for (const g of groups) for (const t of g.tools) map[t]++;
     return map;
-  }, [items]);
+  }, [groups]);
 
-  async function handleUninstall(t: Tool, name: string) {
-    if (!confirm(`确认卸载 ${name} 吗？这会删除 ${TOOL_LABELS[t]} 下的整个 skill 目录。`)) return;
+  // ===== 卸载 =====
+  // 入口：仅一个可卸载工具时直接确认；多个（或含内置）时弹工具选择
+  function startUninstall(group: SkillGroup) {
+    const removable = group.tools.filter((t) => !group.byTool[t]?.isBuiltin);
+    if (removable.length <= 1) {
+      const t = removable[0];
+      if (!t) return;
+      if (!confirm(`确认卸载 ${group.name} 吗？这会删除 ${TOOL_LABELS[t]} 下的整个 skill 目录。`)) return;
+      void doUninstall(group.name, [t]);
+    } else {
+      setUninstallGroup(group);
+    }
+  }
+
+  async function doUninstall(name: string, tools: Tool[]) {
+    setUninstalling(true);
     try {
-      await window.skillkit.uninstallSkill(t, name);
-      toast.show(`${name} 已卸载`);
+      for (const t of tools) await window.skillkit.uninstallSkill(t, name);
+      toast.show(`${name} 已从 ${tools.map((t) => TOOL_LABELS[t]).join('、')} 卸载`);
       await refresh();
       onChanged();
     } catch (e: any) {
       toast.show(`卸载失败：${e?.message ?? e}`, 'error');
+    } finally {
+      setUninstalling(false);
+      setUninstallGroup(null);
     }
   }
 
+  // ===== 复制到其他工具 =====
   async function handleCopy(targets: Tool[]) {
-    if (!copySkill) return;
+    if (!copyGroup) return;
     setCopying(true);
     try {
-      const results = await window.skillkit.copyToTools(copySkill.tool, copySkill.name, targets);
+      const results = await window.skillkit.copyToTools(
+        copyGroup.primary.tool,
+        copyGroup.primary.name,
+        targets,
+      );
       const ok = results.filter((r) => r.ok).map((r) => TOOL_LABELS[r.tool]);
       const fail = results.filter((r) => !r.ok);
       if (ok.length && !fail.length) {
@@ -99,7 +127,7 @@ export default function MySkillsView({
       }
       await refresh();
       onChanged();
-      setCopySkill(null);
+      setCopyGroup(null);
     } catch (e: any) {
       toast.show(`复制失败：${e?.message ?? e}`, 'error');
     } finally {
@@ -147,7 +175,7 @@ export default function MySkillsView({
           className={`chip${tool === 'all' ? ' is-active' : ''}`}
           onClick={() => setTool('all')}
         >
-          全部（{items?.length ?? 0}）
+          全部（{groups.length}）
         </button>
         {ALL_TOOLS.map((t) => (
           <button
@@ -167,15 +195,15 @@ export default function MySkillsView({
         ) : filtered.length === 0 ? (
           <div className="empty">{q ? '没有匹配的 skill' : '当前筛选下还没有 skill'}</div>
         ) : (
-          filtered.map((s) => (
+          filtered.map((g) => (
             <SkillCard
-              key={`${s.tool}::${s.name}`}
-              skill={s}
+              key={g.name}
+              group={g}
               mode={mode}
-              onUninstall={handleUninstall}
-              onReveal={(p) => window.skillkit.revealInFinder(p)}
-              onShare={setShareSkill}
-              onCopyTo={setCopySkill}
+              onUninstall={startUninstall}
+              onReveal={(grp) => window.skillkit.revealInFinder(grp.primary.path)}
+              onShare={(grp) => setShareSkill(grp.primary)}
+              onCopyTo={g.tools.length < ALL_TOOLS.length ? setCopyGroup : undefined}
             />
           ))
         )}
@@ -188,23 +216,55 @@ export default function MySkillsView({
       />
 
       <ToolPicker
-        open={!!copySkill}
-        title={copySkill ? `复制 ${copySkill.name} 到其他工具` : '复制到其他工具'}
+        open={!!uninstallGroup}
+        title={uninstallGroup ? `卸载 ${uninstallGroup.name}` : '卸载'}
         subtitle={
-          copySkill
-            ? `从 ${TOOL_LABELS[copySkill.tool]} 复制到选中的工具，目标位置已存在的同名 skill 会被覆盖（先备份再回滚）。`
+          uninstallGroup
+            ? '从哪些工具卸载？内置工具不可卸载（已置灰）。'
             : ''
         }
         defaultSelected={
-          copySkill
-            ? (ALL_TOOLS.filter((t) => t !== copySkill.tool).slice(0, 1) as Tool[])
+          uninstallGroup
+            ? uninstallGroup.tools.filter((t) => !uninstallGroup.byTool[t]?.isBuiltin)
             : []
         }
-        excludeTools={copySkill ? [copySkill.tool] : []}
+        excludeTools={
+          // 只展示本组已装的工具
+          uninstallGroup ? ALL_TOOLS.filter((t) => !uninstallGroup.tools.includes(t)) : []
+        }
+        disableTools={
+          uninstallGroup
+            ? uninstallGroup.tools.filter((t) => uninstallGroup.byTool[t]?.isBuiltin)
+            : []
+        }
+        busy={uninstalling}
+        confirmLabel="确认卸载"
+        busyLabel="卸载中"
+        tone="danger"
+        onCancel={() => !uninstalling && setUninstallGroup(null)}
+        onConfirm={(targets) => {
+          if (uninstallGroup) void doUninstall(uninstallGroup.name, targets);
+        }}
+      />
+
+      <ToolPicker
+        open={!!copyGroup}
+        title={copyGroup ? `复制 ${copyGroup.name} 到其他工具` : '复制到其他工具'}
+        subtitle={
+          copyGroup
+            ? `从 ${TOOL_LABELS[copyGroup.primary.tool]} 复制到选中的工具，目标位置已存在的同名 skill 会被覆盖（先备份再回滚）。`
+            : ''
+        }
+        defaultSelected={
+          copyGroup
+            ? (ALL_TOOLS.filter((t) => !copyGroup.tools.includes(t)).slice(0, 1) as Tool[])
+            : []
+        }
+        excludeTools={copyGroup ? copyGroup.tools : []}
         busy={copying}
         confirmLabel="确认复制"
         busyLabel="复制中"
-        onCancel={() => !copying && setCopySkill(null)}
+        onCancel={() => !copying && setCopyGroup(null)}
         onConfirm={handleCopy}
       />
     </section>
