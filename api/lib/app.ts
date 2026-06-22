@@ -148,6 +148,18 @@ app.get('/share/:id', async (c) => {
   const host = c.req.header('x-forwarded-host') ?? c.req.header('host') ?? '127.0.0.1:8787';
   const fullUrl = `${proto}://${host}/share/${id}`;
 
+  // 标题 / OG / Twitter Card —— 让链接在 X / Slack / iMessage 里渲染成卡片（类似 github.com）
+  // 必须在下面的 if/else 之前声明：active body 里引用了 tweetHref
+  const title = meta && !expired ? `${meta.name} · Skillkit 分享` : 'Skillkit 分享';
+  const ogDesc =
+    meta && !expired && meta.description
+      ? meta.description
+      : '通过 Skillkit 分享的 AI skill —— 7 天内可一键安装到 Claude Code / Codex / Cursor / Trae。';
+  const ogImage = 'https://www.skillkit.net/assets/logo.png';
+  // 「分享到 X」web intent：预填文案 + 短链
+  const tweetText = meta && !expired ? `分享一个 AI skill：${meta.name}` : 'Skillkit 分享';
+  const tweetHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(fullUrl)}`;
+
   let body: string;
   if (!meta) {
     body = `
@@ -179,14 +191,15 @@ app.get('/share/:id', async (c) => {
         <a class="btn btn-primary" href="skillkit://share/${esc(id)}">从 Skillkit 打开</a>
         <a class="btn" href="/share/${esc(id)}/zip" download="${esc(meta.name)}.zip">下载压缩包</a>
       </div>
-      <div class="fallback">
-        <span class="fallback-label">没有自动打开？复制短链手动安装：</span>
-        <div class="link"><code id="u">${esc(fullUrl)}</code><button type="button" onclick="copyLink(this)">复制</button></div>
-        <p class="muted">还没装 Skillkit？<a href="https://github.com/robotbird/skillkit/releases" target="_blank" rel="noopener">下载桌面端 →</a></p>
+      <div class="share">
+        <a class="share-x" href="${esc(tweetHref)}" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+          分享到 X
+        </a>
+        <div class="link"><code id="u">${esc(fullUrl)}</code><button type="button" onclick="copyLink(this)">复制链接</button></div>
+        <p class="muted">没有 Skillkit？<a href="https://github.com/robotbird/skillkit/releases" target="_blank" rel="noopener">下载桌面端 →</a></p>
       </div>`;
   }
-
-  const title = meta && !expired ? `${meta.name} · Skillkit 分享` : 'Skillkit 分享';
 
   return c.html(`<!doctype html>
 <html lang="zh-CN">
@@ -195,6 +208,17 @@ app.get('/share/:id', async (c) => {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="theme-color" content="#1a1410" />
 <title>${esc(title)}</title>
+<meta property="og:type" content="article" />
+<meta property="og:site_name" content="Skillkit" />
+<meta property="og:title" content="${esc(title)}" />
+<meta property="og:description" content="${esc(ogDesc)}" />
+<meta property="og:url" content="${esc(fullUrl)}" />
+<meta property="og:image" content="${esc(ogImage)}" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:site" content="@PMAndDog" />
+<meta name="twitter:title" content="${esc(title)}" />
+<meta name="twitter:description" content="${esc(ogDesc)}" />
+<meta name="twitter:image" content="${esc(ogImage)}" />
 <script>(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <style>
   :root{--ink:#f3ece1;--ink-soft:rgba(243,236,225,.72);--ink-mute:rgba(243,236,225,.46);--line:rgba(255,255,255,.08);--card-bg:rgba(28,22,18,.62);--card-line:rgba(255,235,200,.09);--accent:#ffb14a;--accent-soft:rgba(255,177,74,.18);--radius-card:16px;--radius-pill:999px;}
@@ -233,8 +257,11 @@ app.get('/share/:id', async (c) => {
   :root[data-theme="light"] .btn:hover{background:rgba(255,255,255,.92);}
   .btn-primary{border:0;background:linear-gradient(180deg,#fff5db,#ffd99a);color:#1a1410;box-shadow:0 6px 18px rgba(0,0,0,.35);}
   .btn-primary:hover{background:linear-gradient(180deg,#fff8e6,#ffe0ac);}
-  .fallback{margin-top:8px;padding-top:20px;border-top:1px dashed var(--line);}
-  .fallback-label{font-size:13px;color:var(--ink-mute);}
+  .share{margin-top:8px;padding-top:20px;border-top:1px dashed var(--line);}
+  .share-x{display:inline-flex;align-items:center;gap:7px;font-size:14px;font-weight:600;background:#000;color:#fff;padding:9px 18px;border-radius:var(--radius-pill);text-decoration:none;transition:transform .15s ease,opacity .15s ease;}
+  :root[data-theme="dark"] .share-x{background:#fff;color:#000;}
+  .share-x svg{width:15px;height:15px;}
+  .share-x:hover{transform:translateY(-1px);opacity:.92;text-decoration:none;}
   .link{display:flex;align-items:center;gap:10px;margin-top:10px;padding:9px 12px;background:rgba(0,0,0,.18);border:1px solid var(--line);border-radius:12px;}
   :root[data-theme="light"] .link{background:rgba(60,40,20,.06);}
   .link code{flex:1;word-break:break-all;color:var(--ink-soft);background:none;padding:0;}
