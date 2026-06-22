@@ -519,6 +519,8 @@ html, body, #root {
 /* 安装页 */
 .install-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 4px; }
 @media (max-width: 880px) { .install-grid { grid-template-columns: 1fr; } }
+.install-grid.is-single { grid-template-columns: 1fr; }
+.install-tabs { margin: 4px 0 16px; }
 
 .install-card {
   background: var(--card-bg);
