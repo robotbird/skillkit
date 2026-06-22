@@ -82,6 +82,20 @@ function migrate(d: Database.Database) {
       v TEXT
     );
 
+    -- 分享链接缓存：同一 (tool, name) 的分享复用，避免每次都重新打包上传。
+    -- 这是一张独立表，**不会被 scanAll 清空**（installed_skills 才会被清空重建）。
+    CREATE TABLE IF NOT EXISTS share_links (
+      tool TEXT NOT NULL,
+      name TEXT NOT NULL,
+      share_id TEXT NOT NULL,
+      url TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      mtime INTEGER,
+      size_bytes INTEGER,
+      PRIMARY KEY (tool, name)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_market_owner ON market_skills(owner);
     CREATE INDEX IF NOT EXISTS idx_market_name ON market_skills(name);
   `);
@@ -229,6 +243,71 @@ export function countMarket(filter?: { q?: string; owner?: string }): number {
   const sql = 'SELECT COUNT(*) AS c FROM market_skills' + (where.length ? ' WHERE ' + where.join(' AND ') : '');
   const r = getDb().prepare(sql).get(...params) as { c: number };
   return r.c;
+}
+
+// ===== share_links（分享链接缓存）=====
+export interface ShareLinkRow {
+  tool: Tool;
+  name: string;
+  shareId: string;
+  url: string;
+  expiresAt: number;
+  createdAt: number;
+  mtime: number | null;
+  sizeBytes: number | null;
+}
+
+export function getShareLink(tool: Tool, name: string): ShareLinkRow | null {
+  const r = getDb()
+    .prepare('SELECT * FROM share_links WHERE tool = ? AND name = ?')
+    .get(tool, name) as
+    | {
+        tool: string;
+        name: string;
+        share_id: string;
+        url: string;
+        expires_at: number;
+        created_at: number;
+        mtime: number | null;
+        size_bytes: number | null;
+      }
+    | undefined;
+  if (!r) return null;
+  return {
+    tool: r.tool as Tool,
+    name: r.name,
+    shareId: r.share_id,
+    url: r.url,
+    expiresAt: r.expires_at,
+    createdAt: r.created_at,
+    mtime: r.mtime ?? null,
+    sizeBytes: r.size_bytes ?? null,
+  };
+}
+
+export function upsertShareLink(row: ShareLinkRow): void {
+  getDb()
+    .prepare(
+      `INSERT INTO share_links (tool, name, share_id, url, expires_at, created_at, mtime, size_bytes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(tool, name) DO UPDATE SET
+         share_id=excluded.share_id,
+         url=excluded.url,
+         expires_at=excluded.expires_at,
+         created_at=excluded.created_at,
+         mtime=excluded.mtime,
+         size_bytes=excluded.size_bytes`,
+    )
+    .run(
+      row.tool,
+      row.name,
+      row.shareId,
+      row.url,
+      row.expiresAt,
+      row.createdAt,
+      row.mtime,
+      row.sizeBytes,
+    );
 }
 
 export function listMarket(args: { q?: string; owner?: string; page: number; pageSize: number }): MarketSkill[] {

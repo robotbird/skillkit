@@ -4,12 +4,13 @@ import os from 'node:os';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import AdmZip from 'adm-zip';
-import { listInstalled } from './db.js';
+import { listInstalled, getShareLink, upsertShareLink, type ShareLinkRow } from './db.js';
 import { installFromZip } from './installer.js';
 import {
   SHARE_BASE_URL,
   SHARE_MAX_BYTES,
   type InstallResult,
+  type InstalledSkill,
   type ShareCreateResult,
   type ShareMeta,
   type ShareSourceInfo,
@@ -17,12 +18,33 @@ import {
 } from '../shared/types.js';
 
 /**
+ * 同一 (tool, name) 的 skill 是否与缓存时内容一致：mtime + 体积都对得上才算未变。
+ * 任一边缺指纹（扫描时 stat 失败等）则无法判定，保守视为「未变」以命中缓存。
+ */
+function shareContentUnchanged(cached: ShareLinkRow, skill: InstalledSkill): boolean {
+  if (cached.mtime == null || cached.sizeBytes == null) return true;
+  if (skill.mtime == null || skill.sizeBytes == null) return true;
+  return cached.mtime === skill.mtime && cached.sizeBytes === skill.sizeBytes;
+}
+
+/**
  * 把一个本地已安装的 skill 打包并上传到分享服务，返回短链。
+ *
+ * 同一 skill 在链接未过期且内容未变时会复用数据库里缓存的短链，不再重复打包上传；
+ * skill 被改动（mtime/体积变化）或旧链接过期后会自动重新生成。
  */
 export async function shareSkill(tool: Tool, name: string): Promise<ShareCreateResult> {
   const list = listInstalled({ tool });
   const skill = list.find((s) => s.name === name);
   if (!skill) throw new Error(`未找到 ${name}（${tool}）`);
+
+  const now = Date.now();
+
+  // 命中缓存：同一 (tool, name) 已有未过期且内容未变的分享，直接复用
+  const cached = getShareLink(tool, name);
+  if (cached && cached.expiresAt > now && shareContentUnchanged(cached, skill)) {
+    return { id: cached.shareId, url: cached.url, expiresAt: cached.expiresAt };
+  }
 
   // 打包
   const zip = new AdmZip();
@@ -65,7 +87,19 @@ export async function shareSkill(tool: Tool, name: string): Promise<ShareCreateR
   }
   const data = (await res.json()) as ShareCreateResult;
   // 链接以客户端使用的基地址为准（不依赖服务端/反代的 Host 头）
-  return { ...data, url: `${SHARE_BASE_URL}/share/${data.id}` };
+  const url = `${SHARE_BASE_URL}/share/${data.id}`;
+  // 缓存这条分享，下次同一 skill 直接复用
+  upsertShareLink({
+    tool,
+    name,
+    shareId: data.id,
+    url,
+    expiresAt: data.expiresAt,
+    createdAt: now,
+    mtime: skill.mtime,
+    sizeBytes: skill.sizeBytes,
+  });
+  return { ...data, url };
 }
 
 /**
