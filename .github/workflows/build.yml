@@ -58,7 +58,9 @@ jobs:
         run: npm run build
 
       - name: Package with electron-builder
-        run: npx electron-builder --${{ matrix.arch }}
+        # --publish never：electron-builder 检测到 CI 环境会默认尝试发版（需要 GH_TOKEN），
+        # 我们在 release job 里用 softprops/action-gh-release 自己发版，这里只打包。
+        run: npx electron-builder --${{ matrix.arch }} --publish never
         env:
           # 关闭 macOS 自动签名身份发现：CI 上没有证书时让它干净地跳过签名。
           # 启用签名见下方注释块。
