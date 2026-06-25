@@ -1,0 +1,137 @@
+name: Build & Package
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'server/**'
+      - 'api/**'
+      - '.claude/**'
+      - '**/*.md'
+  workflow_dispatch:
+    inputs:
+      create-release:
+        description: '创建 GitHub Release 并上传产物（建议先确认签名开关状态）'
+        type: boolean
+        default: false
+      version:
+        description: '版本号（留空则用 package.json 里的 version）'
+        required: false
+
+# 同一分支上的运行串行/抢占，避免 main 上的连续提交叠跑；手动出 Release 时不会被抢断
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.artifact }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 原生 runner 打原生架构，绕开 better-sqlite3 跨架构原生模块编译
+          - { os: macos-14, arch: arm64, artifact: skillkit-mac-arm64 }
+          - { os: macos-13, arch: x64, artifact: skillkit-mac-x64 }
+          - { os: windows-latest, arch: x64, artifact: skillkit-windows-x64 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      # better-sqlite3 必须针对 Electron ABI 重新编译，否则打包出的 app 启动即崩
+      - name: Rebuild native modules (better-sqlite3)
+        run: npm run rebuild
+
+      - name: Build (tsc + vite)
+        run: npm run build
+
+      - name: Package with electron-builder
+        run: npx electron-builder --${{ matrix.arch }}
+        env:
+          # 关闭 macOS 自动签名身份发现：CI 上没有证书时让它干净地跳过签名。
+          # 启用签名见下方注释块。
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      # ---------------------------------------------------------------
+      # macOS 代码签名 / 公证开关（当前：关闭）
+      # 想启用时，在 repo Settings → Secrets and variables → Actions 配置：
+      #   MAC_CERTS            — 导出的 .p12，base64 编码（macOS: base64 -i cert.p12）
+      #   MAC_CERTS_PASSWORD   — 该 .p12 的密码
+      # 然后把上面 env 块替换为：
+      #   CSC_LINK: ${{ secrets.MAC_CERTS }}
+      #   CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+      #   CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # 公证还需要 APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID，
+      # 以及一个 afterSign 钩子调用 @electron/notarize（需新增 build/afterSign.js）。
+      # 未签名的 dmg，用户首次打开需右键「打开」绕过 Gatekeeper。
+      # ---------------------------------------------------------------
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*-mac.zip
+            release/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs['create-release']
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Resolve version
+        id: ver
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          VERSION="${{ inputs.version }}"
+          [ -z "$VERSION" ] && VERSION="$PKG_VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: assets
+
+      - name: Create / update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Skillkit ${{ steps.ver.outputs.version }}
+          files: |
+            assets/**/*.dmg
+            assets/**/*.zip
+            assets/**/*.exe
+          body: |
+            Skillkit ${{ steps.ver.outputs.version }}
+
+            > ⚠️ macOS 版本当前**未签名**。首次打开若提示「已损坏 / 无法验证开发者」，请右键 App →「打开」，或在终端执行 `xattr -dr com.apple.quarantine /Applications/Skillkit.app`。
+          generate_release_notes: true
+          make_latest: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
