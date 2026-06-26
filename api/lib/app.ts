@@ -13,7 +13,7 @@ import {
 // 6 字符 base32(去掉容易混淆的 0/O/1/I/L)— 32^6 ≈ 1e9
 const newId = customAlphabet('23456789abcdefghijkmnpqrstuvwxyz', 6);
 
-const VALID_TOOLS: Tool[] = ['claude', 'codex', 'cursor', 'trae'];
+const VALID_TOOLS: Tool[] = ['claude', 'codex', 'cursor', 'trae', 'workbuddy'];
 
 /**
  * 无副作用的 Hono app —— 阿里云(server/src/index.ts 的 serve)与 Vercel(api/* 函数文件
@@ -125,6 +125,7 @@ const TOOL_LABELS: Record<Tool, string> = {
   codex: 'Codex',
   cursor: 'Cursor',
   trae: 'Trae',
+  workbuddy: 'Workbuddy',
 };
 // 来源 chip 圆点的品牌色（深/浅两种主题下都可见）
 const TOOL_COLOR: Record<Tool, string> = {
@@ -132,6 +133,7 @@ const TOOL_COLOR: Record<Tool, string> = {
   codex: '#4F5BD5',
   cursor: '#9B968A',
   trae: '#1FAE6B',
+  workbuddy: '#6C4DFF',
 };
 
 app.get('/share/:id', async (c) => {
@@ -153,7 +155,7 @@ app.get('/share/:id', async (c) => {
   const ogDesc =
     meta && !expired && meta.description
       ? meta.description
-      : '通过 Skillkit 分享的 AI skill —— 7 天内可一键安装到 Claude Code / Codex / Cursor / Trae。';
+      : '通过 Skillkit 分享的 AI skill —— 7 天内可一键安装到 Claude Code / Codex / Cursor / Trae / Workbuddy。';
   const ogImage = 'https://www.skillkit.net/assets/logo.png';
 
   let body: string;

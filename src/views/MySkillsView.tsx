@@ -9,12 +9,14 @@ import claudeIcon from '../assets/agents/claude-code.svg';
 import codexIcon from '../assets/agents/codex.svg';
 import cursorIcon from '../assets/agents/cursor.svg';
 import traeIcon from '../assets/agents/trae.svg';
+import workbuddyIcon from '../assets/agents/workbuddy.svg';
 
 const TOOL_ICON: Record<Tool, string> = {
   claude: claudeIcon,
   codex: codexIcon,
   cursor: cursorIcon,
   trae: traeIcon,
+  workbuddy: workbuddyIcon,
 };
 
 type ViewMode = 'grid' | 'list';
@@ -70,7 +72,7 @@ export default function MySkillsView({
 
   // 每个 chip 的计数 = 包含该工具的「组」数（而非行数）
   const counts = useMemo(() => {
-    const map: Record<Tool, number> = { claude: 0, codex: 0, cursor: 0, trae: 0 };
+    const map: Record<Tool, number> = { claude: 0, codex: 0, cursor: 0, trae: 0, workbuddy: 0 };
     for (const g of groups) for (const t of g.tools) map[t]++;
     return map;
   }, [groups]);

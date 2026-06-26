@@ -47,15 +47,22 @@ const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const RENDERER_DIST = path.join(__dirname, '../dist');
 
 function createWindow() {
+  const isMac = process.platform === 'darwin';
   const w = new BrowserWindow({
     width: 1240,
     height: 820,
     minWidth: 980,
     minHeight: 640,
-    titleBarStyle: 'hiddenInset',
     backgroundColor: '#1a1410',
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
+    // macOS:hiddenInset + 毛玻璃(左上角红绿灯)。
+    // Windows:'hidden' + titleBarOverlay(右上角原生最小化/最大化/关闭),
+    //         无框但整条 .topbar 仍可拖拽,居中 tabs 不与右上角按钮重叠。
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    vibrancy: isMac ? 'under-window' : undefined,
+    visualEffectState: isMac ? 'active' : undefined,
+    titleBarOverlay: isMac
+      ? undefined
+      : { color: '#1a1410', symbolColor: '#e8dcc8', height: 40 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,

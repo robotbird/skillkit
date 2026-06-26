@@ -3,12 +3,14 @@ import claudeIcon from '../assets/agents/claude-code.svg';
 import codexIcon from '../assets/agents/codex.svg';
 import cursorIcon from '../assets/agents/cursor.svg';
 import traeIcon from '../assets/agents/trae.svg';
+import workbuddyIcon from '../assets/agents/workbuddy.svg';
 
 const ICONS: Record<Tool, string> = {
   claude: claudeIcon,
   codex: codexIcon,
   cursor: cursorIcon,
   trae: traeIcon,
+  workbuddy: workbuddyIcon,
 };
 
 interface Props {

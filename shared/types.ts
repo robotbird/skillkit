@@ -1,14 +1,15 @@
 // 主进程 / 渲染进程共享类型
-export type Tool = 'claude' | 'codex' | 'cursor' | 'trae';
+export type Tool = 'claude' | 'codex' | 'cursor' | 'trae' | 'workbuddy';
 
 export const TOOL_LABELS: Record<Tool, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   cursor: 'Cursor',
   trae: 'Trae',
+  workbuddy: 'Workbuddy',
 };
 
-export const ALL_TOOLS: Tool[] = ['claude', 'codex', 'cursor', 'trae'];
+export const ALL_TOOLS: Tool[] = ['claude', 'codex', 'cursor', 'trae', 'workbuddy'];
 
 export interface InstalledSkill {
   tool: Tool;

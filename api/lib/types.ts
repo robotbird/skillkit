@@ -8,7 +8,7 @@
 // 需同步到此文件。其余符号(TOOL_LABELS、ALL_TOOLS、SHARE_BASE_URL、桌面端 API 类型等)
 // server 运行时用不到,不在此重复。
 
-export type Tool = 'claude' | 'codex' | 'cursor' | 'trae';
+export type Tool = 'claude' | 'codex' | 'cursor' | 'trae' | 'workbuddy';
 
 export interface ShareMeta {
   id: string;

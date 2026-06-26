@@ -26,6 +26,7 @@ const TOOL_LABELS: Record<Tool, string> = {
   codex: 'Codex',
   cursor: 'Cursor',
   trae: 'Trae',
+  workbuddy: 'Workbuddy',
 };
 
 export default function MarketView({
