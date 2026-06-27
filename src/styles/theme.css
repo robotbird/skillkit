@@ -110,6 +110,48 @@ html, body, #root {
   transition: color 0.18s, background 0.18s, transform 0.18s;
   font-family: inherit; letter-spacing: 0.02em;
 }
+
+/* 自动更新按钮(右上角):有新版本时出现,点击下载安装包并打开 */
+.update-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  -webkit-app-region: no-drag;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--amber, #ffb24d);
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
+}
+.update-btn:hover {
+  background: rgba(255, 177, 74, 0.12);
+  border-color: rgba(255, 177, 74, 0.5);
+}
+.update-btn:disabled { cursor: default; opacity: 0.9; }
+.update-btn .spinner { width: 14px; height: 14px; }
+.update-btn.is-done { color: var(--green, #4ade80); }
+.update-btn.is-error { color: #ff6b6b; }
+.update-dot {
+  position: absolute;
+  top: 5px; right: 5px;
+  width: 7px; height: 7px;
+  border-radius: 999px;
+  background: #ffb24d;
+  animation: update-pulse 1.8s infinite;
+}
+@keyframes update-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 178, 77, 0.55); }
+  70% { box-shadow: 0 0 0 6px rgba(255, 178, 77, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 178, 77, 0); }
+}
 .tab:hover { color: var(--ink); background: rgba(255, 255, 255, 0.04); }
 .tab.is-active {
   color: var(--pill-active-ink);

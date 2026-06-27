@@ -4,11 +4,13 @@ import type {
   Tool,
   InstalledFilter,
   MarketListQuery,
+  UpdateAvailableInfo,
 } from '../shared/types.js';
 
 const api: SkillkitApi = {
   scanAll: () => ipcRenderer.invoke('scan:all'),
   listInstalled: (filter?: InstalledFilter) => ipcRenderer.invoke('installed:list', filter),
+  installedTools: () => ipcRenderer.invoke('installed:tools'),
   uninstallSkill: (tool: Tool, name: string) =>
     ipcRenderer.invoke('installed:uninstall', tool, name),
   revealInFinder: (p: string) => ipcRenderer.invoke('installed:reveal', p),
@@ -31,10 +33,20 @@ const api: SkillkitApi = {
   installFromShare: (input: string, targets: Tool[]) =>
     ipcRenderer.invoke('share:installFromShare', input, targets),
 
+  getWarehouseRoot: () => ipcRenderer.invoke('warehouse:get'),
+  pickWarehouseRoot: () => ipcRenderer.invoke('warehouse:pick'),
+  setWarehouseRoot: (path: string) => ipcRenderer.invoke('warehouse:set', path),
+
   // 分享页「从 Skillkit 打开」唤起本应用时，主进程经此通道把 share id 推给渲染进程
   onDeepLink: (cb: (input: string) => void) => {
     ipcRenderer.on('skillkit:deep-link', (_e, input: string) => cb(input));
   },
+
+  onUpdateAvailable: (cb) => {
+    ipcRenderer.on('update:available', (_e, info: UpdateAvailableInfo) => cb(info));
+  },
+  getUpdateStatus: () => ipcRenderer.invoke('update:status'),
+  applyUpdate: () => ipcRenderer.invoke('update:apply'),
 };
 
 contextBridge.exposeInMainWorld('skillkit', api);

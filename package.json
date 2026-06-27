@@ -22,6 +22,7 @@
     "@vercel/blob": "^2.4.1",
     "adm-zip": "^0.5.16",
     "better-sqlite3": "^11.3.0",
+    "electron-updater": "^6.8.9",
     "hono": "^4.6.13",
     "nanoid": "^5.0.9",
     "react": "^18.3.1",
@@ -71,11 +72,34 @@
         "CFBundleURLTypes": [
           {
             "CFBundleURLName": "com.skillkit.app",
-            "CFBundleURLSchemes": ["skillkit"],
+            "CFBundleURLSchemes": [
+              "skillkit"
+            ],
             "CFBundleTypeRole": "Viewer"
           }
         ]
       }
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "robotbird",
+      "repo": "skillkit"
     }
   }
 }

@@ -1,5 +1,5 @@
 import { ipcMain, dialog, shell } from 'electron';
-import { scanAll, listInstalled } from './scan.js';
+import { scanAll, listInstalled, installedTools } from './scan.js';
 import { TOOLS } from './tools.js';
 import { refreshMarket, listMarketSkills, fetchMarketDetail } from './market.js';
 import {
@@ -10,6 +10,8 @@ import {
   copyInstalledToTools,
 } from './installer.js';
 import { shareSkill, inspectShare, installFromShare } from './share.js';
+import { getWarehouseRoot, setWarehouseRoot } from './warehouse.js';
+import { applyUpdate, getUpdateStatus } from './updater.js';
 import type { Tool, InstalledFilter, MarketListQuery } from '../shared/types.js';
 
 export function registerIpc() {
@@ -17,6 +19,7 @@ export function registerIpc() {
   ipcMain.handle('installed:list', async (_e, filter: InstalledFilter | undefined) =>
     listInstalled(filter),
   );
+  ipcMain.handle('installed:tools', async () => installedTools());
   ipcMain.handle('installed:uninstall', async (_e, tool: Tool, name: string) => {
     const list = listInstalled({ tool });
     const target = list.find((s) => s.name === name);
@@ -75,6 +78,22 @@ export function registerIpc() {
     scanAll();
     return r;
   });
+
+  // 仓库根目录配置
+  ipcMain.handle('warehouse:get', async () => getWarehouseRoot());
+  ipcMain.handle('warehouse:pick', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选择 Skill 仓库根目录',
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths.length) return null;
+    return result.filePaths[0];
+  });
+  ipcMain.handle('warehouse:set', async (_e, p: string) => setWarehouseRoot(p));
+
+  // 自动更新
+  ipcMain.handle('update:status', async () => getUpdateStatus());
+  ipcMain.handle('update:apply', async () => applyUpdate());
 }
 
 // 仅供主进程内部用，避免循环引用

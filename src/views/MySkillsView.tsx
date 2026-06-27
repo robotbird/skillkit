@@ -5,6 +5,7 @@ import ShareDialog from '../components/ShareDialog';
 import ToolPicker from '../components/ToolPicker';
 import type { ToastState } from '../components/Toast';
 import { groupBySkill, type SkillGroup } from '../lib/groupSkills';
+import { useInstalledTools } from '../lib/useInstalledTools';
 import claudeIcon from '../assets/agents/claude-code.svg';
 import codexIcon from '../assets/agents/codex.svg';
 import cursorIcon from '../assets/agents/cursor.svg';
@@ -38,6 +39,9 @@ export default function MySkillsView({
   const [copying, setCopying] = useState(false);
   const [uninstallGroup, setUninstallGroup] = useState<SkillGroup | null>(null);
   const [uninstalling, setUninstalling] = useState(false);
+
+  // 只展示「已安装」工具的 chip;未安装工具不出现
+  const { tools: installed } = useInstalledTools();
 
   async function refresh() {
     setScanning(true);
@@ -179,7 +183,7 @@ export default function MySkillsView({
         >
           全部（{groups.length}）
         </button>
-        {ALL_TOOLS.map((t) => (
+        {installed.map((t) => (
           <button
             key={t}
             className={`chip chip-tool${tool === t ? ' is-active' : ''}`}
@@ -205,7 +209,7 @@ export default function MySkillsView({
               onUninstall={startUninstall}
               onReveal={(grp) => window.skillkit.revealInFinder(grp.primary.path)}
               onShare={(grp) => setShareSkill(grp.primary)}
-              onCopyTo={g.tools.length < ALL_TOOLS.length ? setCopyGroup : undefined}
+              onCopyTo={g.tools.length < installed.length ? setCopyGroup : undefined}
             />
           ))
         )}
@@ -259,7 +263,7 @@ export default function MySkillsView({
         }
         defaultSelected={
           copyGroup
-            ? (ALL_TOOLS.filter((t) => !copyGroup.tools.includes(t)).slice(0, 1) as Tool[])
+            ? (installed.filter((t) => !copyGroup.tools.includes(t)).slice(0, 1) as Tool[])
             : []
         }
         excludeTools={copyGroup ? copyGroup.tools : []}

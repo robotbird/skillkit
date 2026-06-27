@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ALL_TOOLS, TOOL_LABELS, type Tool } from '@shared/types';
+import { useInstalledTools } from '../lib/useInstalledTools';
 import claudeIcon from '../assets/agents/claude-code.svg';
 import codexIcon from '../assets/agents/codex.svg';
 import cursorIcon from '../assets/agents/cursor.svg';
@@ -46,14 +47,21 @@ export default function ToolPicker({
   onCancel,
   onConfirm,
 }: Props) {
+  // 只展示「已安装」工具(其 ~/.<tool> 根目录存在),未安装工具既不显示也不可选。
+  const { tools: installed } = useInstalledTools();
+  const availableSet = useMemo(() => new Set(installed), [installed]);
+
   const visibleTools = useMemo(
-    () => ALL_TOOLS.filter((t) => !excludeTools?.includes(t)),
-    [excludeTools],
+    () => ALL_TOOLS.filter((t) => !excludeTools?.includes(t) && availableSet.has(t)),
+    [excludeTools, availableSet],
   );
   const disabledSet = useMemo(() => new Set(disableTools ?? []), [disableTools]);
   const initial = useMemo(
-    () => defaultSelected.filter((t) => !excludeTools?.includes(t) && !disabledSet.has(t)),
-    [defaultSelected, excludeTools, disabledSet],
+    () =>
+      defaultSelected.filter(
+        (t) => !excludeTools?.includes(t) && !disabledSet.has(t) && availableSet.has(t),
+      ),
+    [defaultSelected, excludeTools, disabledSet, availableSet],
   );
   const [picked, setPicked] = useState<Tool[]>(initial);
 

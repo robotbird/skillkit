@@ -3,6 +3,7 @@ import TopBar, { type TabKey } from './components/TopBar';
 import MySkillsView from './views/MySkillsView';
 import MarketView from './views/MarketView';
 import InstallView from './views/InstallView';
+import WarehouseView from './views/WarehouseView';
 import Toast, { useToast } from './components/Toast';
 
 export default function App() {
@@ -46,6 +47,7 @@ export default function App() {
             onPendingConsumed={() => setPendingShare(null)}
           />
         )}
+        {tab === 'warehouse' && <WarehouseView toast={toast} />}
       </main>
 
       <Toast {...toast.props} />

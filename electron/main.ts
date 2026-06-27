@@ -6,6 +6,8 @@ import { registerIpc } from './ipc.js';
 import { refreshMarket } from './market.js';
 import { scanAll } from './scan.js';
 import { parseShareId } from './share.js';
+import { checkForUpdate } from './updater.js';
+import type { UpdateAvailableInfo } from '../shared/types.js';
 
 // macOS 菜单栏 / Dock 等处显示的应用名（dev 模式下默认会显示 "Electron"）
 app.setName('Skillkit');
@@ -14,6 +16,8 @@ app.setName('Skillkit');
 const PROTOCOL = 'skillkit';
 // 冷启动时（window 还没建好）收到的深链，先缓存，等页面加载完再发给渲染进程
 let pendingDeepLink: string | null = null;
+// 启动期检查到的更新信息（渲染进程就绪前先缓存，就绪后补发）
+let pendingUpdate: UpdateAvailableInfo | null = null;
 
 let win: BrowserWindow | null = null;
 
@@ -31,6 +35,15 @@ function handleDeepLink(url: string) {
     }
   } catch {
     // 不是 skillkit://share/<id> 形式，忽略
+  }
+}
+
+/** 把「发现新版本」推给渲染进程；窗口没建好则缓存到 pendingUpdate。 */
+function notifyUpdate(info: UpdateAvailableInfo) {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('update:available', info);
+  } else {
+    pendingUpdate = info;
   }
 }
 
@@ -77,6 +90,10 @@ function createWindow() {
       w.webContents.send('skillkit:deep-link', pendingDeepLink);
       pendingDeepLink = null;
     }
+    if (pendingUpdate) {
+      w.webContents.send('update:available', pendingUpdate);
+      pendingUpdate = null;
+    }
   });
 
   if (VITE_DEV_SERVER_URL) {
@@ -102,6 +119,15 @@ function bootstrap() {
     setTimeout(() => {
       refreshMarket(false).catch((e) => console.error('market warmup failed', e));
     }, 800);
+
+    // 启动后检查更新（后台，失败静默；发现新版本推给渲染进程）
+    setTimeout(() => {
+      checkForUpdate()
+        .then((r) => {
+          if (r.available && r.info) notifyUpdate(r.info);
+        })
+        .catch((e) => console.error('update check failed', e));
+    }, 1500);
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

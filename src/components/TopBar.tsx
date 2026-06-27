@@ -1,11 +1,13 @@
 import logoMark from '../assets/logo-mark.png';
+import UpdateButton from './UpdateButton';
 
-export type TabKey = 'my' | 'market' | 'install';
+export type TabKey = 'my' | 'market' | 'install' | 'warehouse';
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: 'my', label: '我的 Skill' },
   // { key: 'market', label: '推荐 Skill' }, // 暂时隐藏，后续版本开通
   { key: 'install', label: '安装 Skill' },
+  { key: 'warehouse', label: '仓库' },
 ];
 
 export default function TopBar({
@@ -33,6 +35,7 @@ export default function TopBar({
           </button>
         ))}
       </nav>
+      <UpdateButton />
     </header>
   );
 }

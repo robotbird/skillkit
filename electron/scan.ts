@@ -87,6 +87,17 @@ export function scanTool(tool: Tool): InstalledSkill[] {
   return out;
 }
 
+/** 工具是否「已安装」:其用户级根目录(~/.<tool>,即 installRoot 的父目录)存在。
+ *  不检查 skills 子目录本身——工具装了但还没 skill 时也应可见/可选(否则无法安装第一个 skill)。 */
+export function isToolInstalled(tool: Tool): boolean {
+  return fs.existsSync(path.dirname(TOOLS[tool].installRoot));
+}
+
+/** 所有已安装工具(按 ALL_TOOLS 顺序),用于 UI 只展示这些工具。 */
+export function installedTools(): Tool[] {
+  return ALL_TOOLS.filter(isToolInstalled);
+}
+
 export function scanAll(): InstalledSkill[] {
   const all: InstalledSkill[] = [];
   for (const tool of ALL_TOOLS) {
