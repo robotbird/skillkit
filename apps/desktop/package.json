@@ -1,0 +1,99 @@
+{
+  "name": "desktop",
+  "version": "0.2.0",
+  "productName": "Skillkit",
+  "private": true,
+  "description": "Skillkit 桌面端 — 跨 Claude Code / Codex / Cursor / Trae / Workbuddy 的 skill 管理",
+  "main": "dist-electron/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.node.json && tsc -p tsconfig.json && vite build",
+    "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.json",
+    "preview": "vite preview",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "logo:mark": "node scripts/extract-logo-mark.mjs"
+  },
+  "dependencies": {
+    "@skillkit/types": "workspace:*",
+    "adm-zip": "^0.5.16",
+    "better-sqlite3": "^11.3.0",
+    "electron-updater": "^6.8.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tar": "^7.4.3"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
+    "@types/adm-zip": "^0.5.5",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^20.16.5",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^31.4.0",
+    "electron-builder": "^26.15.3",
+    "pngjs": "^7.0.0",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.6",
+    "vite-plugin-electron": "^0.28.8",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "build": {
+    "appId": "com.skillkit.app",
+    "productName": "Skillkit",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "extendInfo": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLName": "com.skillkit.app",
+            "CFBundleURLSchemes": [
+              "skillkit"
+            ],
+            "CFBundleTypeRole": "Viewer"
+          }
+        ]
+      }
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "robotbird",
+      "repo": "skillkit"
+    }
+  }
+}

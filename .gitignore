@@ -8,5 +8,9 @@ build/icon.iconset/
 *.log
 *.local
 .cache/
-server/data/*
-!server/data/README.md
+.turbo/
+.next/
+
+# 本地分享存储(local store)
+apps/server/data/*
+!apps/server/data/README.md

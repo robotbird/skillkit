@@ -4,62 +4,105 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Skillkit v2 — a macOS Electron desktop app for managing "skills" across four AI coding tools (Claude Code, Codex, Cursor, Trae). It browses the [skills.sh](https://www.skills.sh) marketplace, installs/uninstalls skills from market/GitHub/zip, and shares installed skills via short links. Tech stack: **React 18 + TypeScript + Vite + Electron + better-sqlite3**. A separate **Hono** share server lives in `server/`.
+Skillkit — manage "skills" across AI coding tools (Claude Code, Codex, Cursor, Trae, Workbuddy): browse the [skills.sh](https://www.skills.sh) marketplace, install/uninstall from market/GitHub/zip, and share installed skills via short links. A **pnpm-workspace monorepo** with three parts:
+
+- **`apps/desktop`** — Electron desktop client (React 18 + TypeScript + Vite + better-sqlite3).
+- **`apps/server`** — Next.js 16 (App Router) full-stack service: the share short-link API + (future) web 个人中心 / 团队 skill 管理. Deployed to Vercel.
+- **`packages/types`** — `@skillkit/types`: cross-process shared types & constants (single source of truth).
+
+The marketing site (官网) is a **separate repo** at `../skillkit.net`, not part of this monorepo.
 
 ## Commands
 
+Run from the repo root. Each app also has its own scripts (`pnpm --filter <name> <script>`).
+
 ```bash
-npm install
-npm run rebuild   # REQUIRED: rebuilds better-sqlite3 against Electron's ABI (electron-rebuild). Run after install / Electron version bumps.
-npm run dev       # Full Electron app in dev (vite-plugin-electron launches Electron + watches all 3 bundles)
-npm run server    # Share server only (tsx, port 8787). Standalone package in server/ — run `npm install` there first.
-npm run dev:all   # `npm run dev` + `npm run server` together via concurrently
-npm run build     # tsc -p both tsconfigs (typecheck, noEmit) + vite build
-npm run dist      # build + electron-builder → release/ (mac dmg + zip)
-npm run pack      # build + electron-builder --dir (unpacked, for debugging)
+pnpm install                 # workspace install (links @skillkit/types, installs apps/desktop + apps/server deps)
+
+# Desktop (apps/desktop)
+pnpm --filter desktop rebuild   # REQUIRED: rebuilds better-sqlite3 against Electron's ABI. Run after install / Electron bumps.
+pnpm --filter desktop dev       # Full Electron app in dev (vite-plugin-electron launches Electron + watches all 3 bundles)
+pnpm --filter desktop build     # tsc -p both tsconfigs (typecheck, noEmit) + vite build
+pnpm --filter desktop pack      # build + electron-builder --dir (unpacked, for debugging)
+pnpm --filter desktop dist      # build + electron-builder → release/ (mac dmg/zip, win nsis)
+
+# Server (apps/server)
+pnpm --filter server dev        # next dev (port 3000)
+pnpm --filter server build      # next build
+SHARE_STORE=local pnpm --filter server dev   # local file store (no Blob token needed)
+
+# Repo-wide (turbo)
+pnpm dev        # turbo dev — runs desktop + server dev in parallel
+pnpm build      # turbo build
+pnpm typecheck  # turbo typecheck
 ```
 
-There is **no test framework** in this repo (no test files, no test script). Typechecking for the main app is `npm run build` (it runs `tsc -p tsconfig.json` and `tsc -p tsconfig.node.json`); for the server, `cd server && npm run typecheck`.
+There is **no test framework**. Typechecking: desktop via its `typecheck` script (`tsc -p` both tsconfigs); server via `next build` (which typechecks) or `tsc --noEmit`.
 
 ## Architecture
 
-### Three-process Electron model + shared types
+### Monorepo layout
 
-- **Main process** (`electron/`, ESM, built to `dist-electron/`): all native/IO work — SQLite, filesystem scanning, tarball/zip extraction, network fetches, talking to the share server.
-- **Preload** (`electron/preload.ts` → `preload.mjs`): exposes a single `window.skillkit` object via `contextBridge`. `contextIsolation: true`, `nodeIntegration: false` — the renderer can **only** reach the main process through this typed API.
-- **Renderer** (`src/`, React, built to `dist/`): three views (`MySkillsView` / `MarketView` / `InstallView`) behind a `TopBar`, warm-dark theme in `src/styles/theme.css`.
+```
+apps/desktop/   electron/ src/ shared/ build/ public/ vite.config.ts tsconfig*.json
+apps/server/    app/ lib/ next.config.ts tsconfig.json vercel.json
+packages/types/ src/index.ts            # @skillkit/types
+pnpm-workspace.yaml  turbo.json  package.json (root: devDeps + turbo scripts only)
+```
 
-**Adding any main-process capability requires three coordinated edits**: an IPC handler in `electron/ipc.ts`, a method on `window.skillkit` in `electron/preload.ts`, **and** the matching signature in `shared/types.ts` (`SkillkitApi`). `shared/types.ts` is the single source of truth for the cross-process contract — `Tool`, all data interfaces, the `SkillkitApi` type, and share constants (`SHARE_BASE_URL`, `SHARE_TTL_MS`, `SHARE_MAX_BYTES`).
+### `packages/types` (`@skillkit/types`)
 
-The `@shared` alias → `shared/` is wired in **three** places: `vite.config.ts` (renderer and electron-main vite configs) and both tsconfigs (`tsconfig.json` renderer, `tsconfig.node.json` electron). The share server does **not** use the alias — it imports `../../shared/types.js` relatively (its own `server/tsconfig.json` has no `paths`).
+Cross-end symbols consumed by **both** desktop and server: `Tool`, `TOOL_LABELS`, `ALL_TOOLS`, `InstalledSkill`, `MarketSkill`, `InstallResult`, `InstalledFilter`, `Market*`, `ShareMeta`, `ShareCreateResult`, `ShareSourceInfo`, and share constants (`SHARE_BASE_URL`, `SHARE_TTL_MS`, `SHARE_MAX_BYTES`). **Single source of truth** — the old `api/lib/types.ts` manual subset-copy is gone.
+
+It is **pure TS with no build step**. Each consumer must teach its bundler to compile it:
+- **desktop** (`apps/desktop/vite.config.ts`): `resolve.alias['@skillkit/types'] → ../../packages/types/src` in **all three** vite bundles (renderer / electron main / preload).
+- **server** (`apps/server/next.config.ts`): `transpilePackages: ['@skillkit/types']`.
+
+### Desktop: three-process Electron model
+
+`apps/desktop/electron/` (main, ESM, → `dist-electron/`), `apps/desktop/electron/preload.ts` (→ `preload.mjs`), `apps/desktop/src/` (React renderer, → `dist/`).
+
+- **`shared/types.ts` is now a bridge layer** (NOT the source of truth): it re-exports the cross-end symbols from `@skillkit/types` **plus** defines desktop-only types (`UpdateAvailableInfo`, the `SkillkitApi` IPC contract, the `Window` global). Main process imports it as `../shared/types.js`; renderer as `@shared/types`. Keeping `shared/` inside `apps/desktop/` means **both paths stayed identical after the monorepo move** — no import rewrites were needed.
+- **Adding a main-process capability still needs three coordinated edits**: an IPC handler in `electron/ipc.ts`, a method on `window.skillkit` in `electron/preload.ts`, **and** the matching signature in `shared/types.ts` (`SkillkitApi`).
+- The `@shared` alias → `shared/` is wired in `apps/desktop/vite.config.ts` (renderer + main) and both `apps/desktop/tsconfig*.json`. Both use `moduleResolution: bundler`, so `@skillkit/types` resolves via the workspace symlink + its `exports` field — no tsconfig `paths` needed for it.
 
 ### ESM `.js` import gotcha
 
-The project is `"type": "module"`. TypeScript files in `electron/` and `server/` import each other with explicit `.js` extensions (e.g. `from './db.js'` resolves to `db.ts`) because tsc/vite emit ESM. **Always use `.js` in local relative imports** under these dirs; omitting it breaks the built output.
+The project is `"type": "module"`. Files under `apps/desktop/electron/` import each other with explicit `.js` extensions (`from './db.js'` resolves to `db.ts`) because tsc/vite emit ESM. **Always use `.js` in local relative imports there**; omitting it breaks the built output.
 
-### Main-process modules (`electron/`)
+### Desktop main-process modules (`apps/desktop/electron/`)
 
-- **`db.ts`** — better-sqlite3, WAL mode. Tables: `installed_skills`, `market_skills`, `meta` (KV). Includes a one-time legacy migration that copies the DB from the old `skillzix` userData dir to `skillkit` (Electron's userData dir follows `package.json#name`).
-- **`tools.ts`** — `TOOLS` config: each tool's `roots[]` (scan locations), `installRoot`, and optional `builtinRoot`. Cursor scans two roots (`skills` + `skills-cursor`); Trae marks `~/.trae/builtin_skills` as builtin (not uninstallable).
+- **`db.ts`** — better-sqlite3, WAL. Tables: `installed_skills`, `market_skills`, `meta` (KV). One-time legacy migration copies the DB from the old `skillzix` userData dir to `skillkit`.
+- **`tools.ts`** — `TOOLS` config: each tool's `roots[]`, `installRoot`, optional `builtinRoot`. Cursor scans two roots (`skills` + `skills-cursor`); Trae marks `~/.trae/builtin_skills` as builtin (not uninstallable).
 - **`scan.ts`** — `scanAll()` scans every tool's roots and **clears + rewrites the entire `installed_skills` table**. **The filesystem is the source of truth; the DB is a cache.** Any installed-skill state you add must be reconstructable by a scan, or it will be wiped. IPC handlers call `scanAll()` after any install/uninstall/copy.
-- **`installer.ts`** — market/GitHub installs fetch `codeload.github.com/<owner>/<repo>/tar.gz/HEAD`, extract via `tar`, locate the skill subdir; zip installs use `adm-zip` and find the shallowest dir containing `SKILL.md`. Existing installs are backed up then overwritten, rolling back on failure. Multi-target installs are independent (one failing target doesn't abort others).
+- **`installer.ts`** — market/GitHub installs fetch `codeload.github.com/<owner>/<repo>/tar.gz/HEAD`, extract via `tar`, locate the skill subdir; zip installs use `adm-zip` and find the shallowest dir containing `SKILL.md`. Existing installs are backed up then overwritten, rolling back on failure. Multi-target installs are independent.
 - **`market.ts`** — pulls `skills.sh` sitemap XML, lazy-scrapes card descriptions from detail-page JSON-LD (`SoftwareApplication`), cached in SQLite with a **24h TTL**. `OFFICIAL_OWNERS = {anthropics, vercel-labs, microsoft}`.
 - **`skill-md.ts`** — dependency-free YAML frontmatter parser; reads `SKILL.md` **or** `AGENTS.md`.
-- **`share.ts`** — client side of the share feature: zip an installed skill, POST to the share server, inspect/install from a share link.
+- **`share.ts`** — client side of sharing: zip an installed skill, POST to the server, inspect/install from a share link. Calls `${SHARE_BASE_URL}/share`, `/share/:id/meta`, `/share/:id/zip` (no `/api` prefix).
+- **`updater.ts`** — electron-updater: background check, pushes "update available" to the renderer.
+- **`warehouse.ts`** — a unified "原件" warehouse dir for skills.
 
-### Share server (`server/` + `api/`)
+### Server: Next.js App Router (`apps/server`)
 
-A Hono app that runs in **two modes off one codebase**, switched by entry file (not runtime branching):
+Share short-link service, soon to grow a logged-in 个人中心 / 团队管理 (reserved under `app/(dashboard)/`). Replaces the old Hono `api/` + `server/` dual-entry.
 
-- `api/lib/app.ts` — side-effect-free Hono `app` (**no `basePath`** — routes at root: `/share`, `/share/:id`, `/sweep`, `/`), storage via `getStore()`. Lives inside `/api` so `@vercel/node` compiles it (TS outside `/api` is never compiled — see the deploy note below for why this matters). Importing it must NOT trigger `serve()`/`setInterval`/CLI/`ensureDir`. Sibling `store.ts`, `store-blob.ts`, `types.ts` share this constraint.
-- `server/src/index.ts` — Aliyun/local entry: `@hono/node-server` `serve()` + hourly `setInterval` sweep + `--delete <id>` CLI. Default `HOST=0.0.0.0`. Imports `app`/`getStore` from `../../api/lib/` (shares the same source as the Vercel function).
-- Vercel entries — **one function file per route depth** (NOT a catch-all): `api/sweep.ts`, `api/share/index.ts` (POST `/share`), `api/share/[id].ts` (GET `/share/:id` HTML), `api/share/[id]/meta.ts`, `api/share/[id]/zip.ts`. Each is identical: `export const config = { runtime: 'nodejs', maxDuration: 60 }; export const fetch = (req: Request) => app.fetch(req)`, importing `app` from `../lib/app.js` (depth-adjusted). The file's *location* under `/api/` (a Vercel requirement) determines which URL depths reach a function; **public URLs are clean `/share/*` and `/sweep`** — `vercel.json` rewrites map `/share/:path*` → `/api/share/:path*` and `/sweep` → `/api/sweep`, and the Web-API `fetch` export receives the **original** (pre-rewrite) URL, so the app routes `/share/*` at root (NO `basePath` — a basePath would reject the original `/share/<id>` the function actually sees). Hono does the real routing by `req.url`. **Why not a catch-all `[[...route]]`/`[...route]`**: on this project `@vercel/node` mis-routes a catch-all as a single dynamic segment — only single-segment paths reached the function; multi-segment returned Vercel `NOT_FOUND` without invoking it. One-file-per-route avoids the catch-all entirely. **Why the Web-API `export const fetch` (not `@hono/node-server/vercel`'s Node-style `handle`)**: under the "Other" framework preset, the Node-style `(req,res)=>void` adapter stalled reading the POST body → `FUNCTION_INVOCATION_TIMEOUT` (60s) on every POST, while GET worked. The named `fetch` export gets a real web `Request` with the body already attached, so `c.req.formData()` doesn't stall. (Do NOT use `hono/vercel`'s `handle` as a `default` export — `@vercel/node` ignores its returned `Response`, build warns "default export returned a `Response`", client gets 404/empty.) **Do not add a catch-all rewrite for `/api/*`** (it would collapse nested paths and break `c.req.param('id')`).
+**Public paths are clean and MUST stay stable** (desktop `share.ts` calls them, and existing short links depend on them): so these route handlers live **directly under `app/share/` and `app/sweep/`, NOT under `app/api/`** — `/share` (POST), `/share/[id]` (HTML receiver), `/share/[id]/meta` (JSON), `/share/[id]/zip` (download), `/sweep` (cron). Only `/api/health` sits under `api/`.
 
-The Hono app, storage layer, and shared types live in **`api/lib/`** (`app.ts`, `store.ts`, `store-blob.ts`, `types.ts`) — the single source shared by both the Vercel function and the Aliyun `server/src/index.ts` entry. Storage is pluggable behind a `ShareStore` interface (`api/lib/store.ts`), selected by `SHARE_STORE` env: `local` (filesystem in `server/data/`, default) or `blob` (`api/lib/store-blob.ts`, Vercel Blob **public** — share content is public by design; no need for a private-access store). `getStore()` loads BlobStore via **dynamic import**, so Aliyun never needs `@vercel/blob`. The interface is fully async. 6-char nanoid IDs, 7-day TTL, **4MB cap** (constants in `api/lib/types.ts` — the cap exists for Vercel's 4.5MB request-body limit; Pro does not raise it). `api/lib/types.ts` is a **deliberate subset copy** of `shared/types.ts` (only `Tool`, `ShareMeta`, `ShareCreateResult`, `SHARE_TTL_MS`, `SHARE_MAX_BYTES` — the symbols the function needs at runtime) because `shared/types.ts` is outside `/api` and `@vercel/node` won't compile it; if those symbols change in `shared/types.ts`, sync them here. Routes live at root (no `/api` prefix in the public URL): `/share` (POST), `/share/:id/meta` (JSON metadata — note: not `.json`; Hono's router confuses overlapping `/share/:id` and `/share/:id.json`, so meta uses a distinct `/meta` segment), `/share/:id/zip`, `/share/:id` (HTML receiver — content is HTML-escaped, keep it), `/sweep`. **Public share links are clean: `https://skillkit.net/share/<id>`** (e.g. `…/share/eweqj`). The desktop client (`electron/share.ts`) calls the API at `/share`, `/share/:id/meta`, `/share/:id/zip` — same clean paths work on both Vercel (via the rewrites above) and local (Aliyun `serve()` sees `/share/*` directly, no rewrite needed). Sweep: Aliyun hourly interval; Vercel daily cron hitting `/sweep` (guarded by `CRON_SECRET` header; rewritten to `/api/sweep`). Expired shares already return 410 on read, so sweep is cost-only.
+- **`app/share/[id]/route.ts`** — the receiver page returns a **full HTML document** via route handler (not `page.tsx`): inlined CSS/JS, OG/Twitter card, theme toggle, copy-link, `skillkit://share/<id>` deep-link button, HTML-escaped user content. `generateMetadata` is not used (the HTML carries its own `<head>`). `TOOL_LABELS` comes from `@skillkit/types`; `TOOL_COLOR` is a local display constant.
+- **`lib/store.ts`** — `ShareStore` interface + `getStore()` (cached). `LocalStore` (filesystem, for local dev) vs `BlobStore` (`lib/store-blob.ts`, Vercel Blob **public**), selected by `SHARE_STORE` env. `getStore()` loads BlobStore via **dynamic import**, so local dev never needs `@vercel/blob`. `LocalStore`'s data dir defaults to `<cwd>/data` (override `SHARE_LOCAL_DIR`). Async throughout. 6-char nanoid IDs (`lib/id.ts`), 7-day TTL, **4MB cap** (Vercel 4.5MB body limit; Pro does not raise it).
 
-Vercel deploy: Root Directory = **repo root**. **CRITICAL dashboard setting: Settings → General → Framework Preset MUST be "Other" (NOT "Vite").** This is an API-only deploy with no Vite frontend; if the preset is "Vite", Vercel applies framework/SPA routing and nested `/api` paths (`/api/share/<id>/meta`, etc.) return Vercel `NOT_FOUND` without ever reaching the function — only single-segment `/api/<x>` routes through. The `framework:null` in `vercel.json` does NOT override the dashboard preset, so this must be set in the UI. Also in that Settings page, leave Build Command / Output Directory / Install Command **empty/auto** so the `vercel.json` values below apply (Vite may autofill `npm run build` / `dist`, which break this deploy). `vercel.json` sets `framework:null`, `installCommand` with `--omit=dev --ignore-scripts` to skip the Electron binary download and better-sqlite3 native compile (neither is used by the function), `outputDirectory: "."`, a **no-op `buildCommand`** (see below); `maxDuration: 60` is set per-function via each entry's `export const config` (no `functions` key in `vercel.json`). **No `includeFiles`.** **The function MUST live under `/api`** — do not try the legacy `builds`/`routes` model to host it from `server/`. Current Vercel ignores `builds` for files outside `/api`, so such a deploy "succeeds" with zero functions and **every** path returns a Vercel `NOT_FOUND` 404 (this is what took the share endpoint down). The hard constraint: **`@vercel/node` only compiles TS *inside `/api`*** (and the `server/src/index.ts` Aliyun entry, which Vercel never builds). It compiles all of `/api` (including `lib/**`) and nft traces the import graph automatically — this happens **independently of the project `buildCommand`**, which is why the buildCommand must be a no-op: the repo's `build` script is `tsc -p … && vite build`, but `tsc`/`vite` are devDeps and `--omit=dev` means they're absent, so any buildCommand that runs `npm run build` dies with `tsc: command not found` (exit 127) before the function is ever compiled. Despite `framework:null`, Vercel still runs the package `build` script unless overridden — so `buildCommand` is set to a short `echo` no-op. (If a dashboard "Build Command" override is set to `npm run build`, it wins over `vercel.json` — clear it.) So any TS the function imports *must* live physically inside `/api` — which is why the app/store/types live in `api/lib/`. `includeFiles` would copy files verbatim without compiling `.ts`→`.js`, so don't use it. `api/tsconfig.json` (NodeNext) lets `@vercel/node`'s typecheck resolve the `.js` import specs to their `.ts` sources (a `.js` import only rewrites to `.ts` under NodeNext/Bundler, not default `moduleResolution: node`); the root `tsconfig.json` is excluded by `.vercelignore` so the nearest-tsconfig walk-up hits `api/tsconfig.json`. `.vercelignore` excludes desktop-only dirs (`electron/`, `src/`, `build/`, etc.) — **root-file patterns must be anchored with a leading `/`** (e.g. `/tsconfig.json`), since unanchored `tsconfig.json` matches at any depth and would also drop `server/tsconfig.json`. Env: `SHARE_STORE=blob`, `BLOB_READ_WRITE_TOKEN`, `CRON_SECRET`. Client `SHARE_BASE_URL` defaults to `https://skillkit.net` (override locally with `SKILLKIT_SHARE_BASE_URL`).
+**Sweep**: Vercel daily cron hits `/sweep` (see `apps/server/vercel.json` `crons`), guarded by `CRON_SECRET` (Bearer). Expired shares already return 410 on read, so sweep is cost-only.
+
+**Vercel deploy**: Root Directory = **`apps/server`**, Framework Preset = **Next.js** (auto-detected). Leave Build/Install/Output empty/auto. Env: `SHARE_STORE=blob`, `BLOB_READ_WRITE_TOKEN`, `CRON_SECRET`. (This is now a standard Next.js deploy — the old `framework:null` / `--ignore-scripts` / catch-all-rewrite workarounds no longer apply because the server no longer shares a `package.json` with the Electron app.)
+
+**Domain note**: `SHARE_BASE_URL` defaults to `https://skillkit.net` (override locally with `SKILLKIT_SHARE_BASE_URL`). Whether the server keeps `skillkit.net` or moves to a subdomain (with the 官网 taking the root) is an open deploy decision — changing it breaks existing short links.
+
+### CI
+
+`.github/workflows/build.yml` packages the desktop app (mac arm64/x64, win x64) on push to main (path-ignores `apps/server/**`, `docs/**`, `*.md`). Uses **pnpm** (`pnpm/action-setup` + `actions/setup-node` cache: pnpm), installs at repo root, then `pnpm run rebuild`/`build`/`electron-builder` with `working-directory: apps/desktop`. `CSC_IDENTITY_AUTO_DISCOVERY: 'false'` (signing off; see the yml comments to enable). Release via `workflow_dispatch` + `softprops/action-gh-release`; `electron-updater` publishes to `github:robotbird/skillkit`.
 
 ### Data locations
 
 - App DB: `~/Library/Application Support/skillkit/skillkit.db`
-- Installed skills: each tool's user-level dir under `~` (e.g. `~/.claude/skills`, `~/.codex/skills`, `~/.cursor/skills`, `~/.trae/skills`).
+- Installed skills: each tool's user-level dir under `~` (`~/.claude/skills`, `~/.codex/skills`, `~/.cursor/skills`, `~/.trae/skills`, …)
+- Local share store (dev only): `apps/server/data/` (gitignored except `README.md`).
