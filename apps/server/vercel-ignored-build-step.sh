@@ -8,6 +8,11 @@
 # 退出码语义(反直觉):exit 0 → 跳过本次部署;非 0 → 继续部署。
 set -eo pipefail
 
+# 先 cd 到 git 仓库根:Vercel 把 Ignored Build Step 的 cwd 设为 Root Directory(apps/server),
+# 而 git diff --name-only 的路径输出与 cwd 相关 —— cd 到仓库根才能拿到统一的
+# apps/server/...、packages/types/... 前缀供 grep 稳定匹配。
+cd "$(git rev-parse --show-toplevel)"
+
 # 非 Vercel 环境(本地手跑)直接放行
 [ -n "$VERCEL" ] || { echo "not vercel → proceed"; exit 1; }
 
