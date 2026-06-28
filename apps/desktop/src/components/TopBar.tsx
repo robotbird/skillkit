@@ -1,4 +1,3 @@
-import logoMark from '../assets/logo-mark.png';
 import UpdateButton from './UpdateButton';
 
 export type TabKey = 'my' | 'market' | 'install' | 'warehouse';
@@ -21,9 +20,6 @@ export default function TopBar({
     <header className="topbar">
       <div className="topbar-drag" />
       <nav className="tabs" role="tablist">
-        <span className="tabs-logo" title="Skillkit">
-          <img src={logoMark} width={18} height={18} alt="" aria-hidden="true" />
-        </span>
         {tabs.map((t) => (
           <button
             key={t.key}
