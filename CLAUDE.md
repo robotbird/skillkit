@@ -93,7 +93,13 @@ Share short-link service, soon to grow a logged-in 个人中心 / 团队管理 (
 
 **Sweep**: Vercel daily cron hits `/sweep` (see `apps/server/vercel.json` `crons`), guarded by `CRON_SECRET` (Bearer). Expired shares already return 410 on read, so sweep is cost-only.
 
-**Vercel deploy**: Root Directory = **`apps/server`**, Framework Preset = **Next.js** (auto-detected). Leave Build/Install/Output empty/auto. Env: `SHARE_STORE=blob`, `BLOB_READ_WRITE_TOKEN`, `CRON_SECRET`. (This is now a standard Next.js deploy — the old `framework:null` / `--ignore-scripts` / catch-all-rewrite workarounds no longer apply because the server no longer shares a `package.json` with the Electron app.)
+**Vercel deploy**:
+- **Root Directory** = `apps/server`。
+- **Framework Preset 必须显式选 `Next.js`** —— 若留在 "Other"(迁移前 api-only 的遗留)会报 `No Output Directory "public"`(Vercel 没识别成 Next.js)。
+- **Ignored Build Step**(Settings → Git):`bash vercel-ignored-build-step.sh`(命令相对 Root Directory;脚本内部 `cd` 仓库根,仅 `apps/server`/`packages/types` 变更才继续部署,改 `apps/desktop` 自动跳过)。
+- **Install Command**:`apps/server/vercel.json` 设 `pnpm install --filter server...`,只装 server 依赖树,跳过 desktop 的 electron/better-sqlite3 原生编译。
+- Build/Output 留空(Next.js 自动 `.next`)。Env:`SHARE_STORE=blob`、`BLOB_READ_WRITE_TOKEN`、`CRON_SECRET`。
+- 标准的 Next.js 部署,旧的 `framework:null`/`--ignore-scripts`/catch-all 补丁都不再适用。
 
 **Domain note**: `SHARE_BASE_URL` defaults to `https://skillkit.net` (override locally with `SKILLKIT_SHARE_BASE_URL`). Whether the server keeps `skillkit.net` or moves to a subdomain (with the 官网 taking the root) is an open deploy decision — changing it breaks existing short links.
 
