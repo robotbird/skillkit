@@ -56,3 +56,10 @@ export const updateSkillSchema = z
     description: z.string().trim().max(280).nullable().optional(),
   })
   .strict();
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, '请输入当前密码'),
+    newPassword: z.string().min(8, '新密码至少 8 位').max(72, '密码最多 72 位'),
+  })
+  .strict();

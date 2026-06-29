@@ -188,3 +188,8 @@ export interface CreateSkillRequest {
   sourceType: TeamSkillSourceType;
   sourceRef: string;
 }
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
