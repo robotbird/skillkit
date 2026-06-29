@@ -109,8 +109,8 @@ h2 { font-size: 15px; margin: 0 0 14px; color: var(--ink-soft); font-weight: 600
 .auth-card h1 { font-size: 20px; }
 .auth-foot { margin-top: 16px; text-align: center; font-size: 13px; color: var(--ink-mute); }
 
-/* 左侧菜单 + 右侧内容(Git京风格) */
-.app-shell { display: flex; min-height: 100vh; }
+/* 左侧菜单 + 右侧内容(GitHub 风格),整体水平居中 */
+.app-shell { display: flex; min-height: 100vh; max-width: 1096px; margin-inline: auto; }
 .sidebar {
   width: 236px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--line);
   display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; padding: 18px 0 0;
