@@ -1,6 +1,9 @@
 .next/
 out/
 node_modules/
-.env*.local
+.env
+.env.*
+!.env.example
 *.log
 .DS_Store
+*.tsbuildinfo

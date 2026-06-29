@@ -103,6 +103,19 @@ Share short-link service, soon to grow a logged-in 个人中心 / 团队管理 (
 
 **Domain note**: `SHARE_BASE_URL` defaults to `https://skillkit.net` (override locally with `SKILLKIT_SHARE_BASE_URL`). Whether the server keeps `skillkit.net` or moves to a subdomain (with the 官网 taking the root) is an open deploy decision — changing it breaks existing short links.
 
+### 个人中心 / 团队管理(`app/(dashboard)/`)
+
+Web 端个人中心:注册/登录、维护昵称、团队 CRUD、团队下维护 skill **索引/目录**(每个条目指向 GitHub URL 或一条已有 share 短链;服务器**不接管** skill 文件下发,share 项复用现有 `/share/[id]` 链路)。已定:邮箱+密码认证、Vercel Postgres、团队 skill=索引、界面极简(不复用 share 毛玻璃)。
+
+- **数据层**:Prisma 6 + Postgres。`apps/server/prisma/schema.prisma`(User/Team/TeamMember/TeamSkill + TeamRole/TeamSkillSourceType 两个 enum)。`lib/db.ts` 是 PrismaClient 单例(照搬 `lib/store.ts` 的 getStore 缓存思路)。**必须 Prisma 6** —— Prisma 7 移除了 `datasource url`、强求 driver adapter,本项目不用。
+- **认证(手写,`lib/auth/`)**:`jwt.ts`(edge-safe,仅 jose + types,供 proxy 用)、`session.ts`(node,cookie+prisma,导出 issueSession/clearSession/getCurrentUser)、`password.ts`(`@node-rs/argon2`)、`guards.ts`(`requireUser`/`requireTeamMember` + `HttpError` + `errorResponse`)。session = JWT 存 httpOnly cookie(HS256,7 天)。API:`app/api/auth/{register,login,logout}`、`app/api/me`(GET/PATCH 昵称)。
+- **守卫**:`apps/server/proxy.ts`。**Next.js 16 把 `middleware.ts` 弃用、改名 `proxy.ts`**(导出 `proxy` 函数,`config.matcher` 不变)。matcher 放行 `/share /sweep /api /login /register` 等,其余(根 `/`、`/teams/*`)要求登录。proxy 只 import edge-safe 的 `jwt.ts` —— **绝不 import prisma / `session.ts`**(会把 prisma 拉进 edge bundle)。route handler 内用 `getCurrentUser` 重新验签(不信任可伪造 header)。
+- **团队/skill**:`lib/teams/repo.ts`(Prisma→DTO 映射 + 权限:`getTeamDetail` 内置成员校验,非成员一律返回 null)。`lib/teams/slug.ts`(slugify + 唯一性)。`app/api/teams/*` CRUD(创建团队时事务写入 owner 成员;删除团队仅 owner)。详情页 `app/(dashboard)/teams/[id]/page.tsx`,skill 卡片(`skill-row.tsx`)github 复制 URL / share 跳现有 `/share/[id]`(不新建 share 代码)。
+- **类型**:`packages/types` 加 User/Team/TeamMember/TeamSkill + DTO + `SESSION_COOKIE`/`SESSION_TTL_S`(纯增量)。枚举 SQL 大写 ↔ types 小写 union,在 repo 层映射;DateTime ↔ epoch ms。
+- **部署**:Vercel `vercel.json` 加 `buildCommand: "prisma generate && next build"`(关键,否则 build 找不到 Prisma client);`next.config.mjs` 加 `output: 'standalone'`(便于私有化自托管)。私有化见 `apps/server/DEPLOY.md`。env:`DATABASE_URL`、`AUTH_SECRET`(`openssl rand -base64 32`)、`SHARE_STORE`(私有化=`local`)。
+- **本机环境 gotcha**:pnpm 的 git 依赖走 SSH 会被本地代理拦 → 需 `GIT_CONFIG_KEY_0="url.https://github.com/.insteadOf" GIT_CONFIG_VALUE_0="git@github.com:"`;prisma engine 二进制下载 ECONNRESET → 需 `PRISMA_ENGINES_MIRROR=https://registry.npmmirror.com/-/binary/prisma`;本机无 docker/postgres,server runtime 端到端需自备 pg。
+- **验证状态**:typecheck ✓、`next build` ✓(含 prisma generate,部署链路通)、argon2/jose runtime smoke ✓;完整 pg 端到端(migrate + 浏览器流程)因本机无 pg 未跑。
+
 ### CI
 
 `.github/workflows/build.yml` packages the desktop app (mac arm64/x64, win x64) on push to main (path-ignores `apps/server/**`, `docs/**`, `*.md`). Uses **pnpm** (`pnpm/action-setup` + `actions/setup-node` cache: pnpm), installs at repo root, then `pnpm run rebuild`/`build`/`electron-builder` with `working-directory: apps/desktop`. `CSC_IDENTITY_AUTO_DISCOVERY: 'false'` (signing off; see the yml comments to enable). Release via `workflow_dispatch` + `softprops/action-gh-release`; `electron-updater` publishes to `github:robotbird/skillkit`.

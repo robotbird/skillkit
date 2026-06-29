@@ -1,0 +1,90 @@
+// Skillkit 个人中心 / 团队 / 团队 Skill 数据模型。
+// 数据库:Postgres(Vercel Postgres 生产;本地 docker pg 或企业自建 pg 开发与私有化)。
+// 迁移:本地 `pnpm --filter server prisma migrate dev`;生产手动 `prisma migrate deploy`。
+// 类型层(packages/types)用小写 union + epoch ms;此处的枚举为 SQL 大写、时间为 DateTime,
+// 在 lib/teams/repo.ts 统一映射。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Supabase(Vercel 集成)变量:运行时用 pooled(带 pgbouncer 参数,适配 serverless),
+  // migrate 用直连(DDL 不能走 transaction pooler)。
+  // 私有化 / 其他环境:把这两个 env 设为对应连接串即可(或改回 env("DATABASE_URL"))。
+  provider  = "postgresql"
+  url       = env("SKILLKIT_DB_POSTGRES_PRISMA_URL")
+  directUrl = env("SKILLKIT_DB_POSTGRES_URL_NON_POOLING")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  // 后置:改密 / 全设备登出时 bump,使旧 JWT 失效(MVP 不校验,字段先备好)。
+  tokenVersion Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownedTeams  Team[]       @relation("TeamOwner")
+  memberships TeamMember[]
+  addedSkills TeamSkill[]
+
+  @@index([email])
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique // URL 标识
+  ownerId   String
+  createdAt DateTime @default(now())
+
+  owner   User         @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members TeamMember[]
+  skills  TeamSkill[]
+
+  @@index([ownerId])
+}
+
+model TeamMember {
+  teamId   String
+  userId   String
+  role     TeamRole @default(MEMBER)
+  joinedAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+  @@index([userId])
+}
+
+model TeamSkill {
+  id            String             @id @default(cuid())
+  teamId        String
+  name          String
+  description   String?
+  sourceType    TeamSkillSourceType
+  // github: https://github.com/... 仓库 URL;share: 6 字符 share id(复用现有 /share/[id] 链路)。
+  sourceRef     String
+  // 加者删号后置空(SetNull),条目保留。
+  addedByUserId String?
+  addedAt       DateTime           @default(now())
+
+  team  Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  adder User? @relation(fields: [addedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([teamId])
+}
+
+enum TeamRole {
+  OWNER
+  MEMBER
+}
+
+enum TeamSkillSourceType {
+  GITHUB
+  SHARE
+}

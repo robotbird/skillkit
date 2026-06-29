@@ -98,3 +98,93 @@ export const SHARE_BASE_URL =
 export const SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // 4MB:适配 Vercel 函数 4.5MB 请求体硬限制
 export const SHARE_MAX_BYTES = 4 * 1024 * 1024;
+
+// ===== 用户 / 认证 =====
+// 对外暴露的用户视图(绝不包含 passwordHash)。server 的 lib/auth 负责 User → PublicUser 映射。
+export interface PublicUser {
+  id: string;
+  email: string;
+  name: string | null;
+  createdAt: number; // epoch ms(与 ShareMeta 风格一致)
+}
+
+// JWT payload:userId + tokenVersion(后置用于全设备登出 / 改密失效旧 token)。
+export interface AuthSession {
+  userId: string;
+  v: number;
+}
+
+// session cookie 名(前后端共享);有效期(秒)。
+export const SESSION_COOKIE = 'skillkit_session';
+export const SESSION_TTL_S = 7 * 24 * 3600;
+
+// ===== 团队 =====
+// 类型层用小写 union;Prisma 枚举大写,在 lib/teams/repo.ts 做映射。
+export type TeamRole = 'owner' | 'member';
+
+export interface Team {
+  id: string;
+  name: string;
+  slug: string; // URL 标识
+  ownerId: string;
+  createdAt: number;
+  // 列表场景额外携带(详情场景可缺省):
+  role?: TeamRole; // 当前用户在该团队的角色
+  memberCount?: number;
+  skillCount?: number;
+}
+
+export interface TeamMember {
+  userId: string;
+  teamId: string;
+  role: TeamRole;
+  joinedAt: number;
+  user?: Pick<PublicUser, 'id' | 'name' | 'email'>;
+}
+
+// ===== 团队 Skill 清单(索引/目录) =====
+export type TeamSkillSourceType = 'github' | 'share';
+
+export interface TeamSkill {
+  id: string;
+  teamId: string;
+  name: string;
+  description: string | null;
+  sourceType: TeamSkillSourceType;
+  // github: https://github.com/... 仓库 URL;share: 6 字符 share id(复用现有 /share/[id] 链路)
+  sourceRef: string;
+  addedByUserId: string;
+  addedAt: number;
+  addedBy?: Pick<PublicUser, 'id' | 'name'>;
+}
+
+// ===== API DTO =====
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  name?: string;
+}
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+export interface AuthResponse {
+  user: PublicUser;
+}
+export interface UpdateMeRequest {
+  name?: string | null;
+}
+
+export interface CreateTeamRequest {
+  name: string;
+}
+export interface CreateTeamResponse {
+  team: Team;
+}
+
+export interface CreateSkillRequest {
+  name: string;
+  description?: string;
+  sourceType: TeamSkillSourceType;
+  sourceRef: string;
+}

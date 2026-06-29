@@ -10,6 +10,8 @@ const nextConfig = {
   // @skillkit/types 是 monorepo 内的纯 TS workspace 包(无构建产物),
   // 必须显式 transpile,否则 Next.js 不会编译它、运行时拿不到 .js。
   transpilePackages: ['@skillkit/types'],
+  // 产出 standalone 自托管包:既服务 Vercel,也便于后续私有化部署(docker / next start)。
+  output: 'standalone',
   turbopack: {
     root: repoRoot,
   },
