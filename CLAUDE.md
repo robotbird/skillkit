@@ -2,6 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 工作流程：首次改码前先同步远端（每次会话）
+
+**每次进入本仓库、当会话中第一次要修改代码之前**，必须先把远端最新代码拉到本地，再开始改动：
+
+1. 先 `git status` / `git fetch` 查看本地是否干净、是否落后远端。
+2. 本地干净时执行 `git pull --rebase`（与远端同步）；拉取完成后**主动提醒用户**："已拉取最新代码，仓库当前为最新状态。"
+3. 仅在以下情况跳过自动 pull，并明确说明原因、询问用户如何处理，不要自作主张覆盖：
+   - 本地有未提交的改动（pull 可能冲突）；
+   - 本地与远端分叉、需要先 commit/rebase/merge 协调；
+   - 当前分支无 upstream。
+
+> 该规则仅约束"首次改码前"。会话内后续的多次修改无需重复 pull。
+
 ## What this is
 
 Skillkit — manage "skills" across AI coding tools (Claude Code, Codex, Cursor, Trae, Workbuddy): browse the [skills.sh](https://www.skills.sh) marketplace, install/uninstall from market/GitHub/zip, and share installed skills via short links. A **pnpm-workspace monorepo** with three parts:
