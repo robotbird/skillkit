@@ -56,14 +56,18 @@ export function registerIpc() {
     scanAll();
     return r;
   });
-  ipcMain.handle('install:pickAndInstallZip', async (_e, targets: Tool[]) => {
+  // zip 安装拆两步：先选文件（返回路径），再凭路径安装
+  ipcMain.handle('install:pickZip', async () => {
     const result = await dialog.showOpenDialog({
       title: '选择 Skill 压缩包',
       filters: [{ name: 'Zip 压缩包', extensions: ['zip'] }],
       properties: ['openFile'],
     });
     if (result.canceled || !result.filePaths.length) return null;
-    const r = await installFromZip(result.filePaths[0], targets);
+    return result.filePaths[0];
+  });
+  ipcMain.handle('install:fromZip', async (_e, zipPath: string, targets: Tool[]) => {
+    const r = await installFromZip(zipPath, targets);
     scanAll();
     return r;
   });

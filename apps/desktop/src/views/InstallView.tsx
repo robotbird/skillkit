@@ -43,6 +43,8 @@ export default function InstallView({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
+  // zip：先选文件（存绝对路径），上传完成后再点「安装」选目标工具
+  const [zipPath, setZipPath] = useState('');
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [hint, setHint] = useState<{ msg: string; error?: boolean }>({ msg: '支持 https / git@ / shorthand owner/repo / tree URL' });
 
@@ -63,6 +65,12 @@ export default function InstallView({
     setRecent((arr) => [{ name, source, at: new Date().toLocaleString('zh-CN') }, ...arr].slice(0, 12));
   }
 
+  // zip 第一步：弹系统文件框选 zip（仅选文件，不安装）；取消则保持原选择不变
+  async function pickZipFile() {
+    const p = await window.skillkit.pickZip();
+    if (p) setZipPath(p);
+  }
+
   // 点击「安装」：先做当前 tab 的输入校验，通过后弹框选择目标工具
   function startInstall() {
     if (mode === 'github' && !ghUrl.trim()) {
@@ -71,6 +79,10 @@ export default function InstallView({
     }
     if (mode === 'share' && !shareUrl.trim()) {
       toast.show('请输入分享链接', 'error');
+      return;
+    }
+    if (mode === 'zip' && !zipPath) {
+      toast.show('请先选择 zip 文件', 'error');
       return;
     }
     setHint({ msg: '支持 https / git@ / shorthand owner/repo / tree URL' });
@@ -106,17 +118,16 @@ export default function InstallView({
           onInstalled();
         }
       } else {
-        // zip：确认工具后会再弹系统文件选择框
-        const r = await window.skillkit.pickAndInstallZip(targets);
-        if (!r) {
-          toast.show('已取消选择文件', 'info', 2000);
-          return;
-        }
-        results = r;
+        // zip：用第一步选好的路径安装到所选工具
+        results = await window.skillkit.installFromZip(zipPath, targets);
         const okAny = results.some((x) => x.ok);
         toast.show(summarize(results), okAny ? 'info' : 'error', 4000);
         if (okAny) {
-          pushRecent(results.find((x) => x.ok)?.path?.split('/').pop() ?? 'zip 包', '本地压缩包');
+          pushRecent(
+            results.find((x) => x.ok)?.path?.split('/').pop() ?? zipName,
+            '本地压缩包',
+          );
+          setZipPath('');
           onInstalled();
         }
       }
@@ -128,12 +139,14 @@ export default function InstallView({
     }
   }
 
+  const zipName = zipPath ? zipPath.split(/[\\/]/).pop() ?? '' : '';
+
   const pickerSubtitle =
     mode === 'share'
       ? '将把分享链接对应的 skill 安装到所选工具。'
       : mode === 'github'
         ? '将从 GitHub 拉取并复制到所选工具的 skills 目录。'
-        : '选择本地 zip 后，安装到所选工具。';
+        : '将把所选 zip 安装到所选工具。';
 
   return (
     <section>
@@ -228,13 +241,33 @@ export default function InstallView({
               }}
             >
               <div className="dropzone-inner">
-                <svg viewBox="0 0 24 24" width="28" height="28">
-                  <path fill="currentColor" d="M12 3l5 5h-3v6h-4V8H7l5-5zM5 18h14v2H5v-2z"/>
-                </svg>
-                <div className="dropzone-text">选择本地 .zip 文件</div>
-                <button className="btn-primary" onClick={startInstall} disabled={busy}>
-                  {busy ? <><span className="spinner" /> 处理中</> : '选择文件并安装'}
-                </button>
+                {zipPath ? (
+                  <>
+                    <svg viewBox="0 0 24 24" width="28" height="28" style={{ color: '#3ecf8e' }}>
+                      <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    <div className="dropzone-text">上传完成</div>
+                    <div className="dropzone-file">{zipName}</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn-primary" onClick={startInstall} disabled={busy}>
+                        {busy ? <><span className="spinner" /> 安装中</> : '安装'}
+                      </button>
+                      <button className="btn-ghost" onClick={pickZipFile} disabled={busy}>
+                        重新选择
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 24 24" width="28" height="28">
+                      <path fill="currentColor" d="M12 3l5 5h-3v6h-4V8H7l5-5zM5 18h14v2H5v-2z"/>
+                    </svg>
+                    <div className="dropzone-text">选择本地 .zip 文件</div>
+                    <button className="btn-primary" onClick={pickZipFile} disabled={busy}>
+                      {busy ? <><span className="spinner" /> 处理中</> : '选择文件'}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </article>

@@ -70,7 +70,10 @@ export interface SkillkitApi {
 
   installFromMarket(slug: string, targets: Tool[]): Promise<InstallResult[]>;
   installFromGithub(url: string, targets: Tool[]): Promise<InstallResult[]>;
-  pickAndInstallZip(targets: Tool[]): Promise<InstallResult[] | null>;
+  /** 弹系统文件框选 zip，返回绝对路径；取消返回 null（仅选文件，不安装）。 */
+  pickZip(): Promise<string | null>;
+  /** 用已选 zip 路径安装到目标工具。 */
+  installFromZip(zipPath: string, targets: Tool[]): Promise<InstallResult[]>;
 
   shareSkill(tool: Tool, name: string): Promise<ShareCreateResult>;
   inspectShare(input: string): Promise<ShareSourceInfo>;
