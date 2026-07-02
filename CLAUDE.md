@@ -93,7 +93,6 @@ The project is `"type": "module"`. Files under `apps/desktop/electron/` import e
 - **`skill-md.ts`** — dependency-free YAML frontmatter parser; reads `SKILL.md` **or** `AGENTS.md`.
 - **`share.ts`** — client side of sharing: zip an installed skill, POST to the server, inspect/install from a share link. Calls `${SHARE_BASE_URL}/share`, `/share/:id/meta`, `/share/:id/zip` (no `/api` prefix).
 - **`updater.ts`** — electron-updater: background check, pushes "update available" to the renderer.
-- **`warehouse.ts`** — a unified "原件" warehouse dir for skills.
 
 ### Server: Next.js App Router (`apps/server`)
 

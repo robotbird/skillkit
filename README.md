@@ -65,7 +65,7 @@ CI（`.github/workflows/build.yml`）在 push main 时用 pnpm 打包 mac（dmg/
 
 ```
 apps/desktop/
-  electron/    主进程（main/ipc/preload/db/scan/installer/market/share/skill-md/tools/updater/warehouse）
+  electron/    主进程（main/ipc/preload/db/scan/installer/market/share/skill-md/tools/updater）
   src/         React 渲染端（components/views/styles/lib）
   shared/      桥接层 types.ts（re-export @skillkit/types + desktop 专用 SkillkitApi 等）
   build/ public/ vite.config.ts tsconfig*.json

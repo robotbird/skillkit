@@ -34,11 +34,7 @@ const api: SkillkitApi = {
   installFromShare: (input: string, targets: Tool[]) =>
     ipcRenderer.invoke('share:installFromShare', input, targets),
 
-  getWarehouseRoot: () => ipcRenderer.invoke('warehouse:get'),
-  pickWarehouseRoot: () => ipcRenderer.invoke('warehouse:pick'),
-  setWarehouseRoot: (path: string) => ipcRenderer.invoke('warehouse:set', path),
-
-  // 分享页「从 Skillkit 打开」唤起本应用时，主进程经此通道把 share id 推给渲染进程
+    // 分享页「从 Skillkit 打开」唤起本应用时，主进程经此通道把 share id 推给渲染进程
   onDeepLink: (cb: (input: string) => void) => {
     ipcRenderer.on('skillkit:deep-link', (_e, input: string) => cb(input));
   },

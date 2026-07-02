@@ -10,7 +10,6 @@ import {
   copyInstalledToTools,
 } from './installer.js';
 import { shareSkill, inspectShare, installFromShare } from './share.js';
-import { getWarehouseRoot, setWarehouseRoot } from './warehouse.js';
 import { applyUpdate, getUpdateStatus } from './updater.js';
 import type { Tool, InstalledFilter, MarketListQuery } from '../shared/types.js';
 
@@ -82,18 +81,6 @@ export function registerIpc() {
     scanAll();
     return r;
   });
-
-  // 仓库根目录配置
-  ipcMain.handle('warehouse:get', async () => getWarehouseRoot());
-  ipcMain.handle('warehouse:pick', async () => {
-    const result = await dialog.showOpenDialog({
-      title: '选择 Skill 仓库根目录',
-      properties: ['openDirectory'],
-    });
-    if (result.canceled || !result.filePaths.length) return null;
-    return result.filePaths[0];
-  });
-  ipcMain.handle('warehouse:set', async (_e, p: string) => setWarehouseRoot(p));
 
   // 自动更新
   ipcMain.handle('update:status', async () => getUpdateStatus());

@@ -79,14 +79,6 @@ export interface SkillkitApi {
   inspectShare(input: string): Promise<ShareSourceInfo>;
   installFromShare(input: string, targets: Tool[]): Promise<InstallResult[]>;
 
-  // ===== 仓库（warehouse）：存放 skill「原件」的统一目录 =====
-  // 读取仓库根目录（未配置时主进程兜底返回默认 ~/GitHub）
-  getWarehouseRoot(): Promise<string>;
-  // 弹出系统目录选择器，返回选中路径；取消返回 null（不修改当前设置）
-  pickWarehouseRoot(): Promise<string | null>;
-  // 校验为已存在目录后持久化，返回持久化后的（绝对）路径
-  setWarehouseRoot(path: string): Promise<string>;
-
   // 分享页深链（skillkit://share/<id>）唤起应用时，主进程通过它把 share id 推给渲染进程
   onDeepLink(cb: (input: string) => void): void;
 }
