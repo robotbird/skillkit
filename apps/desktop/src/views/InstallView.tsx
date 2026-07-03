@@ -236,8 +236,14 @@ export default function InstallView({
               onDrop={(e) => {
                 e.preventDefault();
                 setDrag(false);
-                // electron 不能直接读 file://，告知用户用按钮选取
-                toast.show('请使用下方按钮选择 zip 文件以保留路径权限');
+                const f = e.dataTransfer?.files?.[0];
+                if (!f) return;
+                const p = window.skillkit.getDroppedFilePath(f);
+                if (!p.toLowerCase().endsWith('.zip')) {
+                  toast.show('只支持 .zip 压缩包', 'error');
+                  return;
+                }
+                setZipPath(p);
               }}
             >
               <div className="dropzone-inner">
@@ -263,6 +269,7 @@ export default function InstallView({
                       <path fill="currentColor" d="M12 3l5 5h-3v6h-4V8H7l5-5zM5 18h14v2H5v-2z"/>
                     </svg>
                     <div className="dropzone-text">选择本地 .zip 文件</div>
+                    <div className="dropzone-tip">也可将 .zip 直接拖入此处</div>
                     <button className="btn-primary" onClick={pickZipFile} disabled={busy}>
                       {busy ? <><span className="spinner" /> 处理中</> : '选择文件'}
                     </button>

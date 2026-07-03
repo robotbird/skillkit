@@ -75,6 +75,9 @@ export interface SkillkitApi {
   /** 用已选 zip 路径安装到目标工具。 */
   installFromZip(zipPath: string, targets: Tool[]): Promise<InstallResult[]>;
 
+  /** 从拖拽事件的 File 取系统绝对路径（Electron webUtils.getPathForFile）。 */
+  getDroppedFilePath(file: File): string;
+
   shareSkill(tool: Tool, name: string): Promise<ShareCreateResult>;
   inspectShare(input: string): Promise<ShareSourceInfo>;
   installFromShare(input: string, targets: Tool[]): Promise<InstallResult[]>;

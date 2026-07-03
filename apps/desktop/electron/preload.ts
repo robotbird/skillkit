@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type {
   SkillkitApi,
   Tool,
@@ -28,6 +28,9 @@ const api: SkillkitApi = {
   pickZip: () => ipcRenderer.invoke('install:pickZip'),
   installFromZip: (zipPath: string, targets: Tool[]) =>
     ipcRenderer.invoke('install:fromZip', zipPath, targets),
+
+  // 拖拽上传：从 drop 事件的 File 取系统绝对路径（Electron webUtils.getPathForFile）
+  getDroppedFilePath: (file: File) => webUtils.getPathForFile(file),
 
   shareSkill: (tool: Tool, name: string) => ipcRenderer.invoke('share:create', tool, name),
   inspectShare: (input: string) => ipcRenderer.invoke('share:inspect', input),
