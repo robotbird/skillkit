@@ -19,6 +19,11 @@ interface Props {
   open: boolean;
   title?: string;
   subtitle?: string;
+  /**
+   * 选择模式：默认 true 多选（checkbox，用于安装/复制/卸载）；
+   * false 单选（radio，用于「打开目录」——一个 skill 装在多个工具下时选一个）。
+   */
+  multiple?: boolean;
   defaultSelected?: Tool[];
   /** 完全隐藏的工具（不在列表里出现）。 */
   excludeTools?: Tool[];
@@ -37,6 +42,7 @@ export default function ToolPicker({
   open,
   title = '安装到哪些工具？',
   subtitle = '至少选择一个工具，已选中的工具会各自得到一份 skill 副本。',
+  multiple = true,
   defaultSelected = ['claude'],
   excludeTools,
   disableTools,
@@ -77,7 +83,12 @@ export default function ToolPicker({
 
   function toggle(t: Tool) {
     if (disabledSet.has(t)) return;
-    setPicked((arr) => (arr.includes(t) ? arr.filter((x) => x !== t) : [...arr, t]));
+    if (multiple) {
+      setPicked((arr) => (arr.includes(t) ? arr.filter((x) => x !== t) : [...arr, t]));
+    } else {
+      // 单选：直接替换（radio 语义，点了即唯一选中）
+      setPicked([t]);
+    }
   }
 
   return (
@@ -99,7 +110,8 @@ export default function ToolPicker({
                 className={`${picked.includes(t) ? 'checked' : ''}${disabled ? ' is-disabled' : ''}`}
               >
                 <input
-                  type="checkbox"
+                  type={multiple ? 'checkbox' : 'radio'}
+                  name={multiple ? undefined : 'tool-picker'}
                   checked={picked.includes(t)}
                   onChange={() => toggle(t)}
                   disabled={busy || disabled}
