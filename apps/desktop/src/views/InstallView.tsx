@@ -182,7 +182,7 @@ export default function InstallView({
             <p className="install-desc">粘贴其他用户分享的短链或完整 URL，即可安装 skill。</p>
             <div className="install-input">
               <input
-                placeholder="http://.../share/xxxxxx  或  短链 ID"
+                placeholder="http://skillkit.net/share/xxxxxx  或  短链 ID"
                 value={shareUrl}
                 onChange={(e) => setShareUrl(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') startInstall(); }}

@@ -39,6 +39,7 @@ export default function MySkillsView({
   const [copying, setCopying] = useState(false);
   const [uninstallGroup, setUninstallGroup] = useState<SkillGroup | null>(null);
   const [uninstalling, setUninstalling] = useState(false);
+  const [revealGroup, setRevealGroup] = useState<SkillGroup | null>(null);
 
   // 只展示「已安装」工具的 chip;未安装工具不出现
   const { tools: installed } = useInstalledTools();
@@ -80,6 +81,16 @@ export default function MySkillsView({
     for (const g of groups) for (const t of g.tools) map[t]++;
     return map;
   }, [groups]);
+
+  // ===== 打开目录 =====
+  // 入口：一个 skill 只装在一个工具下时直接打开；装在多个工具下时弹窗让用户选要打开哪个。
+  function startReveal(group: SkillGroup) {
+    if (group.tools.length <= 1) {
+      void window.skillkit.revealInFinder(group.primary.path);
+      return;
+    }
+    setRevealGroup(group);
+  }
 
   // ===== 卸载 =====
   // 入口：仅一个可卸载工具时直接确认；多个（或含内置）时弹工具选择
@@ -207,7 +218,7 @@ export default function MySkillsView({
               group={g}
               mode={mode}
               onUninstall={startUninstall}
-              onReveal={(grp) => window.skillkit.revealInFinder(grp.primary.path)}
+              onReveal={startReveal}
               onShare={(grp) => setShareSkill(grp.primary)}
               onCopyTo={g.tools.length < installed.length ? setCopyGroup : undefined}
             />
@@ -272,6 +283,30 @@ export default function MySkillsView({
         busyLabel="复制中"
         onCancel={() => !copying && setCopyGroup(null)}
         onConfirm={handleCopy}
+      />
+
+      <ToolPicker
+        open={!!revealGroup}
+        multiple={false}
+        title={revealGroup ? `打开 ${revealGroup.name} 的目录` : '打开目录'}
+        subtitle={
+          revealGroup ? '该 skill 装在多个工具下，选择要打开哪个工具的目录。' : ''
+        }
+        defaultSelected={revealGroup ? [revealGroup.primary.tool] : []}
+        excludeTools={
+          // 只展示本组已装的工具（内置也可打开，不置灰）
+          revealGroup ? ALL_TOOLS.filter((t) => !revealGroup.tools.includes(t)) : []
+        }
+        confirmLabel="打开目录"
+        busyLabel="打开中"
+        onCancel={() => setRevealGroup(null)}
+        onConfirm={(targets) => {
+          if (!revealGroup) return;
+          const t = targets[0];
+          const p = revealGroup.byTool[t]?.path;
+          setRevealGroup(null);
+          if (p) void window.skillkit.revealInFinder(p);
+        }}
       />
     </section>
   );
