@@ -118,46 +118,6 @@ export interface AuthSession {
 export const SESSION_COOKIE = 'skillkit_session';
 export const SESSION_TTL_S = 7 * 24 * 3600;
 
-// ===== 团队 =====
-// 类型层用小写 union;Prisma 枚举大写,在 lib/teams/repo.ts 做映射。
-export type TeamRole = 'owner' | 'member';
-
-export interface Team {
-  id: string;
-  name: string;
-  slug: string; // URL 标识
-  ownerId: string;
-  createdAt: number;
-  // 列表场景额外携带(详情场景可缺省):
-  role?: TeamRole; // 当前用户在该团队的角色
-  memberCount?: number;
-  skillCount?: number;
-}
-
-export interface TeamMember {
-  userId: string;
-  teamId: string;
-  role: TeamRole;
-  joinedAt: number;
-  user?: Pick<PublicUser, 'id' | 'name' | 'email'>;
-}
-
-// ===== 团队 Skill 清单(索引/目录) =====
-export type TeamSkillSourceType = 'github' | 'share';
-
-export interface TeamSkill {
-  id: string;
-  teamId: string;
-  name: string;
-  description: string | null;
-  sourceType: TeamSkillSourceType;
-  // github: https://github.com/... 仓库 URL;share: 6 字符 share id(复用现有 /share/[id] 链路)
-  sourceRef: string;
-  addedByUserId: string;
-  addedAt: number;
-  addedBy?: Pick<PublicUser, 'id' | 'name'>;
-}
-
 // ===== API DTO =====
 export interface RegisterRequest {
   email: string;
@@ -173,20 +133,6 @@ export interface AuthResponse {
 }
 export interface UpdateMeRequest {
   name?: string | null;
-}
-
-export interface CreateTeamRequest {
-  name: string;
-}
-export interface CreateTeamResponse {
-  team: Team;
-}
-
-export interface CreateSkillRequest {
-  name: string;
-  description?: string;
-  sourceType: TeamSkillSourceType;
-  sourceRef: string;
 }
 
 export interface ChangePasswordRequest {

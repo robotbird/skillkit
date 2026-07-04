@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-type IconName = 'user' | 'lock' | 'team';
+type IconName = 'user' | 'lock';
 
 function Icon({ name }: { name: IconName }) {
   if (name === 'user')
@@ -13,19 +13,10 @@ function Icon({ name }: { name: IconName }) {
         <path d="M5 20c0-3.5 3.2-5.5 7-5.5s7 2 7 5.5" />
       </svg>
     );
-  if (name === 'lock')
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="5" y="11" width="14" height="9" rx="2" />
-        <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-      </svg>
-    );
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="9" cy="8" r="3" />
-      <circle cx="17" cy="9" r="2.3" />
-      <path d="M3.5 19c0-3 2.8-4.8 5.5-4.8s5.5 1.8 5.5 4.8" />
-      <path d="M15 19c.2-2 1.8-3.6 4-3.8" />
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
     </svg>
   );
 }
@@ -33,7 +24,6 @@ function Icon({ name }: { name: IconName }) {
 const ITEMS: { href: string; label: string; icon: IconName; match: (p: string) => boolean }[] = [
   { href: '/', label: '个人信息', icon: 'user', match: (p) => p === '/' },
   { href: '/account', label: '账号管理', icon: 'lock', match: (p) => p.startsWith('/account') },
-  { href: '/teams', label: '团队', icon: 'team', match: (p) => p.startsWith('/teams') },
 ];
 
 export function Sidebar({ email, name }: { email: string; name: string | null }) {
