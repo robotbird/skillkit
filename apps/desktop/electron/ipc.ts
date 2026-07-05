@@ -8,6 +8,8 @@ import {
   installFromZip,
   uninstall,
   copyInstalledToTools,
+  listGithubSkills,
+  installGithubSkillsAt,
 } from './installer.js';
 import { shareSkill, inspectShare, installFromShare } from './share.js';
 import { applyUpdate, getUpdateStatus } from './updater.js';
@@ -55,6 +57,16 @@ export function registerIpc() {
     scanAll();
     return r;
   });
+  // 多 skill 仓库：先列举候选（不装、不写 DB），再批量安装选中项
+  ipcMain.handle('github:listSkills', async (_e, url: string) => listGithubSkills(url));
+  ipcMain.handle(
+    'github:installMany',
+    async (_e, url: string, subpaths: string[], targets: Tool[]) => {
+      const r = await installGithubSkillsAt(url, subpaths, targets);
+      scanAll();
+      return r;
+    },
+  );
   // zip 安装拆两步：先选文件（返回路径），再凭路径安装
   ipcMain.handle('install:pickZip', async () => {
     const result = await dialog.showOpenDialog({

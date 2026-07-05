@@ -7,15 +7,129 @@ import { app } from 'electron';
 import * as tar from 'tar';
 import AdmZip from 'adm-zip';
 import { TOOLS } from './tools.js';
-import { readSkillMd } from './skill-md.js';
+import { readSkillMd, type SkillMd } from './skill-md.js';
 import { upsertInstalled } from './db.js';
-import type { InstallResult, Tool } from '../shared/types.js';
+import type { InstallResult, Tool, RepoSkillCandidate, GithubSkillsResult, RepoBatchResult } from '../shared/types.js';
 
 interface RepoRef {
   owner: string;
   repo: string;
   branch?: string;
   subpath?: string;
+}
+
+// ===== 多 skill 仓库扫描常量 =====
+const PLUGIN_MARKERS: Record<string, string> = {
+  '.claude-plugin': 'Claude Code',
+  '.codex-plugin': 'Codex',
+  '.cursor-plugin': 'Cursor',
+  '.kimi-plugin': 'Kimi',
+  '.opencode': 'OpenCode',
+};
+const SCAN_SKIP = new Set([
+  '.git', 'node_modules', 'docs', 'tests', 'test', '__tests__',
+  '.github', 'evals', 'dist', 'build', '.next', 'vendor', 'examples', '.cache',
+]);
+const MAX_DEPTH = 3;
+const MAX_CANDIDATES = 50;
+
+// ===== tarball 内存缓存（list 与 install 共用一份解包结果）=====
+interface CachedTar {
+  extractedRoot: string;
+  ref: RepoRef;
+  at: number; // 最近访问时间戳
+}
+const tarCache = new Map<string, CachedTar>(); // 插入序即 LRU 序（Map 保持插入顺序）
+const TAR_TTL = 10 * 60 * 1000; // 10 分钟
+const TAR_CACHE_MAX = 4;
+
+/** 把 ref 规范化为 cache key：list 与 install 传入的 url 形态可能不同，规范化后保证命中。 */
+function tarCacheKey(ref: RepoRef): string {
+  return `${ref.owner}/${ref.repo}@${ref.branch ?? 'HEAD'}#${ref.subpath ?? ''}`;
+}
+
+/** 取（或新建）缓存的 extractedRoot；miss 时下载并写入，超上限淘汰最旧。 */
+async function cachedExtract(ref: RepoRef): Promise<string> {
+  const key = tarCacheKey(ref);
+  const hit = tarCache.get(key);
+  if (hit) {
+    hit.at = Date.now();
+    // 访问即 LRU：删后重插到末尾
+    tarCache.delete(key);
+    tarCache.set(key, hit);
+    return hit.extractedRoot;
+  }
+  const extractedRoot = await fetchAndExtractTar(ref);
+  tarCache.set(key, { extractedRoot, ref, at: Date.now() });
+  // 超上限淘汰最旧（Map 第一个 = 最早插入且最久未访问）
+  while (tarCache.size > TAR_CACHE_MAX) {
+    const oldest = tarCache.keys().next().value;
+    if (oldest === undefined) break;
+    const evicted = tarCache.get(oldest);
+    tarCache.delete(oldest);
+    if (evicted) {
+      try {
+        rmDir(path.dirname(evicted.extractedRoot));
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return extractedRoot;
+}
+
+/** 清理过期缓存项；由 setInterval 定期调用。 */
+function sweepTarCache(): void {
+  const now = Date.now();
+  for (const [key, c] of tarCache) {
+    if (now - c.at > TAR_TTL) {
+      tarCache.delete(key);
+      try {
+        rmDir(path.dirname(c.extractedRoot));
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+/** 退出时全清缓存（main.ts 的 will-quit 调用）。 */
+export function disposeGithubCache(): void {
+  for (const [, c] of tarCache) {
+    try {
+      rmDir(path.dirname(c.extractedRoot));
+    } catch {
+      /* ignore */
+    }
+  }
+  tarCache.clear();
+}
+
+/** 启动期一次性清理 os.tmpdir() 下残留的 skillkit-* 目录（防上次崩溃残留）。 */
+export function cleanStaleTmpDirs(): void {
+  const tmp = os.tmpdir();
+  let entries: string[] = [];
+  try {
+    entries = fs.readdirSync(tmp);
+  } catch {
+    return;
+  }
+  for (const name of entries) {
+    if (!name.startsWith('skillkit-')) continue;
+    try {
+      rmDir(path.join(tmp, name));
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+// 启动定期清扫（60s 一次）；模块加载即注册，仅主进程引用一次
+let sweeperStarted = false;
+function ensureSweeper(): void {
+  if (sweeperStarted) return;
+  sweeperStarted = true;
+  setInterval(sweepTarCache, 60_000).unref?.();
 }
 
 /** 解析 GitHub URL / shorthand。
@@ -224,6 +338,151 @@ function findSingleSkillChild(dir: string): string | null {
     }
   }
   return found;
+}
+
+interface RawCandidate {
+  dir: string; // 绝对路径（在 extractedRoot 内）
+  subpath: string; // 相对 extractedRoot
+  skill: SkillMd;
+}
+
+/** 广度优先搜集 startDir 下所有「自身目录含有效 SKILL.md/AGENTS.md」的目录。
+ *  单 skill 短路：startDir 自身有 frontmatter → 返回该唯一候选（零回归，走原直装路径）。
+ *  另检测 plugin 框架目录（在 extractedRoot 根）。 */
+function collectRepoSkills(
+  extractedRoot: string,
+  startSubpath: string,
+): { candidates: RawCandidate[]; isPlugin: boolean; pluginHints: string[] } {
+  const startDir = startSubpath ? path.join(extractedRoot, startSubpath) : extractedRoot;
+  if (!fs.existsSync(startDir)) return { candidates: [], isPlugin: false, pluginHints: [] };
+
+  // 单 skill 短路
+  const direct = readSkillMd(startDir);
+  if (direct) {
+    return {
+      candidates: [{ dir: startDir, subpath: startSubpath, skill: direct }],
+      isPlugin: false,
+      pluginHints: [],
+    };
+  }
+
+  const candidates: RawCandidate[] = [];
+  const seen = new Set<string>();
+  // BFS：元素 [目录绝对路径, 相对 extractedRoot 的 subpath, 深度]
+  const queue: Array<[string, string, number]> = [[startDir, startSubpath, 0]];
+
+  while (queue.length > 0 && candidates.length < MAX_CANDIDATES) {
+    const [dir, subpath, depth] = queue.shift()!;
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      // 跳过 plugin marker 目录（不含 skill，避免误判）与噪声目录
+      if (PLUGIN_MARKERS[e.name] || SCAN_SKIP.has(e.name)) continue;
+      if (e.name.startsWith('.') && !PLUGIN_MARKERS[e.name]) continue; // 跳其它隐藏目录
+      const childAbs = path.join(dir, e.name);
+      const childSub = subpath ? `${subpath}/${e.name}` : e.name;
+      const md = readSkillMd(childAbs);
+      if (md) {
+        if (!seen.has(childSub)) {
+          seen.add(childSub);
+          candidates.push({ dir: childAbs, subpath: childSub, skill: md });
+          if (candidates.length >= MAX_CANDIDATES) break;
+        }
+        // skill 目录不再下钻（不会嵌套 skill）
+        continue;
+      }
+      if (depth + 1 < MAX_DEPTH) {
+        queue.push([childAbs, childSub, depth + 1]);
+      }
+    }
+  }
+
+  // plugin 框架识别：只在 extractedRoot 根这一层检查 marker 目录
+  const pluginHints: string[] = [];
+  try {
+    const rootEntries = fs.readdirSync(extractedRoot, { withFileTypes: true });
+    for (const e of rootEntries) {
+      if (e.isDirectory() && PLUGIN_MARKERS[e.name]) {
+        pluginHints.push(PLUGIN_MARKERS[e.name]);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  // 仅当同时扫到 skill 候选才标记 isPlugin（否则只是个空 plugin 仓库，由 UI 友好报错）
+  const isPlugin = pluginHints.length > 0 && candidates.length > 0;
+
+  return { candidates, isPlugin, pluginHints };
+}
+
+/** 列举仓库内的 skill 候选。下载结果缓存在主进程内存，installGithubSkillsAt 复用。 */
+export async function listGithubSkills(url: string): Promise<GithubSkillsResult> {
+  const ref = parseGithubRef(url);
+  if (!ref) throw new Error('GitHub 地址解析失败');
+  ensureSweeper();
+  const extractedRoot = await cachedExtract(ref);
+  const { candidates, isPlugin, pluginHints } = collectRepoSkills(
+    extractedRoot,
+    ref.subpath ?? '',
+  );
+  const skills: RepoSkillCandidate[] = candidates.map((c) => ({
+    name: c.skill.name?.trim() || path.basename(c.dir),
+    description: c.skill.description ?? null,
+    subpath: c.subpath,
+  }));
+  const kind = skills.length === 1 && skills[0].subpath === '' ? 'single' : 'multi';
+  return {
+    kind,
+    skills,
+    isPlugin,
+    pluginHints,
+    repo: `${ref.owner}/${ref.repo}`,
+  };
+}
+
+/** 批量安装仓库内多个 subpath（=多个 skill）到所选工具。复用缓存的 extractedRoot。 */
+export async function installGithubSkillsAt(
+  url: string,
+  subpaths: string[],
+  targets: Tool[],
+): Promise<RepoBatchResult[]> {
+  if (!subpaths.length || !targets.length) return [];
+  const ref = parseGithubRef(url);
+  if (!ref) {
+    return subpaths.map((subpath) => ({
+      subpath,
+      skillName: subpath.split('/').pop() ?? subpath,
+      results: targets.map((t) => ({ tool: t, ok: false, error: 'GitHub 地址解析失败' })),
+    }));
+  }
+  ensureSweeper();
+  const extractedRoot = await cachedExtract(ref);
+  const sourceTagBase = `github:${ref.owner}/${ref.repo}`;
+
+  return subpaths.map((subpath) => {
+    const skillDir = subpath ? path.join(extractedRoot, subpath) : extractedRoot;
+    const md = readSkillMd(skillDir);
+    const skillName = md?.name?.trim() || (subpath ? subpath.split('/').pop()! : ref.repo);
+    if (!fs.existsSync(skillDir) || !md) {
+      return {
+        subpath,
+        skillName,
+        results: targets.map((t) => ({
+          tool: t,
+          ok: false,
+          error: '指定 skill 路径不存在或缺少有效 SKILL.md',
+        })),
+      };
+    }
+    const sourceTag = subpath ? `${sourceTagBase}#${subpath}` : sourceTagBase;
+    const results = targets.map((t) => installSourceToTool(skillDir, t, sourceTag));
+    return { subpath, skillName, results };
+  });
 }
 
 export async function installFromZip(

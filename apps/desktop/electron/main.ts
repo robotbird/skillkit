@@ -7,6 +7,7 @@ import { refreshMarket } from './market.js';
 import { scanAll } from './scan.js';
 import { parseShareId } from './share.js';
 import { checkForUpdate } from './updater.js';
+import { disposeGithubCache, cleanStaleTmpDirs } from './installer.js';
 import type { UpdateAvailableInfo } from '../shared/types.js';
 
 // macOS 菜单栏 / Dock 等处显示的应用名（dev 模式下默认会显示 "Electron"）
@@ -111,6 +112,16 @@ function bootstrap() {
     initDb();
     registerIpc();
     createWindow();
+
+    // 清理上次进程崩溃可能残留的 skillkit-* 临时目录（GitHub/zip 解包）
+    setImmediate(() => {
+      try { cleanStaleTmpDirs(); } catch (e) { console.error('tmp cleanup failed', e); }
+    });
+
+    // 退出时清理 tarball 缓存（list/install 共用的解包结果）
+    app.on('will-quit', () => {
+      try { disposeGithubCache(); } catch (e) { console.error('dispose cache failed', e); }
+    });
 
     // 启动时后台预热：先扫一次本地，再在后台抓 sitemap（24h 内会跳过）
     setImmediate(() => {

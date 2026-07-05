@@ -1,19 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ALL_TOOLS, TOOL_LABELS, type Tool } from '@shared/types';
+import { ALL_TOOLS, type Tool } from '@shared/types';
 import { useInstalledTools } from '../lib/useInstalledTools';
-import claudeIcon from '../assets/agents/claude-code.svg';
-import codexIcon from '../assets/agents/codex.svg';
-import cursorIcon from '../assets/agents/cursor.svg';
-import traeIcon from '../assets/agents/trae.svg';
-import workbuddyIcon from '../assets/agents/workbuddy.svg';
-
-const TOOL_ICON: Record<Tool, string> = {
-  claude: claudeIcon,
-  codex: codexIcon,
-  cursor: cursorIcon,
-  trae: traeIcon,
-  workbuddy: workbuddyIcon,
-};
+import ToolCheckRow from './ToolCheckRow';
 
 interface Props {
   open: boolean;
@@ -105,21 +93,16 @@ export default function ToolPicker({
           {visibleTools.map((t) => {
             const disabled = disabledSet.has(t);
             return (
-              <label
+              <ToolCheckRow
                 key={t}
-                className={`${picked.includes(t) ? 'checked' : ''}${disabled ? ' is-disabled' : ''}`}
-              >
-                <input
-                  type={multiple ? 'checkbox' : 'radio'}
-                  name={multiple ? undefined : 'tool-picker'}
-                  checked={picked.includes(t)}
-                  onChange={() => toggle(t)}
-                  disabled={busy || disabled}
-                />
-                <img className="opt-ico" src={TOOL_ICON[t]} alt="" draggable={false} />
-                <span>{TOOL_LABELS[t]}</span>
-                {disabled && <span className="opt-note">内置·不可卸载</span>}
-              </label>
+                tool={t}
+                checked={picked.includes(t)}
+                multiple={multiple}
+                disabled={disabled}
+                note={disabled ? '内置·不可卸载' : undefined}
+                parentBusy={busy}
+                onToggle={toggle}
+              />
             );
           })}
         </div>
