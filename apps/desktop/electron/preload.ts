@@ -25,6 +25,9 @@ const api: SkillkitApi = {
     ipcRenderer.invoke('install:fromMarket', slug, targets),
   installFromGithub: (url: string, targets: Tool[]) =>
     ipcRenderer.invoke('install:fromGithub', url, targets),
+  listGithubSkills: (url: string) => ipcRenderer.invoke('github:listSkills', url),
+  installGithubSkillsAt: (url: string, subpaths: string[], targets: Tool[]) =>
+    ipcRenderer.invoke('github:installMany', url, subpaths, targets),
   pickZip: () => ipcRenderer.invoke('install:pickZip'),
   installFromZip: (zipPath: string, targets: Tool[]) =>
     ipcRenderer.invoke('install:fromZip', zipPath, targets),

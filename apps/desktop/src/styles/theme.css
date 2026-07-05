@@ -712,6 +712,82 @@ html, body, #root {
   color: var(--ink-mute);
 }
 
+/* 多 skill 仓库批量安装弹窗（RepoSkillPicker） */
+.repo-skill-modal {
+  width: 920px;
+  max-width: 95vw;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 头尾固定，仅中间滚动 */
+}
+.repo-skill-modal hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 4px 0;
+}
+.repo-skill-head { flex-shrink: 0; }
+.repo-skill-scroll {
+  flex: 1;
+  min-height: 0; /* flex 子项滚动必需 */
+  overflow-y: auto;
+  padding-right: 4px; /* 滚动条不贴边 */
+}
+.repo-skill-foot {
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  margin-top: 10px;
+}
+.repo-skill-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+/* skill 候选区：两列横排，充分利用宽度 */
+.modal .opts.opts-skills {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.modal .opts.opts-skills .opts-skills-all,
+.modal .opts.opts-skills hr {
+  flex-basis: 100%;
+}
+.modal .opts.opts-skills label:not(.opts-skills-all) {
+  flex: 0 0 calc(50% - 4px);
+}
+.modal .opts-skills label { align-items: flex-start; }
+.modal .opts-skills .skill-row {
+  display: flex; flex-direction: column; gap: 2px;
+  flex: 1; min-width: 0;
+}
+.modal .opts-skills .skill-row strong { font-weight: 600; color: var(--ink); }
+.modal .opts-skills .skill-row .opt-note { margin-left: 0; }
+.modal .opts-skills .skill-subpath {
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 6px;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+/* 工具区横向排列（RepoSkillPicker 下半区） */
+.modal .opts.opts-tools {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.modal .opts.opts-tools label {
+  flex: 1 1 auto;
+  min-width: 140px;
+}
+.opts-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  margin: 18px 0 10px;
+}
+
 /* recent / 最近安装 */
 .recent {
   margin-top: 28px;

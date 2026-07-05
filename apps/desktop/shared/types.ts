@@ -37,6 +37,30 @@ import type {
   ShareSourceInfo,
 } from '@skillkit/types';
 
+// ===== 多 skill 仓库批量安装（GitHub）=====
+/** 多 skill 仓库里扫到的一个候选 skill。subpath 为 '' 表示单 skill 仓库根。 */
+export interface RepoSkillCandidate {
+  name: string;
+  description: string | null;
+  subpath: string;
+}
+
+/** listGithubSkills 的返回。kind==='single' 时走原直装路径，'multi' 时弹 RepoSkillPicker。 */
+export interface GithubSkillsResult {
+  kind: 'single' | 'multi';
+  skills: RepoSkillCandidate[];
+  isPlugin: boolean; // 是否检测到 plugin 框架目录（.claude-plugin 等）
+  pluginHints: string[]; // 命中的 harness 名，如 ['Claude Code', 'Codex']
+  repo: string; // owner/repo，用于 UI 展示与 recent 记录
+}
+
+/** 批量安装某个 subpath（=一个 skill）到多个工具的结果。 */
+export interface RepoBatchResult {
+  subpath: string;
+  skillName: string;
+  results: InstallResult[]; // 每个 tool 一项
+}
+
 // ===== 自动更新(desktop 专用) =====
 export interface UpdateAvailableInfo {
   version: string; // 最新版本号(去 v 前缀)
@@ -70,6 +94,10 @@ export interface SkillkitApi {
 
   installFromMarket(slug: string, targets: Tool[]): Promise<InstallResult[]>;
   installFromGithub(url: string, targets: Tool[]): Promise<InstallResult[]>;
+  /** 列举 GitHub 仓库内的 skill 候选（单 skill 仓库返回 kind:'single'）。不安装、不写 DB。 */
+  listGithubSkills(url: string): Promise<GithubSkillsResult>;
+  /** 批量安装仓库内多个 subpath（skill）到所选工具；装完由 IPC handler 触发 scanAll。 */
+  installGithubSkillsAt(url: string, subpaths: string[], targets: Tool[]): Promise<RepoBatchResult[]>;
   /** 弹系统文件框选 zip，返回绝对路径；取消返回 null（仅选文件，不安装）。 */
   pickZip(): Promise<string | null>;
   /** 用已选 zip 路径安装到目标工具。 */

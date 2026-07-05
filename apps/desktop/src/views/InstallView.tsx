@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { TOOL_LABELS, type Tool, type InstallResult } from '@shared/types';
+import { TOOL_LABELS, type Tool, type InstallResult, type GithubSkillsResult, type RepoBatchResult } from '@shared/types';
 import type { ToastState } from '../components/Toast';
 import ToolPicker from '../components/ToolPicker';
+import RepoSkillPicker from '../components/RepoSkillPicker';
 
 interface RecentItem {
   name: string;
@@ -16,6 +17,21 @@ function summarize(results: InstallResult[]): string {
   if (ok.length) parts.push(`已安装到：${ok.join('、')}`);
   if (fail.length) parts.push(`失败：${fail.map((r) => `${TOOL_LABELS[r.tool]}（${r.error}）`).join('；')}`);
   return parts.join('；') || '没有任何工具被处理';
+}
+
+/** 批量安装汇总：「已安装 N 个 skill 到 K 个工具：<名>…；失败：…」 */
+function summarizeBatch(batch: RepoBatchResult[]): string {
+  const okSkills = batch.filter((b) => b.results.some((r) => r.ok)).map((b) => b.skillName);
+  const failed = batch.flatMap((b) =>
+    b.results.filter((r) => !r.ok).map((r) => `${b.skillName}→${TOOL_LABELS[r.tool]}（${r.error}）`),
+  );
+  const parts: string[] = [];
+  if (okSkills.length) {
+    const tools = [...new Set(batch.flatMap((b) => b.results.filter((r) => r.ok).map((r) => r.tool)))];
+    parts.push(`已安装 ${okSkills.length} 个 skill 到 ${tools.length} 个工具：${okSkills.join('、')}`);
+  }
+  if (failed.length) parts.push(`失败：${failed.join('；')}`);
+  return parts.join('；') || '没有任何 skill 被处理';
 }
 
 type InstallMode = 'share' | 'github' | 'zip';
@@ -43,6 +59,11 @@ export default function InstallView({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
+  // 多 skill 仓库：listGithubSkills 的结果 + 弹窗开关
+  const [repoPicker, setRepoPicker] = useState<{ open: boolean; result: GithubSkillsResult | null }>({
+    open: false,
+    result: null,
+  });
   // zip：先选文件（存绝对路径），上传完成后再点「安装」选目标工具
   const [zipPath, setZipPath] = useState('');
   const [recent, setRecent] = useState<RecentItem[]>([]);
@@ -85,8 +106,68 @@ export default function InstallView({
       toast.show('请先选择 zip 文件', 'error');
       return;
     }
+    if (mode === 'github') {
+      // GitHub：先列举仓库内 skill 候选，再决定走单 skill 直装还是多 skill 批量
+      void startList();
+      return;
+    }
     setHint({ msg: '支持 https / git@ / shorthand owner/repo / tree URL' });
     setPickerOpen(true);
+  }
+
+  // GitHub 两步流程第一步：列举仓库内 skill 候选
+  async function startList() {
+    if (!ghUrl.trim()) {
+      setHint({ msg: '请输入 GitHub 地址', error: true });
+      return;
+    }
+    setHint({ msg: '支持 https / git@ / shorthand owner/repo / tree URL' });
+    setBusy(true);
+    try {
+      const res = await window.skillkit.listGithubSkills(ghUrl.trim());
+      if (res.kind === 'single') {
+        // 单 skill 仓库：走原 ToolPicker 直装路径（handleConfirm 的 github 分支）
+        setPickerOpen(true);
+      } else if (res.skills.length === 0) {
+        toast.show(
+          res.isPlugin
+            ? `未扫到 skill；该仓库似乎是 plugin 框架（${res.pluginHints.join('、')}），建议用对应 harness 的原生 plugin 安装`
+            : '未扫到任何带有效 frontmatter 的 SKILL.md / AGENTS.md',
+          'error',
+          5000,
+        );
+      } else {
+        // 多 skill：弹 RepoSkillPicker
+        setRepoPicker({ open: true, result: res });
+      }
+    } catch (e: any) {
+      toast.show(`扫描失败：${e?.message ?? e}`, 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // RepoSkillPicker 确认：批量安装选中的 skill 到所选工具
+  async function handleRepoConfirm(pickedSubpaths: string[], targets: Tool[]) {
+    const result = repoPicker.result;
+    if (!result) return;
+    const url = ghUrl.trim();
+    setBusy(true);
+    try {
+      const batch = await window.skillkit.installGithubSkillsAt(url, pickedSubpaths, targets);
+      const anyOk = batch.some((b) => b.results.some((r) => r.ok));
+      toast.show(summarizeBatch(batch), anyOk ? 'info' : 'error', 5000);
+      if (anyOk) {
+        const okNames = batch.filter((b) => b.results.some((r) => r.ok)).map((b) => b.skillName);
+        pushRecent(okNames.join('、'), url);
+        onInstalled();
+      }
+    } catch (e: any) {
+      toast.show(`安装失败：${e?.message ?? e}`, 'error');
+    } finally {
+      setBusy(false);
+      setRepoPicker({ open: false, result: null });
+    }
   }
 
   // 在弹框里确认目标工具后真正执行安装
@@ -212,7 +293,7 @@ export default function InstallView({
                 onKeyDown={(e) => { if (e.key === 'Enter') startInstall(); }}
               />
               <button className="btn-primary" onClick={startInstall} disabled={busy}>
-                {busy ? <><span className="spinner" /> 拉取中</> : '安装'}
+                {busy ? <><span className="spinner" /> 扫描中</> : '安装'}
               </button>
             </div>
             <div className={`install-hint${hint.error ? ' error' : ''}`}>{hint.msg}</div>
@@ -306,6 +387,14 @@ export default function InstallView({
         defaultSelected={['claude']}
         onCancel={() => !busy && setPickerOpen(false)}
         onConfirm={handleConfirm}
+      />
+
+      <RepoSkillPicker
+        open={repoPicker.open}
+        result={repoPicker.result}
+        busy={busy}
+        onCancel={() => !busy && setRepoPicker({ open: false, result: null })}
+        onConfirm={handleRepoConfirm}
       />
     </section>
   );
