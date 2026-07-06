@@ -673,6 +673,20 @@ html, body, #root {
 .chip-tool.is-active .chip-ico {
   border-color: rgba(0, 0, 0, 0.18);
 }
+/* 全局仓库 chip：内联 svg 图标（非白底 logo） */
+.chip-global {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px 5px 7px;
+}
+.chip-global .chip-ico {
+  background: transparent;
+  border: none;
+  width: 16px; height: 16px;
+  color: var(--ink-soft);
+}
+.chip-global.is-active .chip-ico { color: var(--pill-active-ink); }
 
 /* 顶部计数 */
 .tool-counts {
@@ -898,21 +912,47 @@ html, body, #root {
   border-radius: 4px;
   align-self: flex-start;
 }
-/* 工具区横向排列（RepoSkillPicker 下半区） */
+/* 工具区横向排列、紧凑排版（ToolPicker / RepoSkillPicker 下半区）；去背景框，靠勾选框区分 */
 .modal .opts.opts-tools {
   flex-direction: row;
   flex-wrap: wrap;
+  gap: 4px;
 }
 .modal .opts.opts-tools label {
-  flex: 1 1 auto;
-  min-width: 140px;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 6px 10px;
+  border: none;
 }
+.modal .opts.opts-tools label.checked {
+  background: transparent;
+  border: none;
+}
+/* 工具名单行不换行（避免 "Claude Code" 等带空格的名字在窄列里断行） */
+.modal .opts .tool-name { white-space: nowrap; }
 .opts-section-title {
   font-size: 12px;
   font-weight: 600;
   color: var(--ink-mute);
   margin: 18px 0 10px;
 }
+/* 接入方式（软链/拷贝，ToolPicker/RepoSkillPicker）：两个选项横向一排，仅标题（说明走 title）；选中态去背景框，靠单选圆点 + 文字加粗提亮 */
+.modal .opts.opts-method {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.modal .opts.opts-method label {
+  flex: 1 1 120px;
+  justify-content: center;
+}
+.modal .opts.opts-method label,
+.modal .opts.opts-method label.checked {
+  background: transparent;
+  border-color: var(--line);
+}
+.modal .opts.opts-method label strong { font-weight: 500; color: var(--ink-mute); }
+.modal .opts.opts-method label.checked strong { font-weight: 600; color: var(--ink); }
 
 /* recent / 最近安装 */
 .recent {

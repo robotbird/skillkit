@@ -42,6 +42,7 @@ export interface InstallResult {
   ok: boolean;
   path?: string;
   error?: string;
+  warn?: string; // 非致命提示，如 Windows 软链不可用已退回拷贝
 }
 
 export interface MarketRefreshResult {

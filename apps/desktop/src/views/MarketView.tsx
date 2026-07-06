@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { MarketSkill, Tool, InstallResult } from '@shared/types';
+import { TOOL_LABELS, type MarketSkill, type Tool, type InstallResult, type InstallOpts } from '@shared/types';
 import ToolPicker from '../components/ToolPicker';
 import type { ToastState } from '../components/Toast';
 
@@ -20,15 +20,6 @@ function emojiFor(name: string): string {
   for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return emojis[h % emojis.length];
 }
-
-const TOOL_LABELS: Record<Tool, string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  cursor: 'Cursor',
-  trae: 'Trae',
-  workbuddy: 'Workbuddy',
-  qoder: 'Qoder',
-};
 
 export default function MarketView({
   toast,
@@ -105,11 +96,11 @@ export default function MarketView({
     }
   }
 
-  async function handleInstall(targets: Tool[]) {
+  async function handleInstall(targets: Tool[], opts: InstallOpts) {
     if (!picker) return;
     setInstalling(true);
     try {
-      const results = await window.skillkit.installFromMarket(picker.slug, targets);
+      const results = await window.skillkit.installFromMarket(picker.slug, targets, opts);
       const { ok, fail } = summarizeResults(results, TOOL_LABELS);
       if (ok && !fail) toast.show(ok);
       else if (fail) toast.show([ok, fail].filter(Boolean).join('；'), 'error', 4000);
@@ -190,7 +181,7 @@ export default function MarketView({
         open={!!picker}
         title="安装到哪些工具？"
         subtitle={picker ? `将从 GitHub 拉取 ${picker.slug} 并复制到所选工具的 skills 目录。` : ''}
-        defaultSelected={['claude']}
+        lockedScope="global"
         busy={installing}
         onCancel={() => !installing && setPicker(null)}
         onConfirm={handleInstall}

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ALL_TOOLS, TOOL_LABELS, type InstalledSkill, type Tool } from '@shared/types';
+import { ALL_TOOLS, TOOL_LABELS, type InstalledSkill, type Tool, type GlobalRepoSkill } from '@shared/types';
 import SkillCard from '../components/SkillCard';
+import GlobalRepoCard from '../components/GlobalRepoCard';
 import ShareDialog from '../components/ShareDialog';
 import ToolPicker from '../components/ToolPicker';
 import { useToolbarSlot } from '../components/ToolbarSlot';
@@ -35,7 +36,7 @@ export default function MySkillsView({
 }) {
   const [items, setItems] = useState<InstalledSkill[] | null>(null);
   const [q, setQ] = useState('');
-  const [tool, setTool] = useState<Tool | 'all'>('all');
+  const [tool, setTool] = useState<Tool | 'all' | 'global'>('all');
   const [mode, setMode] = useState<ViewMode>('grid');
   const [scanning, setScanning] = useState(false);
   const [shareSkill, setShareSkill] = useState<InstalledSkill | null>(null);
@@ -44,6 +45,10 @@ export default function MySkillsView({
   const [uninstallGroup, setUninstallGroup] = useState<SkillGroup | null>(null);
   const [uninstalling, setUninstalling] = useState(false);
   const [revealGroup, setRevealGroup] = useState<SkillGroup | null>(null);
+  // 全局仓库（~/.agents/skills）
+  const [globalSkills, setGlobalSkills] = useState<GlobalRepoSkill[] | null>(null);
+  const [globalTarget, setGlobalTarget] = useState<GlobalRepoSkill | null>(null);
+  const [installingGlobal, setInstallingGlobal] = useState(false);
 
   // 只展示「已安装」工具的 chip;未安装工具不出现
   const { tools: installed } = useInstalledTools();
@@ -54,8 +59,12 @@ export default function MySkillsView({
   async function refresh() {
     setScanning(true);
     try {
-      const r = await window.skillkit.scanAll();
+      const [r, g] = await Promise.all([
+        window.skillkit.scanAll(),
+        window.skillkit.scanGlobalRepo(),
+      ]);
       setItems(r);
+      setGlobalSkills(g);
     } catch (e: any) {
       toast.show(`扫描失败：${e?.message ?? e}`, 'error');
     } finally {
@@ -73,7 +82,7 @@ export default function MySkillsView({
   const filtered = useMemo(() => {
     const text = q.trim().toLowerCase();
     return groups.filter((g) => {
-      if (tool !== 'all' && !g.tools.includes(tool)) return false;
+      if (tool !== 'all' && tool !== 'global' && !g.tools.includes(tool)) return false;
       if (!text) return true;
       return (
         g.name.toLowerCase().includes(text) ||
@@ -81,6 +90,18 @@ export default function MySkillsView({
       );
     });
   }, [groups, q, tool]);
+
+  // 全局仓库列表的文本筛选（独立于按工具的 filtered）
+  const filteredGlobal = useMemo(() => {
+    const text = q.trim().toLowerCase();
+    const all = globalSkills ?? [];
+    if (!text) return all;
+    return all.filter(
+      (g) =>
+        g.name.toLowerCase().includes(text) ||
+        (g.description ?? '').toLowerCase().includes(text),
+    );
+  }, [globalSkills, q]);
 
   // 每个 chip 的计数 = 包含该工具的「组」数（而非行数）
   const counts = useMemo(() => {
@@ -159,6 +180,52 @@ export default function MySkillsView({
     }
   }
 
+  // ===== 全局仓库：安装到工具… =====
+  async function handleInstallGlobalTo(targets: Tool[], method: 'symlink' | 'copy') {
+    if (!globalTarget) return;
+    setInstallingGlobal(true);
+    try {
+      const results = await window.skillkit.installGlobalToTools(globalTarget.name, targets, method);
+      const ok = results.filter((r) => r.ok).map((r) => TOOL_LABELS[r.tool]);
+      const fail = results.filter((r) => !r.ok);
+      if (ok.length && !fail.length) {
+        toast.show(`已接入：${ok.join('、')}`);
+      } else if (fail.length) {
+        const okPart = ok.length ? `已接入：${ok.join('、')}` : '';
+        const failPart = fail
+          .map((r) => `${TOOL_LABELS[r.tool]}（${r.error ?? '失败'}）`)
+          .join('；');
+        toast.show([okPart, failPart].filter(Boolean).join('；'), 'error', 4000);
+      }
+      await refresh();
+      onChanged();
+      setGlobalTarget(null);
+    } catch (e: any) {
+      toast.show(`接入失败：${e?.message ?? e}`, 'error');
+    } finally {
+      setInstallingGlobal(false);
+    }
+  }
+
+  // ===== 全局仓库：移除（规范副本 + 来源匹配的工具软链；独立副本保留并提示）=====
+  async function doRemoveGlobal(target: GlobalRepoSkill) {
+    try {
+      const r = await window.skillkit.removeFromGlobalRepo(target.name);
+      const parts: string[] = [`已从全局仓库移除 ${target.name}`];
+      if (r.removedLinks.length) {
+        parts.push(`并清理了 ${r.removedLinks.map((t) => TOOL_LABELS[t]).join('、')} 的软链`);
+      }
+      if (r.leftCopies.length) {
+        parts.push(`${r.leftCopies.map((t) => TOOL_LABELS[t]).join('、')} 下有独立副本，未删除`);
+      }
+      toast.show(parts.join('；'), 'info', 5000);
+      await refresh();
+      onChanged();
+    } catch (e: any) {
+      toast.show(`移除失败：${e?.message ?? e}`, 'error');
+    }
+  }
+
   // 顶部统一工具栏控件（搜索 / 视图切换 / 重新扫描）→ portal 进 TopBar 槽位
   const toolbar = (
     <>
@@ -222,6 +289,16 @@ export default function MySkillsView({
         >
           全部（{groups.length}）
         </button>
+        <button
+          className={`chip chip-global${tool === 'global' ? ' is-active' : ''}`}
+          onClick={() => setTool('global')}
+          title="全局共享仓库 ~/.agents/skills（与 npx skills 互通）"
+        >
+          <svg className="chip-ico" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 2c1.7 0 3.3 2.5 3.8 6h-7.6C8.7 6.5 10.3 4 12 4zm-5.7 6h-2A8 8 0 015.5 6.6 12.4 12.4 0 006.3 10zm0 4a12.4 12.4 0 00-.8 3.4A8 8 0 014.3 14h2zm1.9 0h7.6c-.5 3.5-2.1 6-3.8 6s-3.3-2.5-3.8-6zm9.5 0h2a8 8 0 01-1.2 3.4A12.4 12.4 0 0018.5 14zm0-4a12.4 12.4 0 00.8-3.4A8 8 0 0119.7 10h-2z"/>
+          </svg>
+          全局仓库（{globalSkills?.length ?? 0}）
+        </button>
         {installed.map((t) => (
           <button
             key={t}
@@ -235,7 +312,34 @@ export default function MySkillsView({
       </div>
 
       <div className="skills" data-mode={mode}>
-        {items == null ? (
+        {tool === 'global' ? (
+          globalSkills == null ? (
+            <div className="empty"><span className="spinner" /> 正在扫描全局仓库…</div>
+          ) : filteredGlobal.length === 0 ? (
+            <div className="empty">
+              {q ? '没有匹配的 skill' : '全局仓库（~/.agents/skills）还没有 skill'}
+            </div>
+          ) : (
+            filteredGlobal.map((g) => (
+              <GlobalRepoCard
+                key={g.path}
+                skill={g}
+                mode={mode}
+                onReveal={(s) => void window.skillkit.revealInFinder(s.path)}
+                onRemove={(s) => {
+                  if (
+                    confirm(
+                      `确认从全局仓库移除 ${s.name}？\n将删除 ~/.agents/skills/${s.name} 规范副本，并清理指向它的各工具软链（独立副本保留）。`,
+                    )
+                  ) {
+                    void doRemoveGlobal(s);
+                  }
+                }}
+                onInstallTo={setGlobalTarget}
+              />
+            ))
+          )
+        ) : items == null ? (
           <div className="empty"><span className="spinner" /> 正在扫描各工具的 skill 目录…</div>
         ) : filtered.length === 0 ? (
           <div className="empty">{q ? '没有匹配的 skill' : '当前筛选下还没有 skill'}</div>
@@ -334,6 +438,21 @@ export default function MySkillsView({
           const p = revealGroup.byTool[t]?.path;
           setRevealGroup(null);
           if (p) void window.skillkit.revealInFinder(p);
+        }}
+      />
+
+      {/* 全局仓库 → 安装到工具（锁定全局范围，仅选接入方式）*/}
+      <ToolPicker
+        open={!!globalTarget}
+        lockedScope="global"
+        title={globalTarget ? `把 ${globalTarget.name} 安装到哪些工具？` : ''}
+        subtitle="从全局仓库接入所选工具（软链推荐：单一数据源，改一处全更新）。"
+        busy={installingGlobal}
+        confirmLabel="接入"
+        busyLabel="接入中"
+        onCancel={() => !installingGlobal && setGlobalTarget(null)}
+        onConfirm={(targets, opts) => {
+          void handleInstallGlobalTo(targets, opts.method ?? 'symlink');
         }}
       />
     </section>

@@ -10,6 +10,7 @@ import {
   SHARE_BASE_URL,
   SHARE_MAX_BYTES,
   type InstallResult,
+  type InstallOpts,
   type InstalledSkill,
   type ShareCreateResult,
   type ShareMeta,
@@ -146,6 +147,7 @@ export async function inspectShare(input: string): Promise<ShareSourceInfo> {
 export async function installFromShare(
   input: string,
   targets: Tool[],
+  opts?: InstallOpts,
 ): Promise<InstallResult[]> {
   const id = parseShareId(input);
 
@@ -172,7 +174,7 @@ export async function installFromShare(
   const tmpZip = path.join(os.tmpdir(), `skillkit-share-${id}.zip`);
   try {
     await pipeline(Readable.fromWeb(res.body as any), fs.createWriteStream(tmpZip));
-    return await installFromZip(tmpZip, targets);
+    return await installFromZip(tmpZip, targets, opts);
   } catch (e: any) {
     return targets.map((t) => ({ tool: t, ok: false, error: e?.message ?? String(e) }));
   } finally {

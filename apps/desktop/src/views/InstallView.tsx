@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { TOOL_LABELS, type Tool, type InstallResult, type GithubSkillsResult, type RepoBatchResult } from '@shared/types';
+import { TOOL_LABELS, type Tool, type InstallResult, type InstallOpts, type GithubSkillsResult, type RepoBatchResult } from '@shared/types';
 import type { ToastState } from '../components/Toast';
 import ToolPicker from '../components/ToolPicker';
 import RepoSkillPicker from '../components/RepoSkillPicker';
@@ -148,13 +148,13 @@ export default function InstallView({
   }
 
   // RepoSkillPicker 确认：批量安装选中的 skill 到所选工具
-  async function handleRepoConfirm(pickedSubpaths: string[], targets: Tool[]) {
+  async function handleRepoConfirm(pickedSubpaths: string[], targets: Tool[], opts: InstallOpts) {
     const result = repoPicker.result;
     if (!result) return;
     const url = ghUrl.trim();
     setBusy(true);
     try {
-      const batch = await window.skillkit.installGithubSkillsAt(url, pickedSubpaths, targets);
+      const batch = await window.skillkit.installGithubSkillsAt(url, pickedSubpaths, targets, opts);
       const anyOk = batch.some((b) => b.results.some((r) => r.ok));
       toast.show(summarizeBatch(batch), anyOk ? 'info' : 'error', 5000);
       if (anyOk) {
@@ -171,7 +171,7 @@ export default function InstallView({
   }
 
   // 在弹框里确认目标工具后真正执行安装
-  async function handleConfirm(targets: Tool[]) {
+  async function handleConfirm(targets: Tool[], opts: InstallOpts) {
     setBusy(true);
     try {
       let results: InstallResult[] | null = null;
@@ -179,7 +179,7 @@ export default function InstallView({
       if (mode === 'share') {
         const url = (pendingShareRef.current ?? shareUrl).trim();
         pendingShareRef.current = null;
-        results = await window.skillkit.installFromShare(url, targets);
+        results = await window.skillkit.installFromShare(url, targets, opts);
         const okAny = results.some((r) => r.ok);
         toast.show(summarize(results), okAny ? 'info' : 'error', 4000);
         if (okAny) {
@@ -189,7 +189,7 @@ export default function InstallView({
         }
       } else if (mode === 'github') {
         const url = ghUrl.trim();
-        results = await window.skillkit.installFromGithub(url, targets);
+        results = await window.skillkit.installFromGithub(url, targets, opts);
         const okAny = results.some((r) => r.ok);
         toast.show(summarize(results), okAny ? 'info' : 'error', 4000);
         if (okAny) {
@@ -200,7 +200,7 @@ export default function InstallView({
         }
       } else {
         // zip：用第一步选好的路径安装到所选工具
-        results = await window.skillkit.installFromZip(zipPath, targets);
+        results = await window.skillkit.installFromZip(zipPath, targets, opts);
         const okAny = results.some((x) => x.ok);
         toast.show(summarize(results), okAny ? 'info' : 'error', 4000);
         if (okAny) {
@@ -379,7 +379,7 @@ export default function InstallView({
         open={pickerOpen}
         busy={busy}
         subtitle={pickerSubtitle}
-        defaultSelected={['claude']}
+        lockedScope="global"
         onCancel={() => !busy && setPickerOpen(false)}
         onConfirm={handleConfirm}
       />
@@ -388,6 +388,7 @@ export default function InstallView({
         open={repoPicker.open}
         result={repoPicker.result}
         busy={busy}
+        lockedScope="global"
         onCancel={() => !busy && setRepoPicker({ open: false, result: null })}
         onConfirm={handleRepoConfirm}
       />

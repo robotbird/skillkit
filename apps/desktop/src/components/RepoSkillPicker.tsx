@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { type Tool, type GithubSkillsResult } from '@shared/types';
+import { type Tool, type GithubSkillsResult, type InstallOpts } from '@shared/types';
 import { useInstalledTools } from '../lib/useInstalledTools';
 import ToolCheckRow, { visibleToolsOf } from './ToolCheckRow';
 
@@ -7,30 +7,43 @@ interface Props {
   open: boolean;
   result: GithubSkillsResult | null; // 来自 listGithubSkills
   busy: boolean;
+  /** 安装场景：固定 scope='global'，显示「接入方式（软链/拷贝）」选择。 */
+  lockedScope?: 'global';
   onCancel: () => void;
-  onConfirm: (pickedSubpaths: string[], targets: Tool[]) => void;
+  onConfirm: (pickedSubpaths: string[], targets: Tool[], opts: InstallOpts) => void;
 }
 
 /**
  * 多 skill 仓库的批量安装弹窗：复用 ToolPicker 的 modal 骨架与 CSS。
  * 同一弹窗两区域：上栏 skill 候选多选（默认全选，含全选/全不选），
- * 下栏目标工具多选。一次确认即批量安装 N 个 skill 到 K 个工具。
+   * 下栏接入方式（软链/拷贝）+ 目标工具多选。一次确认即批量安装 N 个 skill 到 K 个工具。
  */
-export default function RepoSkillPicker({ open, result, busy, onCancel, onConfirm }: Props) {
+export default function RepoSkillPicker({
+  open,
+  result,
+  busy,
+  lockedScope,
+  onCancel,
+  onConfirm,
+}: Props) {
   const { tools: installed } = useInstalledTools();
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [targets, setTargets] = useState<Tool[]>(['claude']);
+  const [targets, setTargets] = useState<Tool[]>([]);
+  const [method, setMethod] = useState<'symlink' | 'copy'>('symlink');
 
-  // 结果变化时默认全选所有候选；目标工具默认取 claude（若已安装）
+  // 结果变化时默认全选所有候选；目标工具默认取 claude（若已安装）；接入方式默认软链
   useEffect(() => {
     if (!open || !result) return;
     setPicked(new Set(result.skills.map((s) => s.subpath)));
-    setTargets(['claude']);
+    setTargets([]);
+    setMethod('symlink');
   }, [open, result]);
 
   if (!open || !result) return null;
 
   const visibleTools = visibleToolsOf(installed);
+  const showMethod = lockedScope === 'global';
+  const scope: 'tools' | 'global' = lockedScope === 'global' ? 'global' : 'tools';
   const allChecked = result.skills.length > 0 && picked.size === result.skills.length;
 
   function toggleSkill(subpath: string) {
@@ -81,12 +94,16 @@ export default function RepoSkillPicker({ open, result, busy, onCancel, onConfir
             </div>
           ) : (
             <div className="opts opts-skills">
-              <label className={`opts-skills-all${allChecked ? ' checked' : ''}`}>
-                <input type="checkbox" checked={allChecked} onChange={toggleAll} disabled={busy} />
-                <strong>{allChecked ? '全不选' : '全选'}</strong>
-                <span className="opt-note">{picked.size}/{result.skills.length}</span>
-              </label>
-              <hr />
+              {result.skills.length > 1 && (
+                <>
+                  <label className={`opts-skills-all${allChecked ? ' checked' : ''}`}>
+                    <input type="checkbox" checked={allChecked} onChange={toggleAll} disabled={busy} />
+                    <strong>{allChecked ? '全不选' : '全选'}</strong>
+                    <span className="opt-note">{picked.size}/{result.skills.length}</span>
+                  </label>
+                  <hr />
+                </>
+              )}
               {result.skills.map((s) => (
                 <label key={s.subpath} className={picked.has(s.subpath) ? 'checked' : ''}>
                   <input
@@ -109,6 +126,30 @@ export default function RepoSkillPicker({ open, result, busy, onCancel, onConfir
         <div className="repo-skill-foot">
           {result.skills.length > 0 && (
             <>
+              {showMethod && (
+                <div className="opts opts-method">
+                  <div className="opts-section-title">安装方式</div>
+                  <label className={method === 'symlink' ? 'checked' : ''} title="单一数据源，改一处全更新；省空间">
+                    <input
+                      type="radio"
+                      name="rp-method"
+                      checked={method === 'symlink'}
+                      onChange={() => setMethod('symlink')}
+                    />
+                    <strong>软链（推荐）</strong>
+                  </label>
+                  <label className={method === 'copy' ? 'checked' : ''} title="各工具独立副本，占用更多空间">
+                    <input
+                      type="radio"
+                      name="rp-method"
+                      checked={method === 'copy'}
+                      onChange={() => setMethod('copy')}
+                    />
+                    <strong>拷贝</strong>
+                  </label>
+                </div>
+              )}
+
               <div className="opts-section-title">安装到哪些工具？</div>
               <div className="opts opts-tools">
                 {visibleTools.map((t) => (
@@ -130,7 +171,7 @@ export default function RepoSkillPicker({ open, result, busy, onCancel, onConfir
             </button>
             <button
               className="btn-primary"
-              onClick={() => onConfirm([...picked], targets)}
+              onClick={() => onConfirm([...picked], targets, { scope, method })}
               disabled={confirmDisabled}
             >
               {busy && <span className="spinner" />}

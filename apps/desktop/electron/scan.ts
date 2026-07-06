@@ -3,36 +3,8 @@ import path from 'node:path';
 import { TOOLS, ALL_TOOLS } from './tools.js';
 import { readSkillMd } from './skill-md.js';
 import { clearInstalled, upsertInstalled, listInstalled as dbListInstalled } from './db.js';
+import { dirSize } from './fs-util.js';
 import type { InstalledSkill, Tool, InstalledFilter } from '../shared/types.js';
-
-function dirSize(dir: string): number {
-  let total = 0;
-  try {
-    const stack = [dir];
-    while (stack.length) {
-      const cur = stack.pop()!;
-      let entries: fs.Dirent[];
-      try {
-        entries = fs.readdirSync(cur, { withFileTypes: true });
-      } catch {
-        continue;
-      }
-      for (const e of entries) {
-        if (e.name === '.git' || e.name === 'node_modules') continue;
-        const full = path.join(cur, e.name);
-        try {
-          if (e.isDirectory()) stack.push(full);
-          else if (e.isFile()) total += fs.statSync(full).size;
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-  return total;
-}
 
 export function scanTool(tool: Tool): InstalledSkill[] {
   const cfg = TOOLS[tool];

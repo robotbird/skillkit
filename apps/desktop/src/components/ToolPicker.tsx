@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ALL_TOOLS, type Tool } from '@shared/types';
+import { ALL_TOOLS, type Tool, type InstallOpts } from '@shared/types';
 import { useInstalledTools } from '../lib/useInstalledTools';
 import ToolCheckRow from './ToolCheckRow';
 
@@ -17,13 +17,19 @@ interface Props {
   excludeTools?: Tool[];
   /** 显示但置灰、不可勾选的工具（如内置不可卸载）。 */
   disableTools?: Tool[];
+  /**
+   * 安装场景：固定 scope='global'（skill 统一下载到全局仓库 ~/.agents/skills），
+   * 并显示「接入方式（软链/拷贝）」选择。省略则不显示接入方式（卸载/复制/打开目录等场景）。
+   */
+  lockedScope?: 'global';
   busy?: boolean;
   confirmLabel?: string;
   busyLabel?: string;
   /** 确认按钮样式：danger 用于卸载等破坏性操作。 */
   tone?: 'primary' | 'danger';
   onCancel: () => void;
-  onConfirm: (targets: Tool[]) => void;
+  /** 确认时一并回传安装范围/方式；忽略第二参的旧调用方仍合法（TS 允许少参数）。 */
+  onConfirm: (targets: Tool[], opts: InstallOpts) => void;
 }
 
 export default function ToolPicker({
@@ -31,9 +37,10 @@ export default function ToolPicker({
   title = '安装到哪些工具？',
   subtitle = '至少选择一个工具，已选中的工具会各自得到一份 skill 副本。',
   multiple = true,
-  defaultSelected = ['claude'],
+  defaultSelected = [],
   excludeTools,
   disableTools,
+  lockedScope,
   busy,
   confirmLabel = '确认安装',
   busyLabel = '安装中',
@@ -58,12 +65,16 @@ export default function ToolPicker({
     [defaultSelected, excludeTools, disabledSet, availableSet],
   );
   const [picked, setPicked] = useState<Tool[]>(initial);
+  const [method, setMethod] = useState<'symlink' | 'copy'>('symlink');
 
-  // 打开 / 切换源工具时重置已选项
+  // 打开 / 切换源工具时重置已选项与接入方式
   const excludeKey = (excludeTools ?? []).join(',');
   const disableKey = (disableTools ?? []).join(',');
   useEffect(() => {
-    if (open) setPicked(initial);
+    if (open) {
+      setPicked(initial);
+      setMethod('symlink');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, excludeKey, disableKey]);
 
@@ -79,6 +90,10 @@ export default function ToolPicker({
     }
   }
 
+  // 安装场景：固定全局仓库，显示接入方式选择。
+  const showMethod = lockedScope === 'global';
+  const scope: 'tools' | 'global' = lockedScope === 'global' ? 'global' : 'tools';
+
   return (
     <div
       className="modal-mask"
@@ -89,7 +104,35 @@ export default function ToolPicker({
       <div className="modal">
         <h3>{title}</h3>
         <p className="modal-sub">{subtitle}</p>
-        <div className="opts">
+
+        {showMethod && (
+          <div className="opts opts-method">
+            <div className="opts-section-title">安装方式</div>
+            <label
+              className={method === 'symlink' ? 'checked' : ''}
+              title="单一数据源，改一处全更新；省空间"
+            >
+              <input
+                type="radio"
+                name="tp-method"
+                checked={method === 'symlink'}
+                onChange={() => setMethod('symlink')}
+              />
+              <strong>软链（推荐）</strong>
+            </label>
+            <label className={method === 'copy' ? 'checked' : ''} title="各工具独立副本，占用更多空间">
+              <input
+                type="radio"
+                name="tp-method"
+                checked={method === 'copy'}
+                onChange={() => setMethod('copy')}
+              />
+              <strong>拷贝</strong>
+            </label>
+          </div>
+        )}
+
+        <div className="opts opts-tools">
           {visibleTools.map((t) => {
             const disabled = disabledSet.has(t);
             return (
@@ -112,7 +155,7 @@ export default function ToolPicker({
           </button>
           <button
             className={tone === 'danger' ? 'btn-danger' : 'btn-primary'}
-            onClick={() => onConfirm(picked)}
+            onClick={() => onConfirm(picked, { scope, method })}
             disabled={busy || picked.length === 0}
           >
             {busy ? <><span className="spinner" /> {busyLabel}</> : confirmLabel}
