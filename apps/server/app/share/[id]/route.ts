@@ -12,6 +12,7 @@ const TOOL_COLOR: Record<Tool, string> = {
   cursor: '#9B968A',
   trae: '#1FAE6B',
   workbuddy: '#6C4DFF',
+  qoder: '#2ADB5C',
 };
 
 // 分享接收页:返回完整 HTML 文档(自带内联 CSS/JS、OG/Twitter card、主题切换、复制链接)。

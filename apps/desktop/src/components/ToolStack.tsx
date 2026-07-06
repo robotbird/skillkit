@@ -4,6 +4,7 @@ import codexIcon from '../assets/agents/codex.svg';
 import cursorIcon from '../assets/agents/cursor.svg';
 import traeIcon from '../assets/agents/trae.svg';
 import workbuddyIcon from '../assets/agents/workbuddy.svg';
+import qoderIcon from '../assets/agents/qoder.svg';
 
 const ICONS: Record<Tool, string> = {
   claude: claudeIcon,
@@ -11,6 +12,7 @@ const ICONS: Record<Tool, string> = {
   cursor: cursorIcon,
   trae: traeIcon,
   workbuddy: workbuddyIcon,
+  qoder: qoderIcon,
 };
 
 interface Props {
