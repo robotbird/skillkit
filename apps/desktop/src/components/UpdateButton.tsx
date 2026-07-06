@@ -1,11 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { UpdateAvailableInfo } from '@shared/types';
 
-// Windows 顶栏右上角有原生窗口控制按钮(titleBarOverlay,约 138px),按钮要让开;
-// macOS 右上角无控件,贴边即可。
-const isWindows =
-  typeof navigator !== 'undefined' && /win/i.test(navigator.platform || navigator.userAgent);
-
 type Phase = 'idle' | 'downloading' | 'done' | 'error';
 
 export default function UpdateButton() {
@@ -48,7 +43,6 @@ export default function UpdateButton() {
   return (
     <button
       className={`update-btn is-${phase}`}
-      style={{ right: isWindows ? 150 : 16 }}
       title={label}
       aria-label={label}
       onClick={onClick}

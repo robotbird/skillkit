@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ALL_TOOLS, TOOL_LABELS, type InstalledSkill, type Tool } from '@shared/types';
 import SkillCard from '../components/SkillCard';
 import ShareDialog from '../components/ShareDialog';
 import ToolPicker from '../components/ToolPicker';
+import { useToolbarSlot } from '../components/ToolbarSlot';
 import type { ToastState } from '../components/Toast';
 import { groupBySkill, type SkillGroup } from '../lib/groupSkills';
 import { useInstalledTools } from '../lib/useInstalledTools';
@@ -43,6 +45,9 @@ export default function MySkillsView({
 
   // 只展示「已安装」工具的 chip;未安装工具不出现
   const { tools: installed } = useInstalledTools();
+
+  // 统一工具栏槽位：把搜索/视图切换/重新扫描 注入到顶部 TopBar
+  const toolbarHost = useToolbarSlot();
 
   async function refresh() {
     setScanning(true);
@@ -152,40 +157,61 @@ export default function MySkillsView({
     }
   }
 
+  // 顶部统一工具栏控件（搜索 / 视图切换 / 重新扫描）→ portal 进 TopBar 槽位
+  const toolbar = (
+    <>
+      <label className="search-toggle" title="搜索 skill">
+        <span className="search-toggle-ico">
+          <svg viewBox="0 0 24 24" width="16" height="16">
+            <path fill="currentColor" d="M10 4a6 6 0 014.47 9.97l4.78 4.78-1.5 1.5-4.78-4.78A6 6 0 1110 4zm0 2a4 4 0 100 8 4 4 0 000-8z"/>
+          </svg>
+        </span>
+        <input
+          placeholder="搜索 skill"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      </label>
+      <div className="seg" role="group" aria-label="视图切换">
+        <button
+          className={`seg-btn${mode === 'grid' ? ' is-active' : ''}`}
+          onClick={() => setMode('grid')}
+          title="网格"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>
+        </button>
+        <button
+          className={`seg-btn${mode === 'list' ? ' is-active' : ''}`}
+          onClick={() => setMode('list')}
+          title="列表"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M4 5h16v2H4V5zm0 6h16v2H4v-2zm0 6h16v2H4v-2z"/></svg>
+        </button>
+      </div>
+      <button
+        className="rescan-btn"
+        title="重新扫描"
+        aria-label="重新扫描"
+        disabled={scanning}
+        onClick={refresh}
+      >
+        <span className="rescan-ico">
+          {scanning ? (
+            <span className="spinner" />
+          ) : (
+            <svg viewBox="0 0 24 24" width="16" height="16">
+              <path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0012 4a8 8 0 108 8h-2a6 6 0 11-6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+            </svg>
+          )}
+        </span>
+        <span className="rescan-label">重新扫描</span>
+      </button>
+    </>
+  );
+
   return (
     <section>
-      <div className="view-head">
-        <div>
-          <h1 className="view-title">我的 Skill</h1>
-        </div>
-        <div className="view-tools">
-          <label className="search">
-            <svg viewBox="0 0 24 24" width="14" height="14">
-              <path fill="currentColor" d="M10 4a6 6 0 014.47 9.97l4.78 4.78-1.5 1.5-4.78-4.78A6 6 0 1110 4zm0 2a4 4 0 100 8 4 4 0 000-8z"/>
-            </svg>
-            <input placeholder="搜索 skill" value={q} onChange={(e) => setQ(e.target.value)} />
-          </label>
-          <div className="seg" role="group" aria-label="视图切换">
-            <button
-              className={`seg-btn${mode === 'grid' ? ' is-active' : ''}`}
-              onClick={() => setMode('grid')}
-              title="网格"
-            >
-              <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>
-            </button>
-            <button
-              className={`seg-btn${mode === 'list' ? ' is-active' : ''}`}
-              onClick={() => setMode('list')}
-              title="列表"
-            >
-              <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M4 5h16v2H4V5zm0 6h16v2H4v-2zm0 6h16v2H4v-2z"/></svg>
-            </button>
-          </div>
-          <button className="btn-ghost" disabled={scanning} onClick={refresh}>
-            {scanning ? <><span className="spinner" /> 扫描中</> : '重新扫描'}
-          </button>
-        </div>
-      </div>
+      {toolbarHost && createPortal(toolbar, toolbarHost)}
 
       <div className="chips">
         <button
