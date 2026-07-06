@@ -2,7 +2,7 @@
 // desktop 专用的 IPC 契约(SkillkitApi)与自动更新类型(UpdateAvailableInfo)不在此处,
 // 留在 apps/desktop 内。
 
-export type Tool = 'claude' | 'codex' | 'cursor' | 'trae' | 'workbuddy';
+export type Tool = 'claude' | 'codex' | 'cursor' | 'trae' | 'workbuddy' | 'qoder';
 
 export const TOOL_LABELS: Record<Tool, string> = {
   claude: 'Claude Code',
@@ -10,9 +10,10 @@ export const TOOL_LABELS: Record<Tool, string> = {
   cursor: 'Cursor',
   trae: 'Trae',
   workbuddy: 'Workbuddy',
+  qoder: 'Qoder',
 };
 
-export const ALL_TOOLS: Tool[] = ['claude', 'codex', 'cursor', 'trae', 'workbuddy'];
+export const ALL_TOOLS: Tool[] = ['claude', 'codex', 'cursor', 'trae', 'workbuddy', 'qoder'];
 
 export interface InstalledSkill {
   tool: Tool;

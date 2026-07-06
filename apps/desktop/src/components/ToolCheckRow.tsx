@@ -4,6 +4,7 @@ import codexIcon from '../assets/agents/codex.svg';
 import cursorIcon from '../assets/agents/cursor.svg';
 import traeIcon from '../assets/agents/trae.svg';
 import workbuddyIcon from '../assets/agents/workbuddy.svg';
+import qoderIcon from '../assets/agents/qoder.svg';
 
 /** 工具 → 图标映射；ToolPicker 与 RepoSkillPicker 共用。 */
 export const TOOL_ICON: Record<Tool, string> = {
@@ -12,6 +13,7 @@ export const TOOL_ICON: Record<Tool, string> = {
   cursor: cursorIcon,
   trae: traeIcon,
   workbuddy: workbuddyIcon,
+  qoder: qoderIcon,
 };
 
 interface Props {

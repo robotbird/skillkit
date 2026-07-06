@@ -48,6 +48,11 @@ export const TOOLS: Record<Tool, ToolConfig> = {
     roots: [skillRoot('.workbuddy', 'skills')],
     installRoot: skillRoot('.workbuddy', 'skills'),
   },
+  qoder: {
+    label: 'Qoder',
+    roots: [skillRoot('.qoder', 'skills')],
+    installRoot: skillRoot('.qoder', 'skills'),
+  },
 };
 
-export const ALL_TOOLS: Tool[] = ['claude', 'codex', 'cursor', 'trae', 'workbuddy'];
+export const ALL_TOOLS: Tool[] = ['claude', 'codex', 'cursor', 'trae', 'workbuddy', 'qoder'];

@@ -27,6 +27,7 @@ const TOOL_LABELS: Record<Tool, string> = {
   cursor: 'Cursor',
   trae: 'Trae',
   workbuddy: 'Workbuddy',
+  qoder: 'Qoder',
 };
 
 export default function MarketView({
