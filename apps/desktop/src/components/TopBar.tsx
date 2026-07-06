@@ -1,4 +1,6 @@
 import UpdateButton from './UpdateButton';
+import { isWindows } from '../lib/os';
+import { useToolbarSlotHost } from './ToolbarSlot';
 
 export type TabKey = 'my' | 'market' | 'install';
 
@@ -15,8 +17,9 @@ export default function TopBar({
   tab: TabKey;
   onTab: (t: TabKey) => void;
 }) {
+  const slotRef = useToolbarSlotHost();
   return (
-    <header className="topbar">
+    <header className="topbar" data-os={isWindows ? 'win' : 'mac'}>
       <div className="topbar-drag" />
       <nav className="tabs" role="tablist">
         {tabs.map((t) => (
@@ -30,7 +33,11 @@ export default function TopBar({
           </button>
         ))}
       </nav>
-      <UpdateButton />
+      <div className="toolbar-trail">
+        {/* 当前激活视图通过 portal 把搜索/视图切换/重新扫描 等控件注入此处 */}
+        <div className="toolbar-slot" ref={slotRef} />
+        <UpdateButton />
+      </div>
     </header>
   );
 }

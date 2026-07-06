@@ -67,17 +67,48 @@ html, body, #root {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='1'/></svg>");
 }
 
-/* 顶部栏 */
+/* 顶部栏（统一工具栏：标签居中、视图控件 + 更新按钮靠右） */
 .topbar {
   position: relative;
   z-index: 2;
-  height: 64px;
+  height: 60px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;   /* trail 靠右；标签用绝对定位居中 */
+  gap: 12px;
+  padding-left: var(--tb-left, 80px);
+  padding-right: var(--tb-right, 16px);
   flex: 0 0 auto;
 }
+/* macOS 左上角红绿灯需避让；Windows 右上角原生标题栏覆盖（titleBarOverlay，约 138–150px）需避让 */
+.topbar[data-os="win"] { --tb-left: 16px; --tb-right: 152px; }
 .topbar-drag { position: absolute; inset: 0; -webkit-app-region: drag; }
+/* 顶部标签：工具栏内绝对居中（不受右侧控件宽度影响；仅作用 .topbar 内，不影响安装页子标签） */
+.topbar .tabs {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+}
+
+/* 工具栏右侧容器：视图 portal 槽位 + 更新按钮（均 no-drag，可点） */
+.toolbar-trail {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+/* 当前激活视图把搜索/视图切换/重新扫描 portal 进这里 */
+.toolbar-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  -webkit-app-region: no-drag;
+}
 
 .tabs {
   position: relative;
@@ -111,13 +142,10 @@ html, body, #root {
   font-family: inherit; letter-spacing: 0.02em;
 }
 
-/* 自动更新按钮(右上角):有新版本时出现,点击下载安装包并打开 */
+/* 自动更新按钮(工具栏右侧):有新版本时出现,点击下载安装包并打开 */
 .update-btn {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
+  position: relative;
   -webkit-app-region: no-drag;
-  z-index: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -164,7 +192,7 @@ html, body, #root {
 .main {
   position: relative; z-index: 1;
   flex: 1 1 auto; overflow: auto;
-  padding: 8px 56px 56px;
+  padding: 4px 56px 56px;
 }
 .main::-webkit-scrollbar { width: 10px; height: 10px; }
 .main::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 999px; }
@@ -176,6 +204,7 @@ html, body, #root {
 }
 .view-title { margin: 0 0 6px; font-size: 22px; font-weight: 600; }
 .view-sub { margin: 0; color: var(--ink-mute); font-size: 12.5px; }
+.view-intro { margin: 0; padding: 22px 4px 0; color: var(--ink-mute); font-size: 12.5px; }
 .view-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 /* 搜索框 */
@@ -506,10 +535,107 @@ html, body, #root {
   border-color: var(--line);
 }
 
-/* chips */
+/* 重新扫描：默认仅图标，悬停展开显示「重新扫描」文字 */
+.rescan-btn {
+  -webkit-app-region: no-drag;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(20, 14, 10, 0.55);
+  color: var(--ink-soft);
+  cursor: pointer;
+  overflow: hidden;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.rescan-btn:hover:not(:disabled) {
+  background: rgba(40, 28, 20, 0.7);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+.rescan-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.rescan-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+}
+.rescan-label {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 12.5px;
+  margin-left: 0;
+  padding-right: 0;
+  transition: max-width 0.2s ease, opacity 0.15s ease, margin-left 0.2s ease, padding-right 0.2s ease;
+}
+.rescan-btn:hover:not(:disabled) .rescan-label {
+  max-width: 96px;
+  opacity: 1;
+  margin-left: 2px;
+  padding-right: 12px;
+}
+
+/* 搜索：默认仅放大镜图标，点击聚焦后展开为输入框（有内容/聚焦时保持展开） */
+.search-toggle {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(20, 14, 10, 0.55);
+  color: var(--ink-soft);
+  cursor: text;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.search-toggle:hover {
+  background: rgba(40, 28, 20, 0.7);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.search-toggle:focus-within {
+  background: rgba(30, 22, 16, 0.7);
+  border-color: rgba(255, 177, 74, 0.45);
+  color: var(--ink);
+}
+.search-toggle-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+}
+.search-toggle input {
+  width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-family: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: width 0.2s ease, padding 0.2s ease;
+}
+.search-toggle input::placeholder { color: var(--ink-mute); }
+.search-toggle:focus-within input,
+.search-toggle input:not(:placeholder-shown) {
+  width: 150px;
+  padding: 0 12px 0 2px;
+}
+
+/* chips —— 工具栏下方的分类栏（scope bar） */
 .chips {
   display: flex; flex-wrap: wrap; gap: 8px;
-  padding: 4px 4px 14px;
+  padding: 8px 4px 14px;
 }
 .chip {
   appearance: none;

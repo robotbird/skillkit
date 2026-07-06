@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import TopBar, { type TabKey } from './components/TopBar';
+import { ToolbarSlotProvider } from './components/ToolbarSlot';
 import MySkillsView from './views/MySkillsView';
 import MarketView from './views/MarketView';
 import InstallView from './views/InstallView';
@@ -31,22 +32,24 @@ export default function App() {
         <div className="bg-grain" />
       </div>
 
-      <TopBar tab={tab} onTab={setTab} />
+      <ToolbarSlotProvider>
+        <TopBar tab={tab} onTab={setTab} />
 
-      <main className="main">
-        {tab === 'my' && (
-          <MySkillsView key={`my-${installedVersion}`} toast={toast} onChanged={() => onInstalled()} />
-        )}
-        {tab === 'market' && <MarketView toast={toast} onInstalled={() => onInstalled()} />}
-        {tab === 'install' && (
-          <InstallView
-            toast={toast}
-            onInstalled={() => onInstalled()}
-            pendingShare={pendingShare}
-            onPendingConsumed={() => setPendingShare(null)}
-          />
-        )}
-      </main>
+        <main className="main">
+          {tab === 'my' && (
+            <MySkillsView key={`my-${installedVersion}`} toast={toast} onChanged={() => onInstalled()} />
+          )}
+          {tab === 'market' && <MarketView toast={toast} onInstalled={() => onInstalled()} />}
+          {tab === 'install' && (
+            <InstallView
+              toast={toast}
+              onInstalled={() => onInstalled()}
+              pendingShare={pendingShare}
+              onPendingConsumed={() => setPendingShare(null)}
+            />
+          )}
+        </main>
+      </ToolbarSlotProvider>
 
       <Toast {...toast.props} />
     </>

@@ -231,12 +231,7 @@ export default function InstallView({
 
   return (
     <section>
-      <div className="view-head">
-        <div>
-          <h1 className="view-title">安装 Skill</h1>
-          <p className="view-sub">选择来源并安装；安装时再选择要安装到的工具。</p>
-        </div>
-      </div>
+      <p className="view-intro">选择来源并安装；安装时再选择要安装到的工具。</p>
 
       <div className="tabs install-tabs">
         {(['share', 'github', 'zip'] as InstallMode[]).map((m) => (
