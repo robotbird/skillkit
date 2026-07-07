@@ -61,6 +61,28 @@ export interface RepoBatchResult {
   results: InstallResult[]; // 每个 tool 一项
 }
 
+// ===== 全局仓库（~/.agents/skills，与 npx skills 互通）=====
+/** 安装范围 + 方式。从 ToolPicker 经 IPC 传到 installer。 */
+export interface InstallOpts {
+  scope: 'tools' | 'global'; // 按工具（当前行为）/ 全局仓库
+  method?: 'symlink' | 'copy'; // 仅 scope==='global' 有意义；默认 'symlink'
+}
+
+/** 全局仓库 ~/.agents/skills/<name> 下的一条记录。文件系统即真相，不写 DB。 */
+export interface GlobalRepoSkill {
+  name: string;
+  description: string | null;
+  path: string; // ~/.agents/skills/<name>
+  sizeBytes: number | null;
+  mtime: number | null;
+}
+
+/** 从全局仓库移除的回执：已清软链 / 残留独立副本（无法判定来源，留待用户处理）。 */
+export interface GlobalRepoRemoveResult {
+  removedLinks: Tool[];
+  leftCopies: Tool[];
+}
+
 // ===== 自动更新(desktop 专用) =====
 export interface UpdateAvailableInfo {
   version: string; // 最新版本号(去 v 前缀)
@@ -92,23 +114,40 @@ export interface SkillkitApi {
   marketList(query?: MarketListQuery): Promise<MarketListResult>;
   marketDetail(slug: string): Promise<{ description: string | null }>;
 
-  installFromMarket(slug: string, targets: Tool[]): Promise<InstallResult[]>;
-  installFromGithub(url: string, targets: Tool[]): Promise<InstallResult[]>;
+  installFromMarket(slug: string, targets: Tool[], opts?: InstallOpts): Promise<InstallResult[]>;
+  installFromGithub(url: string, targets: Tool[], opts?: InstallOpts): Promise<InstallResult[]>;
   /** 列举 GitHub 仓库内的 skill 候选（单 skill 仓库返回 kind:'single'）。不安装、不写 DB。 */
   listGithubSkills(url: string): Promise<GithubSkillsResult>;
   /** 批量安装仓库内多个 subpath（skill）到所选工具；装完由 IPC handler 触发 scanAll。 */
-  installGithubSkillsAt(url: string, subpaths: string[], targets: Tool[]): Promise<RepoBatchResult[]>;
+  installGithubSkillsAt(
+    url: string,
+    subpaths: string[],
+    targets: Tool[],
+    opts?: InstallOpts,
+  ): Promise<RepoBatchResult[]>;
   /** 弹系统文件框选 zip，返回绝对路径；取消返回 null（仅选文件，不安装）。 */
   pickZip(): Promise<string | null>;
   /** 用已选 zip 路径安装到目标工具。 */
-  installFromZip(zipPath: string, targets: Tool[]): Promise<InstallResult[]>;
+  installFromZip(zipPath: string, targets: Tool[], opts?: InstallOpts): Promise<InstallResult[]>;
 
   /** 从拖拽事件的 File 取系统绝对路径（Electron webUtils.getPathForFile）。 */
   getDroppedFilePath(file: File): string;
 
   shareSkill(tool: Tool, name: string): Promise<ShareCreateResult>;
   inspectShare(input: string): Promise<ShareSourceInfo>;
-  installFromShare(input: string, targets: Tool[]): Promise<InstallResult[]>;
+  installFromShare(input: string, targets: Tool[], opts?: InstallOpts): Promise<InstallResult[]>;
+
+  // ===== 全局仓库（~/.agents/skills）=====
+  /** 扫描全局仓库下所有 skill（文件系统即真相，不读 DB）。 */
+  scanGlobalRepo(): Promise<GlobalRepoSkill[]>;
+  /** 从全局仓库移除：删规范副本 + 清来源匹配的工具软链；独立副本保留并在结果里列出。 */
+  removeFromGlobalRepo(name: string): Promise<GlobalRepoRemoveResult>;
+  /** 把全局仓库中已有 skill 以 软链/拷贝 接入所选工具。 */
+  installGlobalToTools(
+    name: string,
+    targets: Tool[],
+    method: 'symlink' | 'copy',
+  ): Promise<InstallResult[]>;
 
   // 分享页深链（skillkit://share/<id>）唤起应用时，主进程通过它把 share id 推给渲染进程
   onDeepLink(cb: (input: string) => void): void;

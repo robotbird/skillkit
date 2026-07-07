@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SkillGroup } from '../lib/groupSkills';
+import { emojiFor, formatSize, formatTime, truncate } from '../lib/format';
 import ToolStack from './ToolStack';
 
 interface Props {
@@ -9,36 +10,6 @@ interface Props {
   onReveal?: (group: SkillGroup) => void;
   onShare?: (group: SkillGroup) => void;
   onCopyTo?: (group: SkillGroup) => void;
-}
-
-function emojiFor(name: string): string {
-  const emojis = ['📝', '📄', '🎞️', '📊', '🎨', '🧪', '🔌', '🌈', '🪪', '✨', '🛠️', '🧠', '🔍', '📦', '🎬', '✅', '🛡️', '📈', '🖼️', '🖥️', '🗒️'];
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return emojis[h % emojis.length];
-}
-
-function formatSize(bytes: number | null): string {
-  if (bytes == null) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function formatTime(ts: number | null): string {
-  if (!ts) return '';
-  const diff = Date.now() - ts;
-  const day = 24 * 3600 * 1000;
-  if (diff < day) return '今天';
-  if (diff < 2 * day) return '昨天';
-  if (diff < 30 * day) return `${Math.floor(diff / day)} 天前`;
-  if (diff < 365 * day) return `${Math.floor(diff / (30 * day))} 月前`;
-  return new Date(ts).toLocaleDateString('zh-CN');
-}
-
-function truncate(s: string, max: number): string {
-  if (s.length <= max) return s;
-  return s.slice(0, max - 1).trimEnd() + '…';
 }
 
 function KebabMenu({

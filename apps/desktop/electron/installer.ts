@@ -9,7 +9,16 @@ import AdmZip from 'adm-zip';
 import { TOOLS } from './tools.js';
 import { readSkillMd, type SkillMd } from './skill-md.js';
 import { upsertInstalled } from './db.js';
-import type { InstallResult, Tool, RepoSkillCandidate, GithubSkillsResult, RepoBatchResult } from '../shared/types.js';
+import { copyDir, rmDir, safeExists } from './fs-util.js';
+import { writeToCanonical, linkOrCopyFromCanonical } from './global-repo.js';
+import type {
+  InstallResult,
+  InstallOpts,
+  Tool,
+  RepoSkillCandidate,
+  GithubSkillsResult,
+  RepoBatchResult,
+} from '../shared/types.js';
 
 interface RepoRef {
   owner: string;
@@ -186,29 +195,6 @@ async function fetchAndExtractTar(ref: RepoRef): Promise<string> {
   return path.join(tmpDir, top);
 }
 
-function copyDir(src: string, dst: string) {
-  fs.mkdirSync(dst, { recursive: true });
-  for (const e of fs.readdirSync(src, { withFileTypes: true })) {
-    const sp = path.join(src, e.name);
-    const dp = path.join(dst, e.name);
-    if (e.isDirectory()) copyDir(sp, dp);
-    else if (e.isSymbolicLink()) {
-      try {
-        const linkTo = fs.readlinkSync(sp);
-        fs.symlinkSync(linkTo, dp);
-      } catch {
-        /* skip broken symlink */
-      }
-    } else if (e.isFile()) {
-      fs.copyFileSync(sp, dp);
-    }
-  }
-}
-
-function rmDir(dir: string) {
-  fs.rmSync(dir, { recursive: true, force: true });
-}
-
 /** 从已经准备好的"skill 源目录"安装到一个 tool 的 installRoot/<name>/ */
 function installSourceToTool(srcDir: string, tool: Tool, sourceTag: string): InstallResult {
   const md = readSkillMd(srcDir);
@@ -220,9 +206,9 @@ function installSourceToTool(srcDir: string, tool: Tool, sourceTag: string): Ins
   fs.mkdirSync(cfg.installRoot, { recursive: true });
   const dst = path.join(cfg.installRoot, name);
 
-  // 已存在 → 备份再覆盖
+  // 已存在 → 备份再覆盖（dst 可能是软链，用 safeExists 不跟随，避免悬空软链漏判）
   let backup: string | null = null;
-  if (fs.existsSync(dst)) {
+  if (safeExists(dst)) {
     backup = `${dst}.bak-${Date.now()}`;
     fs.renameSync(dst, backup);
   }
@@ -255,9 +241,31 @@ function installSourceToTool(srcDir: string, tool: Tool, sourceTag: string): Ins
   }
 }
 
+/**
+ * 安装分发：根据 opts.scope 决定走「按工具拷贝」（installSourceToTool，当前行为）
+ * 还是「全局规范副本 + 按方式接入各工具」（writeToCanonical 一次 + linkOrCopyFromCanonical）。
+ */
+function dispatchInstall(
+  srcDir: string,
+  targets: Tool[],
+  sourceTag: string,
+  opts?: InstallOpts,
+): InstallResult[] {
+  if (opts?.scope === 'global') {
+    const method = opts.method ?? 'symlink';
+    const canon = writeToCanonical(srcDir, sourceTag);
+    if (!canon.ok || !canon.path || !canon.name) {
+      return targets.map((t) => ({ tool: t, ok: false, error: canon.error }));
+    }
+    return targets.map((t) => linkOrCopyFromCanonical(canon.path!, t, method, canon.name!));
+  }
+  return targets.map((t) => installSourceToTool(srcDir, t, sourceTag));
+}
+
 export async function installFromMarket(
   slug: string,
   targets: Tool[],
+  opts?: InstallOpts,
 ): Promise<InstallResult[]> {
   const [owner, repo, name] = slug.split('/');
   if (!owner || !repo || !name) {
@@ -270,7 +278,7 @@ export async function installFromMarket(
     if (!fs.existsSync(skillDir)) {
       return targets.map((t) => ({ tool: t, ok: false, error: `仓库中找不到 ${name}/` }));
     }
-    return targets.map((t) => installSourceToTool(skillDir, t, `market:${slug}`));
+    return dispatchInstall(skillDir, targets, `market:${slug}`, opts);
   } catch (err: any) {
     return targets.map((t) => ({ tool: t, ok: false, error: err?.message || String(err) }));
   } finally {
@@ -288,6 +296,7 @@ export async function installFromMarket(
 export async function installFromGithub(
   url: string,
   targets: Tool[],
+  opts?: InstallOpts,
 ): Promise<InstallResult[]> {
   const ref = parseGithubRef(url);
   if (!ref) {
@@ -304,7 +313,7 @@ export async function installFromGithub(
       // 试着从仓库根扫一层下面是否含单一 SKILL.md 子目录
       const child = findSingleSkillChild(skillDir);
       if (child) {
-        return targets.map((t) => installSourceToTool(child, t, `github:${url}`));
+        return dispatchInstall(child, targets, `github:${url}`, opts);
       }
       return targets.map((t) => ({
         tool: t,
@@ -312,7 +321,7 @@ export async function installFromGithub(
         error: '该路径未发现 SKILL.md（或子目录中也没有单一 SKILL.md）',
       }));
     }
-    return targets.map((t) => installSourceToTool(skillDir, t, `github:${url}`));
+    return dispatchInstall(skillDir, targets, `github:${url}`, opts);
   } catch (err: any) {
     return targets.map((t) => ({ tool: t, ok: false, error: err?.message || String(err) }));
   } finally {
@@ -450,6 +459,7 @@ export async function installGithubSkillsAt(
   url: string,
   subpaths: string[],
   targets: Tool[],
+  opts?: InstallOpts,
 ): Promise<RepoBatchResult[]> {
   if (!subpaths.length || !targets.length) return [];
   const ref = parseGithubRef(url);
@@ -480,7 +490,7 @@ export async function installGithubSkillsAt(
       };
     }
     const sourceTag = subpath ? `${sourceTagBase}#${subpath}` : sourceTagBase;
-    const results = targets.map((t) => installSourceToTool(skillDir, t, sourceTag));
+    const results = dispatchInstall(skillDir, targets, sourceTag, opts);
     return { subpath, skillName, results };
   });
 }
@@ -488,6 +498,7 @@ export async function installGithubSkillsAt(
 export async function installFromZip(
   zipPath: string,
   targets: Tool[],
+  opts?: InstallOpts,
 ): Promise<InstallResult[]> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skillkit-zip-'));
   try {
@@ -506,9 +517,7 @@ export async function installFromZip(
         }));
       }
     }
-    return targets.map((t) =>
-      installSourceToTool(skillDir, t, `zip:${path.basename(zipPath)}`),
-    );
+    return dispatchInstall(skillDir, targets, `zip:${path.basename(zipPath)}`, opts);
   } catch (err: any) {
     return targets.map((t) => ({ tool: t, ok: false, error: err?.message || String(err) }));
   } finally {

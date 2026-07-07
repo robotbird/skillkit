@@ -12,8 +12,13 @@ import {
   installGithubSkillsAt,
 } from './installer.js';
 import { shareSkill, inspectShare, installFromShare } from './share.js';
+import {
+  scanGlobalRepo,
+  removeFromGlobalRepo,
+  installGlobalToTools,
+} from './global-repo.js';
 import { applyUpdate, getUpdateStatus } from './updater.js';
-import type { Tool, InstalledFilter, MarketListQuery } from '../shared/types.js';
+import type { Tool, InstalledFilter, MarketListQuery, InstallOpts } from '../shared/types.js';
 
 export function registerIpc() {
   ipcMain.handle('scan:all', async () => scanAll());
@@ -47,22 +52,28 @@ export function registerIpc() {
   );
   ipcMain.handle('market:detail', async (_e, slug: string) => fetchMarketDetail(slug));
 
-  ipcMain.handle('install:fromMarket', async (_e, slug: string, targets: Tool[]) => {
-    const r = await installFromMarket(slug, targets);
-    scanAll();
-    return r;
-  });
-  ipcMain.handle('install:fromGithub', async (_e, url: string, targets: Tool[]) => {
-    const r = await installFromGithub(url, targets);
-    scanAll();
-    return r;
-  });
+  ipcMain.handle(
+    'install:fromMarket',
+    async (_e, slug: string, targets: Tool[], opts?: InstallOpts) => {
+      const r = await installFromMarket(slug, targets, opts);
+      scanAll();
+      return r;
+    },
+  );
+  ipcMain.handle(
+    'install:fromGithub',
+    async (_e, url: string, targets: Tool[], opts?: InstallOpts) => {
+      const r = await installFromGithub(url, targets, opts);
+      scanAll();
+      return r;
+    },
+  );
   // 多 skill 仓库：先列举候选（不装、不写 DB），再批量安装选中项
   ipcMain.handle('github:listSkills', async (_e, url: string) => listGithubSkills(url));
   ipcMain.handle(
     'github:installMany',
-    async (_e, url: string, subpaths: string[], targets: Tool[]) => {
-      const r = await installGithubSkillsAt(url, subpaths, targets);
+    async (_e, url: string, subpaths: string[], targets: Tool[], opts?: InstallOpts) => {
+      const r = await installGithubSkillsAt(url, subpaths, targets, opts);
       scanAll();
       return r;
     },
@@ -77,22 +88,44 @@ export function registerIpc() {
     if (result.canceled || !result.filePaths.length) return null;
     return result.filePaths[0];
   });
-  ipcMain.handle('install:fromZip', async (_e, zipPath: string, targets: Tool[]) => {
-    const r = await installFromZip(zipPath, targets);
-    scanAll();
-    return r;
-  });
+  ipcMain.handle(
+    'install:fromZip',
+    async (_e, zipPath: string, targets: Tool[], opts?: InstallOpts) => {
+      const r = await installFromZip(zipPath, targets, opts);
+      scanAll();
+      return r;
+    },
+  );
 
   // 分享
   ipcMain.handle('share:create', async (_e, tool: Tool, name: string) =>
     shareSkill(tool, name),
   );
   ipcMain.handle('share:inspect', async (_e, input: string) => inspectShare(input));
-  ipcMain.handle('share:installFromShare', async (_e, input: string, targets: Tool[]) => {
-    const r = await installFromShare(input, targets);
+  ipcMain.handle(
+    'share:installFromShare',
+    async (_e, input: string, targets: Tool[], opts?: InstallOpts) => {
+      const r = await installFromShare(input, targets, opts);
+      scanAll();
+      return r;
+    },
+  );
+
+  // 全局仓库（~/.agents/skills）
+  ipcMain.handle('globalRepo:scan', async () => scanGlobalRepo());
+  ipcMain.handle('globalRepo:remove', async (_e, name: string) => {
+    const r = removeFromGlobalRepo(name);
     scanAll();
     return r;
   });
+  ipcMain.handle(
+    'globalRepo:installToTools',
+    async (_e, name: string, targets: Tool[], method: 'symlink' | 'copy') => {
+      const r = installGlobalToTools(name, targets, method);
+      scanAll();
+      return r;
+    },
+  );
 
   // 自动更新
   ipcMain.handle('update:status', async () => getUpdateStatus());

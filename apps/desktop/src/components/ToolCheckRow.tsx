@@ -46,7 +46,7 @@ export default function ToolCheckRow({
         disabled={parentBusy || disabled}
       />
       <img className="opt-ico" src={TOOL_ICON[tool]} alt="" draggable={false} />
-      <span>{TOOL_LABELS[tool]}</span>
+      <span className="tool-name">{TOOL_LABELS[tool]}</span>
       {disabled && note && <span className="opt-note">{note}</span>}
     </label>
   );

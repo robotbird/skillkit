@@ -4,6 +4,7 @@ import type {
   Tool,
   InstalledFilter,
   MarketListQuery,
+  InstallOpts,
   UpdateAvailableInfo,
 } from '../shared/types.js';
 
@@ -21,24 +22,34 @@ const api: SkillkitApi = {
   marketList: (q?: MarketListQuery) => ipcRenderer.invoke('market:list', q),
   marketDetail: (slug: string) => ipcRenderer.invoke('market:detail', slug),
 
-  installFromMarket: (slug: string, targets: Tool[]) =>
-    ipcRenderer.invoke('install:fromMarket', slug, targets),
-  installFromGithub: (url: string, targets: Tool[]) =>
-    ipcRenderer.invoke('install:fromGithub', url, targets),
+  installFromMarket: (slug: string, targets: Tool[], opts?: InstallOpts) =>
+    ipcRenderer.invoke('install:fromMarket', slug, targets, opts),
+  installFromGithub: (url: string, targets: Tool[], opts?: InstallOpts) =>
+    ipcRenderer.invoke('install:fromGithub', url, targets, opts),
   listGithubSkills: (url: string) => ipcRenderer.invoke('github:listSkills', url),
-  installGithubSkillsAt: (url: string, subpaths: string[], targets: Tool[]) =>
-    ipcRenderer.invoke('github:installMany', url, subpaths, targets),
+  installGithubSkillsAt: (
+    url: string,
+    subpaths: string[],
+    targets: Tool[],
+    opts?: InstallOpts,
+  ) => ipcRenderer.invoke('github:installMany', url, subpaths, targets, opts),
   pickZip: () => ipcRenderer.invoke('install:pickZip'),
-  installFromZip: (zipPath: string, targets: Tool[]) =>
-    ipcRenderer.invoke('install:fromZip', zipPath, targets),
+  installFromZip: (zipPath: string, targets: Tool[], opts?: InstallOpts) =>
+    ipcRenderer.invoke('install:fromZip', zipPath, targets, opts),
 
   // 拖拽上传：从 drop 事件的 File 取系统绝对路径（Electron webUtils.getPathForFile）
   getDroppedFilePath: (file: File) => webUtils.getPathForFile(file),
 
   shareSkill: (tool: Tool, name: string) => ipcRenderer.invoke('share:create', tool, name),
   inspectShare: (input: string) => ipcRenderer.invoke('share:inspect', input),
-  installFromShare: (input: string, targets: Tool[]) =>
-    ipcRenderer.invoke('share:installFromShare', input, targets),
+  installFromShare: (input: string, targets: Tool[], opts?: InstallOpts) =>
+    ipcRenderer.invoke('share:installFromShare', input, targets, opts),
+
+  // 全局仓库（~/.agents/skills）
+  scanGlobalRepo: () => ipcRenderer.invoke('globalRepo:scan'),
+  removeFromGlobalRepo: (name: string) => ipcRenderer.invoke('globalRepo:remove', name),
+  installGlobalToTools: (name: string, targets: Tool[], method: 'symlink' | 'copy') =>
+    ipcRenderer.invoke('globalRepo:installToTools', name, targets, method),
 
     // 分享页「从 Skillkit 打开」唤起本应用时，主进程经此通道把 share id 推给渲染进程
   onDeepLink: (cb: (input: string) => void) => {
