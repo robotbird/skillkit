@@ -133,6 +133,14 @@ export interface LoginRequest {
 export interface AuthResponse {
   user: PublicUser;
 }
+
+// 桌面端 token 鉴权：/api/auth/token 登录成功后下发 bearer token + 用户。
+// 与 web 的 cookie session 复用同一套 JWT（signSession）+ tokenVersion 失效机制，
+// 只是 token 走响应体给桌面端自行存储，不写 cookie。
+export interface TokenAuthResponse {
+  token: string;
+  user: PublicUser;
+}
 export interface UpdateMeRequest {
   name?: string | null;
 }

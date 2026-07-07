@@ -1074,3 +1074,353 @@ html, body, #root {
   font-family: "SF Mono", Monaco, Consolas, monospace;
   font-size: 11px;
 }
+
+/* =========================================================
+   设置齿轮按钮 + 设置弹窗
+   ========================================================= */
+.settings-btn {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color 0.18s, background 0.18s;
+}
+.settings-btn:hover {
+  color: var(--ink);
+  background: var(--pill-bg-hover);
+}
+
+/* 设置弹窗：左导航 + 右内容（覆盖默认 .modal 的窄宽） */
+.modal.settings-dialog {
+  width: 640px;
+  max-width: 92vw;
+  min-height: 420px;
+  max-height: 84vh;
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+}
+.settings-rail {
+  flex: 0 0 172px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 18px 10px 14px 16px;
+  border-right: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.16);
+  position: relative;
+}
+.settings-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  padding: 2px 8px 12px;
+}
+.settings-nav {
+  -webkit-app-region: no-drag;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  font-family: inherit;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.settings-nav:hover {
+  color: var(--ink);
+  background: var(--pill-bg-hover);
+}
+.settings-nav.is-active {
+  color: var(--pill-active-ink);
+  background: var(--accent);
+}
+.settings-close {
+  position: absolute;
+  top: 14px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-mute);
+  font-size: 13px;
+  cursor: pointer;
+}
+.settings-close:hover {
+  color: var(--ink);
+  background: var(--pill-bg-hover);
+}
+
+.settings-content {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 26px;
+  overflow-y: auto;
+}
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings-section h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--ink);
+}
+.settings-hint {
+  margin: 0;
+  color: var(--ink-mute);
+  font-size: 12.5px;
+}
+.settings-error {
+  color: var(--danger);
+  font-size: 12.5px;
+}
+.settings-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+/* 通用按钮 */
+.btn {
+  appearance: none;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, filter 0.15s;
+}
+.btn:hover {
+  background: var(--pill-bg-hover);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btn.primary {
+  background: var(--accent);
+  color: var(--pill-active-ink);
+  border-color: transparent;
+}
+.btn.primary:hover {
+  filter: brightness(1.06);
+}
+.btn-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 8px 4px;
+}
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+/* 表单字段 */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.field input {
+  appearance: none;
+  background: var(--pill-bg);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-input);
+  padding: 9px 12px;
+  font-family: inherit;
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.field input:focus {
+  border-color: var(--accent);
+}
+
+/* 分段选择（主题 / 语言） */
+.seg {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.seg-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  color: var(--ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.seg-item:hover {
+  background: var(--pill-bg-hover);
+  color: var(--ink);
+}
+.seg-item.checked {
+  background: var(--accent);
+  color: var(--pill-active-ink);
+  border-color: transparent;
+}
+.seg-item input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 键值卡片（空间 / 关于） */
+.kv-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-line);
+  border-radius: var(--radius-card);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kv-label {
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+.kv-value {
+  font-size: 13.5px;
+  color: var(--ink);
+  word-break: break-all;
+  font-variant-numeric: tabular-nums;
+}
+.kv-value.is-error {
+  color: var(--danger);
+}
+.kv-desc {
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin-top: 2px;
+}
+
+/* 账号卡片 */
+.account-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-line);
+  border-radius: var(--radius-card);
+  padding: 14px 16px;
+}
+.account-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.account-email {
+  font-size: 13px;
+  color: var(--ink-mute);
+  margin-top: 2px;
+}
+
+/* 关于：更新区 */
+.about-update {
+  margin-top: 4px;
+}
+.about-update-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.about-new {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.about-phase {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+}
+
+/* =========================================================
+   浅色主题（[data-theme="light"]）：覆盖 :root 变量 + 硬编码深色处
+   ========================================================= */
+[data-theme="light"] {
+  --bg-0: #f5f0e8;
+  --bg-1: #efe8db;
+  --ink: #2a2018;
+  --ink-soft: rgba(42, 32, 24, 0.72);
+  --ink-mute: rgba(42, 32, 24, 0.5);
+  --line: rgba(60, 40, 20, 0.1);
+  --line-strong: rgba(60, 40, 20, 0.16);
+  --pill-bg: rgba(255, 255, 255, 0.6);
+  --pill-bg-hover: rgba(255, 255, 255, 0.85);
+  --pill-active-bg: #2a2018;
+  --pill-active-ink: #f5f0e8;
+  --card-bg: rgba(255, 255, 255, 0.72);
+  --card-bg-hover: rgba(255, 255, 255, 0.92);
+  --card-line: rgba(120, 90, 50, 0.14);
+  --accent: #c9761a;
+  --accent-soft: rgba(201, 118, 26, 0.16);
+  --danger: #d24a38;
+  --shadow-pill: 0 6px 18px rgba(120, 90, 50, 0.16), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 8px 24px rgba(120, 90, 50, 0.1);
+}
+[data-theme="light"] .bg {
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(255, 190, 110, 0.35), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(210, 150, 90, 0.22), transparent 65%),
+    linear-gradient(180deg, #fbf5ea 0%, #f3ebde 50%, #ece1d0 100%);
+}
+[data-theme="light"] .bg-vignette {
+  background: radial-gradient(120% 80% at 50% 60%, transparent 50%, rgba(120, 90, 50, 0.12) 100%);
+}
+[data-theme="light"] .modal {
+  background: linear-gradient(180deg, #fbf5ea 0%, #f1e8da 100%);
+  border-color: rgba(120, 90, 50, 0.16);
+  box-shadow: 0 20px 60px rgba(120, 90, 50, 0.22);
+}
+[data-theme="light"] .modal-mask {
+  background: rgba(60, 40, 20, 0.35);
+}
+[data-theme="light"] .settings-rail {
+  background: rgba(120, 90, 50, 0.06);
+}
+/* 硬编码 rgba(255,255,255,*) 在亮色下不可见，改为深色透明（仅覆盖关键可见项） */
+[data-theme="light"] .tab:hover,
+[data-theme="light"] .modal .opts label:hover,
+[data-theme="light"] .btn-ghost:hover {
+  background: rgba(60, 40, 20, 0.06);
+}
+[data-theme="light"] .tabs-logo {
+  background: rgba(60, 40, 20, 0.06);
+}
+[data-theme="light"] .main::-webkit-scrollbar-thumb {
+  background: rgba(60, 40, 20, 0.16);
+}
+[data-theme="light"] .main::-webkit-scrollbar-thumb:hover {
+  background: rgba(60, 40, 20, 0.26);
+}
+[data-theme="light"] .muted-hint code {
+  background: rgba(60, 40, 20, 0.06);
+}
