@@ -805,7 +805,7 @@ html, body, #root {
   backdrop-filter: blur(2px);
 }
 .modal {
-  width: 380px; max-width: 90vw;
+  width: 460px; max-width: 90vw;
   background: linear-gradient(180deg, #2a2018 0%, #1f1611 100%);
   border: 1px solid rgba(255, 200, 140, 0.16);
   border-radius: 18px;
@@ -927,6 +927,15 @@ html, body, #root {
 .modal .opts.opts-tools label.checked {
   background: transparent;
   border: none;
+}
+/* ToolPicker（单 skill 弹窗）工具区：两列等宽网格，让 checkbox/图标/名称按列对齐，
+   避免「按内容宽度的 chip 换行后错位」。RepoSkillPicker 走 .repo-skill-modal，
+   命中 :not(...) 之外，仍保留上面的紧凑 chip 横排（宽弹窗下更聚拢）。 */
+.modal:not(.repo-skill-modal) .opts.opts-tools {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  row-gap: 4px;
+  column-gap: 8px;
 }
 /* 工具名单行不换行（避免 "Claude Code" 等带空格的名字在窄列里断行） */
 .modal .opts .tool-name { white-space: nowrap; }
