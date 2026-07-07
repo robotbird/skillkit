@@ -162,7 +162,7 @@ function AppearanceSection() {
   return (
     <div className="settings-section">
       <h3>{t('appearance.label')}</h3>
-      <div className="seg opts">
+      <div className="seg">
         {options.map((o) => (
           <label key={o.key} className={`seg-item${setting === o.key ? ' checked' : ''}`}>
             <input
@@ -189,7 +189,7 @@ function LanguageSection() {
   return (
     <div className="settings-section">
       <h3>{t('language.label')}</h3>
-      <div className="seg opts">
+      <div className="seg">
         {options.map((o) => (
           <label key={o.key} className={`seg-item${locale === o.key ? ' checked' : ''}`}>
             <input
