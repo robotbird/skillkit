@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ALL_TOOLS, type Tool, type InstallOpts } from '@shared/types';
 import { useInstalledTools } from '../lib/useInstalledTools';
 import ToolCheckRow from './ToolCheckRow';
+import ModalPortal from './ModalPortal';
 
 interface Props {
   open: boolean;
@@ -95,73 +96,75 @@ export default function ToolPicker({
   const scope: 'tools' | 'global' = lockedScope === 'global' ? 'global' : 'tools';
 
   return (
-    <div
-      className="modal-mask"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !busy) onCancel();
-      }}
-    >
-      <div className="modal">
-        <h3>{title}</h3>
-        <p className="modal-sub">{subtitle}</p>
+    <ModalPortal>
+      <div
+        className="modal-mask"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget && !busy) onCancel();
+        }}
+      >
+        <div className="modal">
+          <h3>{title}</h3>
+          <p className="modal-sub">{subtitle}</p>
 
-        {showMethod && (
-          <div className="opts opts-method">
-            <div className="opts-section-title">安装方式</div>
-            <label
-              className={method === 'symlink' ? 'checked' : ''}
-              title="单一数据源，改一处全更新；省空间"
-            >
-              <input
-                type="radio"
-                name="tp-method"
-                checked={method === 'symlink'}
-                onChange={() => setMethod('symlink')}
-              />
-              <strong>软链（推荐）</strong>
-            </label>
-            <label className={method === 'copy' ? 'checked' : ''} title="各工具独立副本，占用更多空间">
-              <input
-                type="radio"
-                name="tp-method"
-                checked={method === 'copy'}
-                onChange={() => setMethod('copy')}
-              />
-              <strong>拷贝</strong>
-            </label>
+          {showMethod && (
+            <div className="opts opts-method">
+              <div className="opts-section-title">安装方式</div>
+              <label
+                className={method === 'symlink' ? 'checked' : ''}
+                title="单一数据源，改一处全更新；省空间"
+              >
+                <input
+                  type="radio"
+                  name="tp-method"
+                  checked={method === 'symlink'}
+                  onChange={() => setMethod('symlink')}
+                />
+                <strong>软链（推荐）</strong>
+              </label>
+              <label className={method === 'copy' ? 'checked' : ''} title="各工具独立副本，占用更多空间">
+                <input
+                  type="radio"
+                  name="tp-method"
+                  checked={method === 'copy'}
+                  onChange={() => setMethod('copy')}
+                />
+                <strong>拷贝</strong>
+              </label>
+            </div>
+          )}
+
+          <div className="opts opts-tools">
+            {visibleTools.map((t) => {
+              const disabled = disabledSet.has(t);
+              return (
+                <ToolCheckRow
+                  key={t}
+                  tool={t}
+                  checked={picked.includes(t)}
+                  multiple={multiple}
+                  disabled={disabled}
+                  note={disabled ? '内置·不可卸载' : undefined}
+                  parentBusy={busy}
+                  onToggle={toggle}
+                />
+              );
+            })}
           </div>
-        )}
-
-        <div className="opts opts-tools">
-          {visibleTools.map((t) => {
-            const disabled = disabledSet.has(t);
-            return (
-              <ToolCheckRow
-                key={t}
-                tool={t}
-                checked={picked.includes(t)}
-                multiple={multiple}
-                disabled={disabled}
-                note={disabled ? '内置·不可卸载' : undefined}
-                parentBusy={busy}
-                onToggle={toggle}
-              />
-            );
-          })}
-        </div>
-        <div className="modal-actions">
-          <button className="btn-ghost" onClick={onCancel} disabled={busy}>
-            取消
-          </button>
-          <button
-            className={tone === 'danger' ? 'btn-danger' : 'btn-primary'}
-            onClick={() => onConfirm(picked, { scope, method })}
-            disabled={busy || picked.length === 0}
-          >
-            {busy ? <><span className="spinner" /> {busyLabel}</> : confirmLabel}
-          </button>
+          <div className="modal-actions">
+            <button className="btn-ghost" onClick={onCancel} disabled={busy}>
+              取消
+            </button>
+            <button
+              className={tone === 'danger' ? 'btn-danger' : 'btn-primary'}
+              onClick={() => onConfirm(picked, { scope, method })}
+              disabled={busy || picked.length === 0}
+            >
+              {busy ? <><span className="spinner" /> {busyLabel}</> : confirmLabel}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

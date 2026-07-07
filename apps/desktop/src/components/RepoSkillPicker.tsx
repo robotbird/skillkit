@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { type Tool, type GithubSkillsResult, type InstallOpts } from '@shared/types';
 import { useInstalledTools } from '../lib/useInstalledTools';
 import ToolCheckRow, { visibleToolsOf } from './ToolCheckRow';
+import ModalPortal from './ModalPortal';
 
 interface Props {
   open: boolean;
@@ -73,113 +74,115 @@ export default function RepoSkillPicker({
   const confirmDisabled = busy || picked.size === 0 || targets.length === 0;
 
   return (
-    <div
-      className="modal-mask"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !busy) onCancel();
-      }}
-    >
-      <div className="modal repo-skill-modal">
-        <div className="repo-skill-head">
-          <h3>从 GitHub 仓库选择要安装的 Skill</h3>
-          <p className="modal-sub">
-            扫描到 {result.skills.length} 个 skill 候选 · {result.repo}
-          </p>
-        </div>
+    <ModalPortal>
+      <div
+        className="modal-mask"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget && !busy) onCancel();
+        }}
+      >
+        <div className="modal repo-skill-modal">
+          <div className="repo-skill-head">
+            <h3>从 GitHub 仓库选择要安装的 Skill</h3>
+            <p className="modal-sub">
+              扫描到 {result.skills.length} 个 skill 候选 · {result.repo}
+            </p>
+          </div>
 
-        <div className="repo-skill-scroll">
-          {result.skills.length === 0 ? (
-            <div className="repo-skill-empty">
-              未扫到任何带有效 frontmatter 的 SKILL.md / AGENTS.md。
-            </div>
-          ) : (
-            <div className="opts opts-skills">
-              {result.skills.length > 1 && (
-                <>
-                  <label className={`opts-skills-all${allChecked ? ' checked' : ''}`}>
-                    <input type="checkbox" checked={allChecked} onChange={toggleAll} disabled={busy} />
-                    <strong>{allChecked ? '全不选' : '全选'}</strong>
-                    <span className="opt-note">{picked.size}/{result.skills.length}</span>
-                  </label>
-                  <hr />
-                </>
-              )}
-              {result.skills.map((s) => (
-                <label key={s.subpath} className={picked.has(s.subpath) ? 'checked' : ''}>
-                  <input
-                    type="checkbox"
-                    checked={picked.has(s.subpath)}
-                    onChange={() => toggleSkill(s.subpath)}
-                    disabled={busy}
-                  />
-                  <div className="skill-row">
-                    <strong>{s.name}</strong>
-                    {s.description && <span className="opt-note">{s.description}</span>}
-                    <code className="skill-subpath">{s.subpath || '(仓库根)'}</code>
-                  </div>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="repo-skill-foot">
-          {result.skills.length > 0 && (
-            <>
-              {showMethod && (
-                <div className="opts opts-method">
-                  <div className="opts-section-title">安装方式</div>
-                  <label className={method === 'symlink' ? 'checked' : ''} title="单一数据源，改一处全更新；省空间">
+          <div className="repo-skill-scroll">
+            {result.skills.length === 0 ? (
+              <div className="repo-skill-empty">
+                未扫到任何带有效 frontmatter 的 SKILL.md / AGENTS.md。
+              </div>
+            ) : (
+              <div className="opts opts-skills">
+                {result.skills.length > 1 && (
+                  <>
+                    <label className={`opts-skills-all${allChecked ? ' checked' : ''}`}>
+                      <input type="checkbox" checked={allChecked} onChange={toggleAll} disabled={busy} />
+                      <strong>{allChecked ? '全不选' : '全选'}</strong>
+                      <span className="opt-note">{picked.size}/{result.skills.length}</span>
+                    </label>
+                    <hr />
+                  </>
+                )}
+                {result.skills.map((s) => (
+                  <label key={s.subpath} className={picked.has(s.subpath) ? 'checked' : ''}>
                     <input
-                      type="radio"
-                      name="rp-method"
-                      checked={method === 'symlink'}
-                      onChange={() => setMethod('symlink')}
+                      type="checkbox"
+                      checked={picked.has(s.subpath)}
+                      onChange={() => toggleSkill(s.subpath)}
+                      disabled={busy}
                     />
-                    <strong>软链（推荐）</strong>
+                    <div className="skill-row">
+                      <strong>{s.name}</strong>
+                      {s.description && <span className="opt-note">{s.description}</span>}
+                      <code className="skill-subpath">{s.subpath || '(仓库根)'}</code>
+                    </div>
                   </label>
-                  <label className={method === 'copy' ? 'checked' : ''} title="各工具独立副本，占用更多空间">
-                    <input
-                      type="radio"
-                      name="rp-method"
-                      checked={method === 'copy'}
-                      onChange={() => setMethod('copy')}
-                    />
-                    <strong>拷贝</strong>
-                  </label>
-                </div>
-              )}
-
-              <div className="opts-section-title">安装到哪些工具？</div>
-              <div className="opts opts-tools">
-                {visibleTools.map((t) => (
-                  <ToolCheckRow
-                    key={t}
-                    tool={t}
-                    checked={targets.includes(t)}
-                    parentBusy={busy}
-                    onToggle={toggleTarget}
-                  />
                 ))}
               </div>
-            </>
-          )}
+            )}
+          </div>
 
-          <div className="modal-actions">
-            <button className="btn-ghost" onClick={onCancel} disabled={busy}>
-              取消
-            </button>
-            <button
-              className="btn-primary"
-              onClick={() => onConfirm([...picked], targets, { scope, method })}
-              disabled={confirmDisabled}
-            >
-              {busy && <span className="spinner" />}
-              {confirmLabel}
-            </button>
+          <div className="repo-skill-foot">
+            {result.skills.length > 0 && (
+              <>
+                {showMethod && (
+                  <div className="opts opts-method">
+                    <div className="opts-section-title">安装方式</div>
+                    <label className={method === 'symlink' ? 'checked' : ''} title="单一数据源，改一处全更新；省空间">
+                      <input
+                        type="radio"
+                        name="rp-method"
+                        checked={method === 'symlink'}
+                        onChange={() => setMethod('symlink')}
+                      />
+                      <strong>软链（推荐）</strong>
+                    </label>
+                    <label className={method === 'copy' ? 'checked' : ''} title="各工具独立副本，占用更多空间">
+                      <input
+                        type="radio"
+                        name="rp-method"
+                        checked={method === 'copy'}
+                        onChange={() => setMethod('copy')}
+                      />
+                      <strong>拷贝</strong>
+                    </label>
+                  </div>
+                )}
+
+                <div className="opts-section-title">安装到哪些工具？</div>
+                <div className="opts opts-tools">
+                  {visibleTools.map((t) => (
+                    <ToolCheckRow
+                      key={t}
+                      tool={t}
+                      checked={targets.includes(t)}
+                      parentBusy={busy}
+                      onToggle={toggleTarget}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="modal-actions">
+              <button className="btn-ghost" onClick={onCancel} disabled={busy}>
+                取消
+              </button>
+              <button
+                className="btn-primary"
+                onClick={() => onConfirm([...picked], targets, { scope, method })}
+                disabled={confirmDisabled}
+              >
+                {busy && <span className="spinner" />}
+                {confirmLabel}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
