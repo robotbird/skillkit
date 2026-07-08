@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 export interface ToastState {
-  show: (msg: string, kind?: 'info' | 'error', ms?: number) => void;
-  props: { msg: string; kind: 'info' | 'error'; visible: boolean };
+  show: (msg: string, kind?: 'info' | 'success' | 'error', ms?: number) => void;
+  props: { msg: string; kind: 'info' | 'success' | 'error'; visible: boolean };
 }
 
 export function useToast(): ToastState {
   const [msg, setMsg] = useState('');
-  const [kind, setKind] = useState<'info' | 'error'>('info');
+  const [kind, setKind] = useState<'info' | 'success' | 'error'>('info');
   const [visible, setVisible] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const show = useCallback((m: string, k: 'info' | 'error' = 'info', ms = 2200) => {
+  const show = useCallback((m: string, k: 'info' | 'success' | 'error' = 'info', ms = 2200) => {
     setMsg(m);
     setKind(k);
     setVisible(true);
@@ -34,11 +34,12 @@ export default function Toast({
   visible,
 }: {
   msg: string;
-  kind: 'info' | 'error';
+  kind: 'info' | 'success' | 'error';
   visible: boolean;
 }) {
+  const tone = kind === 'error' ? ' error' : kind === 'success' ? ' success' : '';
   return (
-    <div className={`toast${visible ? ' show' : ''}${kind === 'error' ? ' error' : ''}`}>
+    <div className={`toast${visible ? ' show' : ''}${tone}`}>
       {msg}
     </div>
   );

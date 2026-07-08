@@ -3,6 +3,7 @@ import { ALL_TOOLS, type Tool, type InstallOpts } from '@shared/types';
 import { useInstalledTools } from '../lib/useInstalledTools';
 import ToolCheckRow from './ToolCheckRow';
 import ModalPortal from './ModalPortal';
+import { useI18n } from '../i18n';
 
 interface Props {
   open: boolean;
@@ -35,33 +36,39 @@ interface Props {
 
 export default function ToolPicker({
   open,
-  title = '安装到哪些工具？',
-  subtitle = '至少选择一个工具，已选中的工具会各自得到一份 skill 副本。',
+  title,
+  subtitle,
   multiple = true,
   defaultSelected = [],
   excludeTools,
   disableTools,
   lockedScope,
   busy,
-  confirmLabel = '确认安装',
-  busyLabel = '安装中',
+  confirmLabel,
+  busyLabel,
   tone = 'primary',
   onCancel,
   onConfirm,
 }: Props) {
+  const { t } = useI18n();
+  const titleText = title ?? t('toolpicker.title');
+  const subtitleText = subtitle ?? t('toolpicker.subtitle');
+  const confirmText = confirmLabel ?? t('toolpicker.confirm');
+  const busyText = busyLabel ?? t('toolpicker.busy');
+
   // 只展示「已安装」工具(其 ~/.<tool> 根目录存在),未安装工具既不显示也不可选。
   const { tools: installed } = useInstalledTools();
   const availableSet = useMemo(() => new Set(installed), [installed]);
 
   const visibleTools = useMemo(
-    () => ALL_TOOLS.filter((t) => !excludeTools?.includes(t) && availableSet.has(t)),
+    () => ALL_TOOLS.filter((tool) => !excludeTools?.includes(tool) && availableSet.has(tool)),
     [excludeTools, availableSet],
   );
   const disabledSet = useMemo(() => new Set(disableTools ?? []), [disableTools]);
   const initial = useMemo(
     () =>
       defaultSelected.filter(
-        (t) => !excludeTools?.includes(t) && !disabledSet.has(t) && availableSet.has(t),
+        (tool) => !excludeTools?.includes(tool) && !disabledSet.has(tool) && availableSet.has(tool),
       ),
     [defaultSelected, excludeTools, disabledSet, availableSet],
   );
@@ -79,15 +86,25 @@ export default function ToolPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, excludeKey, disableKey]);
 
+  // Esc 关闭（busy 进行中不响应）
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !busy) onCancel();
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, busy, onCancel]);
+
   if (!open) return null;
 
-  function toggle(t: Tool) {
-    if (disabledSet.has(t)) return;
+  function toggle(tool: Tool) {
+    if (disabledSet.has(tool)) return;
     if (multiple) {
-      setPicked((arr) => (arr.includes(t) ? arr.filter((x) => x !== t) : [...arr, t]));
+      setPicked((arr) => (arr.includes(tool) ? arr.filter((x) => x !== tool) : [...arr, tool]));
     } else {
       // 单选：直接替换（radio 语义，点了即唯一选中）
-      setPicked([t]);
+      setPicked([tool]);
     }
   }
 
@@ -104,15 +121,15 @@ export default function ToolPicker({
         }}
       >
         <div className="modal">
-          <h3>{title}</h3>
-          <p className="modal-sub">{subtitle}</p>
+          <h3>{titleText}</h3>
+          <p className="modal-sub">{subtitleText}</p>
 
           {showMethod && (
             <div className="opts opts-method">
-              <div className="opts-section-title">安装方式</div>
+              <div className="opts-section-title">{t('install.method')}</div>
               <label
                 className={method === 'symlink' ? 'checked' : ''}
-                title="单一数据源，改一处全更新；省空间"
+                title={t('install.symlinkDesc')}
               >
                 <input
                   type="radio"
@@ -120,31 +137,31 @@ export default function ToolPicker({
                   checked={method === 'symlink'}
                   onChange={() => setMethod('symlink')}
                 />
-                <strong>软链（推荐）</strong>
+                <strong>{t('install.symlink')}</strong>
               </label>
-              <label className={method === 'copy' ? 'checked' : ''} title="各工具独立副本，占用更多空间">
+              <label className={method === 'copy' ? 'checked' : ''} title={t('install.copyDesc')}>
                 <input
                   type="radio"
                   name="tp-method"
                   checked={method === 'copy'}
                   onChange={() => setMethod('copy')}
                 />
-                <strong>拷贝</strong>
+                <strong>{t('install.copy')}</strong>
               </label>
             </div>
           )}
 
           <div className="opts opts-tools">
-            {visibleTools.map((t) => {
-              const disabled = disabledSet.has(t);
+            {visibleTools.map((tool) => {
+              const disabled = disabledSet.has(tool);
               return (
                 <ToolCheckRow
-                  key={t}
-                  tool={t}
-                  checked={picked.includes(t)}
+                  key={tool}
+                  tool={tool}
+                  checked={picked.includes(tool)}
                   multiple={multiple}
                   disabled={disabled}
-                  note={disabled ? '内置·不可卸载' : undefined}
+                  note={disabled ? t('toolpicker.builtinNote') : undefined}
                   parentBusy={busy}
                   onToggle={toggle}
                 />
@@ -153,14 +170,14 @@ export default function ToolPicker({
           </div>
           <div className="modal-actions">
             <button className="btn-ghost" onClick={onCancel} disabled={busy}>
-              取消
+              {t('common.cancel')}
             </button>
             <button
               className={tone === 'danger' ? 'btn-danger' : 'btn-primary'}
               onClick={() => onConfirm(picked, { scope, method })}
               disabled={busy || picked.length === 0}
             >
-              {busy ? <><span className="spinner" /> {busyLabel}</> : confirmLabel}
+              {busy ? <><span className="spinner" /> {busyText}</> : confirmText}
             </button>
           </div>
         </div>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { SkillGroup } from '../lib/groupSkills';
 import { emojiFor, formatSize, formatTime, truncate } from '../lib/format';
 import ToolStack from './ToolStack';
+import { useI18n } from '../i18n';
 
 interface Props {
   group: SkillGroup;
@@ -25,6 +26,7 @@ function KebabMenu({
   onShare?: () => void;
   onCopyTo?: () => void;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -49,7 +51,7 @@ function KebabMenu({
     <div className={`kebab${open ? ' is-open' : ''}`} ref={wrapRef}>
       <button
         className="icon-btn"
-        title="更多操作"
+        title={t('skill.kebabMore')}
         onClick={(e) => {
           e.stopPropagation();
           setOpen((v) => !v);
@@ -74,7 +76,7 @@ function KebabMenu({
             <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
               <path fill="currentColor" d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
             </svg>
-            打开目录
+            {t('skill.openDir')}
           </button>
           {onShare && (
             <button
@@ -90,7 +92,7 @@ function KebabMenu({
                   d="M14 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1.9-5.5 4.2-10.9 11-11z"
                 />
               </svg>
-              分享
+              {t('skill.share')}
             </button>
           )}
           {onCopyTo && (
@@ -107,7 +109,7 @@ function KebabMenu({
                   d="M16 1H4a2 2 0 00-2 2v14h2V3h12V1zm3 4H8a2 2 0 00-2 2v14a2 2 0 002 2h11a2 2 0 002-2V7a2 2 0 00-2-2zm0 16H8V7h11v14z"
                 />
               </svg>
-              复制到其他工具
+              {t('skill.copyTo')}
             </button>
           )}
           <button
@@ -124,7 +126,7 @@ function KebabMenu({
                 d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12a2 2 0 01-2 2H9a2 2 0 01-2-2L6 9z"
               />
             </svg>
-            {canUninstall ? '卸载' : '全部为内置'}
+            {canUninstall ? t('skill.uninstall') : t('skill.allBuiltin')}
           </button>
         </div>
       )}
@@ -133,11 +135,12 @@ function KebabMenu({
 }
 
 export default function SkillCard({ group, mode, onUninstall, onReveal, onShare, onCopyTo }: Props) {
+  const { t } = useI18n();
   const { primary, tools } = group;
-  const builtinTools = tools.filter((t) => group.byTool[t]?.isBuiltin);
+  const builtinTools = tools.filter((tool) => group.byTool[tool]?.isBuiltin);
   const multi = tools.length > 1;
   // 只要有一个非内置工具就允许卸载（弹窗里再按工具勾选，内置会置灰）
-  const canUninstall = tools.some((t) => !group.byTool[t]?.isBuiltin);
+  const canUninstall = tools.some((tool) => !group.byTool[tool]?.isBuiltin);
 
   const reveal = () => onReveal?.(group);
   const uninstall = () => onUninstall?.(group);
@@ -158,7 +161,7 @@ export default function SkillCard({ group, mode, onUninstall, onReveal, onShare,
           {group.name}
         </div>
         <p className="skill-desc-grid">
-          {truncate(primary.description || '（未提供描述）', 100)}
+          {truncate(primary.description || t('skill.noDesc'), 100)}
         </p>
       </article>
     );
@@ -174,10 +177,10 @@ export default function SkillCard({ group, mode, onUninstall, onReveal, onShare,
             {group.name}
           </div>
           <ToolStack tools={tools} builtinTools={builtinTools} size="md" />
-          {multi && <span className="skill-tag tag-multi">{tools.length} 个工具</span>}
-          {builtinTools.length > 0 && <span className="skill-tag tag-builtin">含内置</span>}
+          {multi && <span className="skill-tag tag-multi">{t('skill.toolCount', { count: tools.length })}</span>}
+          {builtinTools.length > 0 && <span className="skill-tag tag-builtin">{t('skill.hasBuiltin')}</span>}
         </div>
-        <div className="skill-desc">{primary.description || '（未提供描述）'}</div>
+        <div className="skill-desc">{primary.description || t('skill.noDesc')}</div>
         <div className="skill-meta">
           {primary.sizeBytes != null && (
             <>
@@ -187,7 +190,7 @@ export default function SkillCard({ group, mode, onUninstall, onReveal, onShare,
           )}
           {primary.mtime != null && (
             <>
-              <span>更新于 {formatTime(primary.mtime)}</span>
+              <span>{t('skill.updated', { time: formatTime(primary.mtime) })}</span>
               <span className="dot" />
             </>
           )}

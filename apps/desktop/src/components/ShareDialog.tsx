@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { InstalledSkill, ShareCreateResult } from '@shared/types';
 import ModalPortal from './ModalPortal';
+import { useI18n } from '../i18n';
 
 interface Props {
   open: boolean;
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function ShareDialog({ open, skill, onClose }: Props) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ShareCreateResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +25,16 @@ export default function ShareDialog({ open, skill, onClose }: Props) {
       setCopied(false);
     }
   }, [open, skill?.tool, skill?.name]);
+
+  // Esc 关闭（busy 生成中不响应）
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !busy) onClose();
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, busy, onClose]);
 
   async function generate() {
     if (!skill) return;
@@ -60,43 +72,42 @@ export default function ShareDialog({ open, skill, onClose }: Props) {
         }}
       >
         <div className="modal share-modal">
-          <h3>分享 {skill.name}</h3>
+          <h3>{t('share.title', { name: skill.name })}</h3>
 
           {!result ? (
             <>
               <p className="modal-sub">
-                该 skill 会被压缩并上传到分享服务，<strong>任何人 7 天内</strong>通过链接都能安装。
+                {t('share.descPre')}<strong>{t('share.descBold')}</strong>{t('share.descPost')}
                 <br />
-                请确认其中不包含敏感信息。
+                {t('share.warn')}
               </p>
               {error && <div className="share-error">{error}</div>}
               <div className="modal-actions">
                 <button className="btn-ghost" onClick={onClose} disabled={busy}>
-                  取消
+                  {t('common.cancel')}
                 </button>
                 <button className="btn-primary" onClick={generate} disabled={busy}>
-                  {busy ? <><span className="spinner" /> 生成中</> : '生成分享链接'}
+                  {busy ? <><span className="spinner" /> {t('share.generating')}</> : t('share.generate')}
                 </button>
               </div>
             </>
           ) : (
             <>
               <p className="modal-sub">
-                ✓ 链接已生成，{expIn === 0 ? '今天到期' : `${expIn} 天后过期`}。任何人都可以通过它安装这个
-                skill。
+                {expIn === 0 ? t('share.doneToday') : t('share.doneDays', { days: expIn })}
               </p>
               <div className="share-link">
                 <code>{result.url}</code>
                 <button className="btn-primary" onClick={copy}>
-                  {copied ? '已复制' : '复制'}
+                  {copied ? t('common.copied') : t('common.copy')}
                 </button>
               </div>
               <p className="muted-hint">
-                短链 ID：<code>{result.id}</code>
+                {t('share.shortIdLabel')}<code>{result.id}</code>
               </p>
               <div className="modal-actions">
                 <button className="btn-ghost" onClick={onClose}>
-                  关闭
+                  {t('common.close')}
                 </button>
               </div>
             </>

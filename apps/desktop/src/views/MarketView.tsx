@@ -1,16 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TOOL_LABELS, type MarketSkill, type Tool, type InstallResult, type InstallOpts } from '@shared/types';
 import ToolPicker from '../components/ToolPicker';
 import type { ToastState } from '../components/Toast';
+import { useI18n } from '../i18n';
+import type { MessageKey } from '../i18n/messages';
 
 const PAGE_SIZE = 30;
 
-function summarizeResults(results: InstallResult[], labels: Record<Tool, string>): { ok: string; fail: string } {
+type T = (key: MessageKey, vars?: Record<string, string | number>) => string;
+
+function summarizeResults(results: InstallResult[], labels: Record<Tool, string>, t: T): { ok: string; fail: string } {
   const ok = results.filter((r) => r.ok).map((r) => labels[r.tool]);
   const fail = results.filter((r) => !r.ok);
   return {
-    ok: ok.length ? `已安装到：${ok.join('、')}` : '',
-    fail: fail.length ? `失败：${fail.map((r) => `${labels[r.tool]}（${r.error}）`).join('；')}` : '',
+    ok: ok.length ? t('market.installedTo', { tools: ok.join(', ') }) : '',
+    fail: fail.length ? t('market.failed', { detail: fail.map((r) => `${labels[r.tool]} (${r.error})`).join('; ') }) : '',
   };
 }
 
@@ -28,6 +32,7 @@ export default function MarketView({
   toast: ToastState;
   onInstalled: () => void;
 }) {
+  const { t } = useI18n();
   const [items, setItems] = useState<MarketSkill[] | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -54,11 +59,12 @@ export default function MarketView({
       try {
         await window.skillkit.marketRefresh(false);
       } catch (e: any) {
-        toast.show(`市场刷新失败：${e?.message ?? e}`, 'error');
+        toast.show(t('market.refreshFail', { error: e?.message ?? e }), 'error');
       } finally {
         setRefreshing(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 加载分页
@@ -88,9 +94,9 @@ export default function MarketView({
     setRefreshing(true);
     try {
       const r = await window.skillkit.marketRefresh(true);
-      toast.show(r.fetched ? `已更新市场（${r.count} 个 skill）` : `市场缓存仍是新鲜的（${r.count} 个）`);
+      toast.show(r.fetched ? t('market.refreshOk', { count: r.count }) : t('market.refreshStale', { count: r.count }));
     } catch (e: any) {
-      toast.show(`市场刷新失败：${e?.message ?? e}`, 'error');
+      toast.show(t('market.refreshFail', { error: e?.message ?? e }), 'error');
     } finally {
       setRefreshing(false);
     }
@@ -101,13 +107,13 @@ export default function MarketView({
     setInstalling(true);
     try {
       const results = await window.skillkit.installFromMarket(picker.slug, targets, opts);
-      const { ok, fail } = summarizeResults(results, TOOL_LABELS);
+      const { ok, fail } = summarizeResults(results, TOOL_LABELS, t);
       if (ok && !fail) toast.show(ok);
-      else if (fail) toast.show([ok, fail].filter(Boolean).join('；'), 'error', 4000);
+      else if (fail) toast.show([ok, fail].filter(Boolean).join('; '), 'error', 4000);
       onInstalled();
       setPicker(null);
     } catch (e: any) {
-      toast.show(`安装失败：${e?.message ?? e}`, 'error');
+      toast.show(t('market.installFail', { error: e?.message ?? e }), 'error');
     } finally {
       setInstalling(false);
     }
@@ -117,27 +123,27 @@ export default function MarketView({
     <section>
       <div className="view-head">
         <div>
-          <h1 className="view-title">推荐 Skill</h1>
-          <p className="view-sub">来自 skills.sh · 共 <strong>{total}</strong> 个</p>
+          <h1 className="view-title">{t('market.title')}</h1>
+          <p className="view-sub">{t('market.sub', { total })}</p>
         </div>
         <div className="view-tools">
           <label className="search">
             <svg viewBox="0 0 24 24" width="14" height="14">
               <path fill="currentColor" d="M10 4a6 6 0 014.47 9.97l4.78 4.78-1.5 1.5-4.78-4.78A6 6 0 1110 4zm0 2a4 4 0 100 8 4 4 0 000-8z"/>
             </svg>
-            <input placeholder="搜索 owner / repo / 名称" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input placeholder={t('market.searchPlaceholder')} value={q} onChange={(e) => setQ(e.target.value)} />
           </label>
           <button className="btn-ghost" onClick={handleRefresh} disabled={refreshing}>
-            {refreshing ? <><span className="spinner" /> 同步中</> : '同步市场'}
+            {refreshing ? <><span className="spinner" /> {t('market.syncing')}</> : t('market.sync')}
           </button>
         </div>
       </div>
 
       <div className="skills market-grid" data-mode="grid">
         {items == null ? (
-          <div className="empty"><span className="spinner" /> 加载中…</div>
+          <div className="empty"><span className="spinner" /> {t('market.loading')}</div>
         ) : items.length === 0 ? (
-          <div className="empty">未找到匹配的 skill</div>
+          <div className="empty">{t('market.empty')}</div>
         ) : (
           items.map((s) => (
             <article className="skill is-list" key={s.slug}>
@@ -145,11 +151,11 @@ export default function MarketView({
               <div className="skill-body">
                 <div className="skill-row1">
                   <div className="skill-name" title={s.slug}>{s.name}</div>
-                  {s.isOfficial && <span className="skill-tag tag-official">官方</span>}
+                  {s.isOfficial && <span className="skill-tag tag-official">{t('market.official')}</span>}
                   <span className="skill-tag">@{s.owner}</span>
                 </div>
                 <div className="skill-desc">
-                  {s.description ?? <span style={{ color: 'var(--ink-mute)' }}>正在加载描述…</span>}
+                  {s.description ?? <span style={{ color: 'var(--ink-mute)' }}>{t('market.loadingDesc')}</span>}
                 </div>
                 <div className="skill-meta">
                   <span>{s.owner}/{s.repo}</span>
@@ -157,7 +163,7 @@ export default function MarketView({
               </div>
               <div className="skill-actions">
                 <button className="btn-primary" onClick={() => setPicker({ slug: s.slug })}>
-                  安装
+                  {t('market.install')}
                 </button>
               </div>
             </article>
@@ -168,19 +174,18 @@ export default function MarketView({
       {totalPages > 1 && (
         <div className="pager">
           <button className="btn-ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            上一页
+            {t('market.prev')}
           </button>
           <span>{page} / {totalPages}</span>
           <button className="btn-ghost" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-            下一页
+            {t('market.next')}
           </button>
         </div>
       )}
 
       <ToolPicker
         open={!!picker}
-        title="安装到哪些工具？"
-        subtitle={picker ? `将从 GitHub 拉取 ${picker.slug} 并复制到所选工具的 skills 目录。` : ''}
+        subtitle={picker ? t('market.pickerSubtitle', { slug: picker.slug }) : ''}
         lockedScope="global"
         busy={installing}
         onCancel={() => !installing && setPicker(null)}

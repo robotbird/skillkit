@@ -3,6 +3,7 @@ import { type Tool, type GithubSkillsResult, type InstallOpts } from '@shared/ty
 import { useInstalledTools } from '../lib/useInstalledTools';
 import ToolCheckRow, { visibleToolsOf } from './ToolCheckRow';
 import ModalPortal from './ModalPortal';
+import { useI18n } from '../i18n';
 
 interface Props {
   open: boolean;
@@ -27,6 +28,7 @@ export default function RepoSkillPicker({
   onCancel,
   onConfirm,
 }: Props) {
+  const { t } = useI18n();
   const { tools: installed } = useInstalledTools();
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [targets, setTargets] = useState<Tool[]>([]);
@@ -39,6 +41,16 @@ export default function RepoSkillPicker({
     setTargets([]);
     setMethod('symlink');
   }, [open, result]);
+
+  // Esc 关闭（busy 进行中不响应）
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !busy) onCancel();
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, busy, onCancel]);
 
   if (!open || !result) return null;
 
@@ -64,13 +76,13 @@ export default function RepoSkillPicker({
     });
   }
 
-  function toggleTarget(t: Tool) {
-    setTargets((arr) => (arr.includes(t) ? arr.filter((x) => x !== t) : [...arr, t]));
+  function toggleTarget(tool: Tool) {
+    setTargets((arr) => (arr.includes(tool) ? arr.filter((x) => x !== tool) : [...arr, tool]));
   }
 
   const confirmLabel = busy
-    ? '安装中…'
-    : `安装 ${picked.size} 个 skill 到 ${targets.length} 个工具`;
+    ? t('reposkill.busy')
+    : t('reposkill.confirm', { picked: picked.size, targets: targets.length });
   const confirmDisabled = busy || picked.size === 0 || targets.length === 0;
 
   return (
@@ -83,24 +95,22 @@ export default function RepoSkillPicker({
       >
         <div className="modal repo-skill-modal">
           <div className="repo-skill-head">
-            <h3>从 GitHub 仓库选择要安装的 Skill</h3>
+            <h3>{t('reposkill.title')}</h3>
             <p className="modal-sub">
-              扫描到 {result.skills.length} 个 skill 候选 · {result.repo}
+              {t('reposkill.scanned', { count: result.skills.length, repo: result.repo })}
             </p>
           </div>
 
           <div className="repo-skill-scroll">
             {result.skills.length === 0 ? (
-              <div className="repo-skill-empty">
-                未扫到任何带有效 frontmatter 的 SKILL.md / AGENTS.md。
-              </div>
+              <div className="repo-skill-empty">{t('reposkill.empty')}</div>
             ) : (
               <div className="opts opts-skills">
                 {result.skills.length > 1 && (
                   <>
                     <label className={`opts-skills-all${allChecked ? ' checked' : ''}`}>
                       <input type="checkbox" checked={allChecked} onChange={toggleAll} disabled={busy} />
-                      <strong>{allChecked ? '全不选' : '全选'}</strong>
+                      <strong>{allChecked ? t('reposkill.selectNone') : t('reposkill.selectAll')}</strong>
                       <span className="opt-note">{picked.size}/{result.skills.length}</span>
                     </label>
                     <hr />
@@ -117,7 +127,7 @@ export default function RepoSkillPicker({
                     <div className="skill-row">
                       <strong>{s.name}</strong>
                       {s.description && <span className="opt-note">{s.description}</span>}
-                      <code className="skill-subpath">{s.subpath || '(仓库根)'}</code>
+                      <code className="skill-subpath">{s.subpath || t('reposkill.repoRoot')}</code>
                     </div>
                   </label>
                 ))}
@@ -130,35 +140,35 @@ export default function RepoSkillPicker({
               <>
                 {showMethod && (
                   <div className="opts opts-method">
-                    <div className="opts-section-title">安装方式</div>
-                    <label className={method === 'symlink' ? 'checked' : ''} title="单一数据源，改一处全更新；省空间">
+                    <div className="opts-section-title">{t('install.method')}</div>
+                    <label className={method === 'symlink' ? 'checked' : ''} title={t('install.symlinkDesc')}>
                       <input
                         type="radio"
                         name="rp-method"
                         checked={method === 'symlink'}
                         onChange={() => setMethod('symlink')}
                       />
-                      <strong>软链（推荐）</strong>
+                      <strong>{t('install.symlink')}</strong>
                     </label>
-                    <label className={method === 'copy' ? 'checked' : ''} title="各工具独立副本，占用更多空间">
+                    <label className={method === 'copy' ? 'checked' : ''} title={t('install.copyDesc')}>
                       <input
                         type="radio"
                         name="rp-method"
                         checked={method === 'copy'}
                         onChange={() => setMethod('copy')}
                       />
-                      <strong>拷贝</strong>
+                      <strong>{t('install.copy')}</strong>
                     </label>
                   </div>
                 )}
 
-                <div className="opts-section-title">安装到哪些工具？</div>
+                <div className="opts-section-title">{t('toolpicker.title')}</div>
                 <div className="opts opts-tools">
-                  {visibleTools.map((t) => (
+                  {visibleTools.map((tool) => (
                     <ToolCheckRow
-                      key={t}
-                      tool={t}
-                      checked={targets.includes(t)}
+                      key={tool}
+                      tool={tool}
+                      checked={targets.includes(tool)}
                       parentBusy={busy}
                       onToggle={toggleTarget}
                     />
@@ -169,7 +179,7 @@ export default function RepoSkillPicker({
 
             <div className="modal-actions">
               <button className="btn-ghost" onClick={onCancel} disabled={busy}>
-                取消
+                {t('common.cancel')}
               </button>
               <button
                 className="btn-primary"
