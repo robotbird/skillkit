@@ -1,6 +1,13 @@
 /* =========================================================
    Skillkit v2 —— 暖色暗调主题 (从 v1 迁移)
+   品牌层（CSS 三层之一）：配色变量、主题、背景特效、原生组件视觉。
+   新控件视觉改用 shadcn 控件层（src/components/ui/*），不在此新增。
+   样式规范见 apps/desktop/STYLES.md
    ========================================================= */
+
+/* z-index 层级约定（散落值，勿随意新增；新增浮层取相邻档位）：
+   0 背景层 / 1 主体·工具栏槽 / 2 顶栏 / 30 浮层(kebab菜单) /
+   40 卡片菜单打开抬升 / 100 模态遮罩 / 200 Toast(高于模态，确保弹窗内可见) */
 :root {
   --bg-0: #1a1410;
   --bg-1: #221a14;
@@ -24,6 +31,12 @@
   --accent: #ffb14a;
   --accent-soft: rgba(255, 177, 74, 0.18);
   --danger: #ff6a5a;
+  --success: #4ade80;
+  /* toast 状态色（浅底深字，暗亮通用） */
+  --danger-soft: #ffe6e0;
+  --danger-ink: #6b1a10;
+  --success-soft: #e3f7e9;
+  --success-ink: #1a5a2a;
 
   --radius-pill: 999px;
   --radius-card: 16px;
@@ -31,6 +44,9 @@
 
   --shadow-pill: 0 6px 18px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
   --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.28);
+
+  /* transition：新代码统一引用 --ease；时长档 fast 0.15s / normal 0.18s / slow 0.2s（存量逐步对齐） */
+  --ease: ease;
 }
 
 * { box-sizing: border-box; }
@@ -478,22 +494,6 @@ html, body, #root {
 .btn-primary:active { transform: translateY(0); filter: brightness(0.96); }
 .btn-primary:disabled { filter: grayscale(0.4) brightness(0.8); cursor: not-allowed; transform: none; }
 
-/* 危险态主按钮（卸载等破坏性操作） */
-.btn-danger {
-  appearance: none; border: 0;
-  font-family: inherit; font-size: 12.5px; font-weight: 600;
-  padding: 8px 16px;
-  border-radius: 999px;
-  color: #fff;
-  background: linear-gradient(180deg, #f07a68, #d94f3c);
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(217, 79, 60, 0.28), 0 1px 0 rgba(255, 255, 255, 0.4) inset;
-  transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
-}
-.btn-danger:hover { transform: translateY(-1px); filter: brightness(1.04); }
-.btn-danger:active { transform: translateY(0); filter: brightness(0.96); }
-.btn-danger:disabled { filter: grayscale(0.4) brightness(0.8); cursor: not-allowed; transform: none; }
-
 .btn-ghost {
   appearance: none; font-family: inherit; font-size: 12.5px;
   padding: 7px 14px; border-radius: 999px;
@@ -506,6 +506,7 @@ html, body, #root {
 .btn-ghost:hover { background: rgba(255, 255, 255, 0.1); }
 .btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* 危险态按钮（卸载等破坏性操作，描边浅红） */
 .btn-danger {
   appearance: none; font-family: inherit; font-size: 12px;
   padding: 6px 12px; border-radius: 999px;
@@ -985,7 +986,7 @@ html, body, #root {
 
 /* toast */
 .toast {
-  position: fixed; z-index: 50;
+  position: fixed; z-index: 200;
   top: 80px; left: 50%;
   transform: translate(-50%, -8px);
   padding: 10px 18px;
@@ -999,7 +1000,8 @@ html, body, #root {
   max-width: 70vw; text-align: center;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
-.toast.error { background: #ffe6e0; color: #6b1a10; }
+.toast.error { background: var(--danger-soft); color: var(--danger-ink); }
+.toast.success { background: var(--success-soft); color: var(--success-ink); }
 
 /* 空态 / loading */
 .empty {

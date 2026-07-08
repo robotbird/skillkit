@@ -5,6 +5,10 @@ import { useTheme } from '../lib/useTheme';
 import { useAccount } from '../lib/useAccount';
 import { useUpdate } from '../lib/useUpdate';
 import type { Theme, Locale } from '@shared/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 type Section = 'account' | 'appearance' | 'language' | 'space' | 'about';
 
@@ -16,6 +20,17 @@ function abbreviateHome(p: string): string {
 export default function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useI18n();
   const [section, setSection] = useState<Section>('account');
+  const [busy, setBusy] = useState(false);
+
+  // Esc 关闭（busy 进行中不响应，避免中断登录等异步操作）
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !busy) onClose();
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, busy, onClose]);
 
   if (!open) return null;
 
@@ -32,7 +47,7 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
       <div
         className="modal-mask"
         onMouseDown={(e) => {
-          if (e.target === e.currentTarget) onClose();
+          if (e.target === e.currentTarget && !busy) onClose();
         }}
       >
         <div className="modal settings-dialog" role="dialog" aria-modal="true" aria-label={t('settings.title')}>
@@ -52,7 +67,7 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
             </button>
           </nav>
           <div className="settings-content">
-            {section === 'account' && <AccountSection />}
+            {section === 'account' && <AccountSection busy={busy} onBusyChange={setBusy} />}
             {section === 'appearance' && <AppearanceSection />}
             {section === 'language' && <LanguageSection />}
             {section === 'space' && <SpaceSection />}
@@ -65,20 +80,19 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
 }
 
 // ===== 账号 =====
-function AccountSection() {
+function AccountSection({ busy, onBusyChange }: { busy: boolean; onBusyChange: (b: boolean) => void }) {
   const { t } = useI18n();
   const { user, loading, login, logout } = useAccount();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setBusy(true);
+    onBusyChange(true);
     setError(null);
     const r = await login(email.trim(), password);
-    setBusy(false);
+    onBusyChange(false);
     if (!r.ok) setError(r.error || t('account.loginFailed'));
     else {
       setEmail('');
@@ -99,10 +113,10 @@ function AccountSection() {
           <div className="account-email">{user.email}</div>
         </div>
         <div className="settings-actions">
-          <button className="btn" onClick={() => logout()}>{t('account.logout')}</button>
-          <button className="btn-link" onClick={() => window.skillkit.openAccountPage('account')}>
+          <Button variant="outline" onClick={() => logout()}>{t('account.logout')}</Button>
+          <Button variant="link" onClick={() => window.skillkit.openAccountPage('account')}>
             {t('account.manage')}
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -112,39 +126,39 @@ function AccountSection() {
     <form className="settings-section" onSubmit={onSubmit}>
       <h3>{t('account.notSignedIn')}</h3>
       <p className="settings-hint">{t('account.loginHint')}</p>
-      <label className="field">
-        <span>{t('account.emailLabel')}</span>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          autoFocus
-          autoComplete="email"
-        />
-      </label>
-      <label className="field">
-        <span>{t('account.passwordLabel')}</span>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          autoComplete="current-password"
-        />
-      </label>
-      {error && <div className="settings-error">{error}</div>}
+      <FieldGroup className="gap-4">
+        <Field>
+          <FieldLabel htmlFor="login-email">{t('account.emailLabel')}</FieldLabel>
+          <Input
+            id="login-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoFocus
+            autoComplete="email"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="login-password">{t('account.passwordLabel')}</FieldLabel>
+          <Input
+            id="login-password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+          />
+        </Field>
+        {error && <FieldError>{error}</FieldError>}
+      </FieldGroup>
       <div className="settings-actions">
-        <button type="submit" className="btn primary" disabled={busy}>
+        <Button type="submit" disabled={busy}>
           {busy ? t('account.loggingIn') : t('account.loginBtn')}
-        </button>
-        <button
-          type="button"
-          className="btn-link"
-          onClick={() => window.skillkit.openAccountPage('register')}
-        >
+        </Button>
+        <Button type="button" variant="link" onClick={() => window.skillkit.openAccountPage('register')}>
           {t('account.register')}
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -162,19 +176,20 @@ function AppearanceSection() {
   return (
     <div className="settings-section">
       <h3>{t('appearance.label')}</h3>
-      <div className="seg">
+      <ToggleGroup
+        type="single"
+        value={setting}
+        onValueChange={(v) => {
+          if (v) changeTheme(v as Theme);
+        }}
+        variant="outline"
+      >
         {options.map((o) => (
-          <label key={o.key} className={`seg-item${setting === o.key ? ' checked' : ''}`}>
-            <input
-              type="radio"
-              name="theme"
-              checked={setting === o.key}
-              onChange={() => changeTheme(o.key)}
-            />
+          <ToggleGroupItem key={o.key} value={o.key}>
             {o.label}
-          </label>
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
     </div>
   );
 }
@@ -189,19 +204,20 @@ function LanguageSection() {
   return (
     <div className="settings-section">
       <h3>{t('language.label')}</h3>
-      <div className="seg">
+      <ToggleGroup
+        type="single"
+        value={locale}
+        onValueChange={(v) => {
+          if (v) setLocale(v as Locale);
+        }}
+        variant="outline"
+      >
         {options.map((o) => (
-          <label key={o.key} className={`seg-item${locale === o.key ? ' checked' : ''}`}>
-            <input
-              type="radio"
-              name="locale"
-              checked={locale === o.key}
-              onChange={() => setLocale(o.key)}
-            />
+          <ToggleGroupItem key={o.key} value={o.key}>
             {o.label}
-          </label>
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
     </div>
   );
 }
@@ -234,13 +250,9 @@ function SpaceSection() {
         <div className="kv-desc">{t('space.globalRepoDesc')}</div>
       </div>
       <div className="settings-actions">
-        <button
-          className="btn"
-          disabled={!path}
-          onClick={() => path && window.skillkit.openPath(path)}
-        >
+        <Button variant="outline" disabled={!path} onClick={() => path && window.skillkit.openPath(path)}>
           {t('space.reveal')}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -277,16 +289,16 @@ function AboutSection() {
         {info ? (
           <div className="about-update-info">
             <div className="about-new">{t('about.newVersion', { version: info.version })}</div>
-            <button className="btn primary" onClick={apply} disabled={phase === 'downloading' || phase === 'done'}>
+            <Button onClick={apply} disabled={phase === 'downloading' || phase === 'done'}>
               {t('about.update')}
-            </button>
+            </Button>
             {phaseLabel && <div className="about-phase">{phaseLabel}</div>}
           </div>
         ) : (
           <div className="about-update-info">
-            <button className="btn" onClick={check} disabled={checkState === 'checking'}>
+            <Button variant="outline" onClick={check} disabled={checkState === 'checking'}>
               {checkState === 'checking' ? t('about.checking') : t('about.checkUpdate')}
-            </button>
+            </Button>
             {checkState === 'upToDate' && <div className="about-phase">{t('about.upToDate')}</div>}
             {checkState === 'error' && <div className="about-phase">{t('about.updateError')}</div>}
           </div>

@@ -78,6 +78,8 @@ It is **pure TS with no build step**. Each consumer must teach its bundler to co
 - **`shared/types.ts` is now a bridge layer** (NOT the source of truth): it re-exports the cross-end symbols from `@skillkit/types` **plus** defines desktop-only types (`UpdateAvailableInfo`, the `SkillkitApi` IPC contract, the `Window` global). Main process imports it as `../shared/types.js`; renderer as `@shared/types`. Keeping `shared/` inside `apps/desktop/` means **both paths stayed identical after the monorepo move** — no import rewrites were needed.
 - **Adding a main-process capability still needs three coordinated edits**: an IPC handler in `electron/ipc.ts`, a method on `window.skillkit` in `electron/preload.ts`, **and** the matching signature in `shared/types.ts` (`SkillkitApi`).
 - The `@shared` alias → `shared/` is wired in `apps/desktop/vite.config.ts` (renderer + main) and both `apps/desktop/tsconfig*.json`. Both use `moduleResolution: bundler`, so `@skillkit/types` resolves via the workspace symlink + its `exports` field — no tsconfig `paths` needed for it.
+- **Renderer 有三个别名**：`@shared`(shared)、`@skillkit/types`(跨端类型)，外加 shadcn 约定的 `@/`(→ `apps/desktop/src`)，同样在 `vite.config.ts` + `tsconfig.json` 配好。
+- **CSS 三层 + shadcn 控件边界**：`src/styles/theme.css` 是品牌层(配色变量/暖色主题/原生组件视觉，**冻结新增**)；`src/styles/globals.css` 是桥接层(只放 shadcn token → theme.css 变量映射 + `@layer base` 兜底 + Tailwind v4 import，**故意跳过 preflight** 保护现有原生 CSS)；`src/components/ui/*` 是控件层(只装 `shadcn add` 产物)。判定准则：**控件交互用 shadcn，布局/品牌视觉用原生 CSS**。Tailwind v4 仅在 renderer bundle 生效。详见 `apps/desktop/STYLES.md`。
 
 ### ESM `.js` import gotcha
 
