@@ -9,6 +9,7 @@ import { useToolbarSlot } from '../components/ToolbarSlot';
 import type { ToastState } from '../components/Toast';
 import { groupBySkill, type SkillGroup } from '../lib/groupSkills';
 import { useInstalledTools } from '../lib/useInstalledTools';
+import { useI18n } from '../i18n';
 import claudeIcon from '../assets/agents/claude-code.svg';
 import codexIcon from '../assets/agents/codex.svg';
 import cursorIcon from '../assets/agents/cursor.svg';
@@ -34,6 +35,7 @@ export default function MySkillsView({
   toast: ToastState;
   onChanged: () => void;
 }) {
+  const { t } = useI18n();
   const [items, setItems] = useState<InstalledSkill[] | null>(null);
   const [q, setQ] = useState('');
   const [tool, setTool] = useState<Tool | 'all' | 'global'>('all');
@@ -66,7 +68,7 @@ export default function MySkillsView({
       setItems(r);
       setGlobalSkills(g);
     } catch (e: any) {
-      toast.show(`扫描失败：${e?.message ?? e}`, 'error');
+      toast.show(t('my.toast.scanFail', { error: e?.message ?? e }), 'error');
     } finally {
       setScanning(false);
     }
@@ -74,9 +76,10 @@ export default function MySkillsView({
 
   useEffect(() => {
     refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 扁平记录 → 按 name 合并的组（跨工具同一 skill 一组）
+  // 扁平记录 -> 按 name 合并的组（跨工具同一 skill 一组）
   const groups = useMemo(() => (items ? groupBySkill(items) : []), [items]);
 
   const filtered = useMemo(() => {
@@ -106,7 +109,7 @@ export default function MySkillsView({
   // 每个 chip 的计数 = 包含该工具的「组」数（而非行数）
   const counts = useMemo(() => {
     const map: Record<Tool, number> = { claude: 0, codex: 0, cursor: 0, trae: 0, workbuddy: 0, qoder: 0 };
-    for (const g of groups) for (const t of g.tools) map[t]++;
+    for (const g of groups) for (const tl of g.tools) map[tl]++;
     return map;
   }, [groups]);
 
@@ -123,12 +126,12 @@ export default function MySkillsView({
   // ===== 卸载 =====
   // 入口：仅一个可卸载工具时直接确认；多个（或含内置）时弹工具选择
   function startUninstall(group: SkillGroup) {
-    const removable = group.tools.filter((t) => !group.byTool[t]?.isBuiltin);
+    const removable = group.tools.filter((tool) => !group.byTool[tool]?.isBuiltin);
     if (removable.length <= 1) {
-      const t = removable[0];
-      if (!t) return;
-      if (!confirm(`确认卸载 ${group.name} 吗？这会删除 ${TOOL_LABELS[t]} 下的整个 skill 目录。`)) return;
-      void doUninstall(group.name, [t]);
+      const target = removable[0];
+      if (!target) return;
+      if (!confirm(t('my.confirm.uninstall', { name: group.name, tool: TOOL_LABELS[target] }))) return;
+      void doUninstall(group.name, [target]);
     } else {
       setUninstallGroup(group);
     }
@@ -137,12 +140,12 @@ export default function MySkillsView({
   async function doUninstall(name: string, tools: Tool[]) {
     setUninstalling(true);
     try {
-      for (const t of tools) await window.skillkit.uninstallSkill(t, name);
-      toast.show(`${name} 已从 ${tools.map((t) => TOOL_LABELS[t]).join('、')} 卸载`);
+      for (const target of tools) await window.skillkit.uninstallSkill(target, name);
+      toast.show(t('my.toast.uninstalled', { name, tools: tools.map((target) => TOOL_LABELS[target]).join(', ') }));
       await refresh();
       onChanged();
     } catch (e: any) {
-      toast.show(`卸载失败：${e?.message ?? e}`, 'error');
+      toast.show(t('my.toast.uninstallFail', { error: e?.message ?? e }), 'error');
     } finally {
       setUninstalling(false);
       setUninstallGroup(null);
@@ -162,19 +165,19 @@ export default function MySkillsView({
       const ok = results.filter((r) => r.ok).map((r) => TOOL_LABELS[r.tool]);
       const fail = results.filter((r) => !r.ok);
       if (ok.length && !fail.length) {
-        toast.show(`已复制到：${ok.join('、')}`);
+        toast.show(t('my.toast.copiedTo', { tools: ok.join(', ') }));
       } else if (fail.length) {
-        const okPart = ok.length ? `已复制到：${ok.join('、')}` : '';
+        const okPart = ok.length ? t('my.toast.copiedTo', { tools: ok.join(', ') }) : '';
         const failPart = fail
-          .map((r) => `${TOOL_LABELS[r.tool]}（${r.error ?? '失败'}）`)
-          .join('；');
-        toast.show([okPart, failPart].filter(Boolean).join('；'), 'error', 4000);
+          .map((r) => t('my.toast.failedDetail', { tool: TOOL_LABELS[r.tool], error: r.error ?? t('my.toast.failFallback') }))
+          .join('; ');
+        toast.show([okPart, failPart].filter(Boolean).join('; '), 'error', 4000);
       }
       await refresh();
       onChanged();
       setCopyGroup(null);
     } catch (e: any) {
-      toast.show(`复制失败：${e?.message ?? e}`, 'error');
+      toast.show(t('my.toast.copyFail', { error: e?.message ?? e }), 'error');
     } finally {
       setCopying(false);
     }
@@ -189,19 +192,19 @@ export default function MySkillsView({
       const ok = results.filter((r) => r.ok).map((r) => TOOL_LABELS[r.tool]);
       const fail = results.filter((r) => !r.ok);
       if (ok.length && !fail.length) {
-        toast.show(`已接入：${ok.join('、')}`);
+        toast.show(t('my.toast.linkedTo', { tools: ok.join(', ') }));
       } else if (fail.length) {
-        const okPart = ok.length ? `已接入：${ok.join('、')}` : '';
+        const okPart = ok.length ? t('my.toast.linkedTo', { tools: ok.join(', ') }) : '';
         const failPart = fail
-          .map((r) => `${TOOL_LABELS[r.tool]}（${r.error ?? '失败'}）`)
-          .join('；');
-        toast.show([okPart, failPart].filter(Boolean).join('；'), 'error', 4000);
+          .map((r) => t('my.toast.failedDetail', { tool: TOOL_LABELS[r.tool], error: r.error ?? t('my.toast.failFallback') }))
+          .join('; ');
+        toast.show([okPart, failPart].filter(Boolean).join('; '), 'error', 4000);
       }
       await refresh();
       onChanged();
       setGlobalTarget(null);
     } catch (e: any) {
-      toast.show(`接入失败：${e?.message ?? e}`, 'error');
+      toast.show(t('my.toast.linkFail', { error: e?.message ?? e }), 'error');
     } finally {
       setInstallingGlobal(false);
     }
@@ -211,56 +214,56 @@ export default function MySkillsView({
   async function doRemoveGlobal(target: GlobalRepoSkill) {
     try {
       const r = await window.skillkit.removeFromGlobalRepo(target.name);
-      const parts: string[] = [`已从全局仓库移除 ${target.name}`];
+      const parts: string[] = [t('my.toast.removedGlobal', { name: target.name })];
       if (r.removedLinks.length) {
-        parts.push(`并清理了 ${r.removedLinks.map((t) => TOOL_LABELS[t]).join('、')} 的软链`);
+        parts.push(t('my.toast.cleanedLinks', { tools: r.removedLinks.map((tl) => TOOL_LABELS[tl]).join(', ') }));
       }
       if (r.leftCopies.length) {
-        parts.push(`${r.leftCopies.map((t) => TOOL_LABELS[t]).join('、')} 下有独立副本，未删除`);
+        parts.push(t('my.toast.leftCopies', { tools: r.leftCopies.map((tl) => TOOL_LABELS[tl]).join(', ') }));
       }
-      toast.show(parts.join('；'), 'info', 5000);
+      toast.show(parts.join('; '), 'info', 5000);
       await refresh();
       onChanged();
     } catch (e: any) {
-      toast.show(`移除失败：${e?.message ?? e}`, 'error');
+      toast.show(t('my.toast.removeFail', { error: e?.message ?? e }), 'error');
     }
   }
 
-  // 顶部统一工具栏控件（搜索 / 视图切换 / 重新扫描）→ portal 进 TopBar 槽位
+  // 顶部统一工具栏控件（搜索 / 视图切换 / 重新扫描）-> portal 进 TopBar 槽位
   const toolbar = (
     <>
-      <label className="search-toggle" title="搜索 skill">
+      <label className="search-toggle" title={t('my.searchTitle')}>
         <span className="search-toggle-ico">
           <svg viewBox="0 0 24 24" width="16" height="16">
             <path fill="currentColor" d="M10 4a6 6 0 014.47 9.97l4.78 4.78-1.5 1.5-4.78-4.78A6 6 0 1110 4zm0 2a4 4 0 100 8 4 4 0 000-8z"/>
           </svg>
         </span>
         <input
-          placeholder="搜索 skill"
+          placeholder={t('my.searchPlaceholder')}
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
       </label>
-      <div className="seg" role="group" aria-label="视图切换">
+      <div className="seg" role="group" aria-label={t('my.viewSwitch')}>
         <button
           className={`seg-btn${mode === 'grid' ? ' is-active' : ''}`}
           onClick={() => setMode('grid')}
-          title="网格"
+          title={t('my.grid')}
         >
           <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>
         </button>
         <button
           className={`seg-btn${mode === 'list' ? ' is-active' : ''}`}
           onClick={() => setMode('list')}
-          title="列表"
+          title={t('my.list')}
         >
           <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M4 5h16v2H4V5zm0 6h16v2H4v-2zm0 6h16v2H4v-2z"/></svg>
         </button>
       </div>
       <button
         className="rescan-btn"
-        title="重新扫描"
-        aria-label="重新扫描"
+        title={t('my.rescan')}
+        aria-label={t('my.rescan')}
         disabled={scanning}
         onClick={refresh}
       >
@@ -273,7 +276,7 @@ export default function MySkillsView({
             </svg>
           )}
         </span>
-        <span className="rescan-label">重新扫描</span>
+        <span className="rescan-label">{t('my.rescan')}</span>
       </button>
     </>
   );
@@ -287,26 +290,26 @@ export default function MySkillsView({
           className={`chip${tool === 'all' ? ' is-active' : ''}`}
           onClick={() => setTool('all')}
         >
-          全部（{groups.length}）
+          {t('my.chipAll', { count: groups.length })}
         </button>
         <button
           className={`chip chip-global${tool === 'global' ? ' is-active' : ''}`}
           onClick={() => setTool('global')}
-          title="全局共享仓库 ~/.agents/skills（与 npx skills 互通）"
+          title={t('my.chipGlobalTitle')}
         >
           <svg className="chip-ico" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
             <path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 2c1.7 0 3.3 2.5 3.8 6h-7.6C8.7 6.5 10.3 4 12 4zm-5.7 6h-2A8 8 0 015.5 6.6 12.4 12.4 0 006.3 10zm0 4a12.4 12.4 0 00-.8 3.4A8 8 0 014.3 14h2zm1.9 0h7.6c-.5 3.5-2.1 6-3.8 6s-3.3-2.5-3.8-6zm9.5 0h2a8 8 0 01-1.2 3.4A12.4 12.4 0 0018.5 14zm0-4a12.4 12.4 0 00.8-3.4A8 8 0 0119.7 10h-2z"/>
           </svg>
-          全局仓库（{globalSkills?.length ?? 0}）
+          {t('my.chipGlobal', { count: globalSkills?.length ?? 0 })}
         </button>
-        {installed.map((t) => (
+        {installed.map((tl) => (
           <button
-            key={t}
-            className={`chip chip-tool${tool === t ? ' is-active' : ''}`}
-            onClick={() => setTool(t)}
+            key={tl}
+            className={`chip chip-tool${tool === tl ? ' is-active' : ''}`}
+            onClick={() => setTool(tl)}
           >
-            <img className="chip-ico" src={TOOL_ICON[t]} alt="" draggable={false} />
-            {TOOL_LABELS[t]}（{counts[t]}）
+            <img className="chip-ico" src={TOOL_ICON[tl]} alt="" draggable={false} />
+            {t('my.chipTool', { label: TOOL_LABELS[tl], count: counts[tl] })}
           </button>
         ))}
       </div>
@@ -314,10 +317,10 @@ export default function MySkillsView({
       <div className="skills" data-mode={mode}>
         {tool === 'global' ? (
           globalSkills == null ? (
-            <div className="empty"><span className="spinner" /> 正在扫描全局仓库…</div>
+            <div className="empty"><span className="spinner" /> {t('my.empty.scanningGlobal')}</div>
           ) : filteredGlobal.length === 0 ? (
             <div className="empty">
-              {q ? '没有匹配的 skill' : '全局仓库（~/.agents/skills）还没有 skill'}
+              {q ? t('my.empty.noMatch') : t('my.empty.globalEmpty')}
             </div>
           ) : (
             filteredGlobal.map((g) => (
@@ -328,9 +331,7 @@ export default function MySkillsView({
                 onReveal={(s) => void window.skillkit.revealInFinder(s.path)}
                 onRemove={(s) => {
                   if (
-                    confirm(
-                      `确认从全局仓库移除 ${s.name}？\n将删除 ~/.agents/skills/${s.name} 规范副本，并清理指向它的各工具软链（独立副本保留）。`,
-                    )
+                    confirm(t('my.confirm.removeGlobal', { name: s.name }))
                   ) {
                     void doRemoveGlobal(s);
                   }
@@ -340,9 +341,9 @@ export default function MySkillsView({
             ))
           )
         ) : items == null ? (
-          <div className="empty"><span className="spinner" /> 正在扫描各工具的 skill 目录…</div>
+          <div className="empty"><span className="spinner" /> {t('my.empty.scanningTools')}</div>
         ) : filtered.length === 0 ? (
-          <div className="empty">{q ? '没有匹配的 skill' : '当前筛选下还没有 skill'}</div>
+          <div className="empty">{q ? t('my.empty.noMatch') : t('my.empty.filteredEmpty')}</div>
         ) : (
           filtered.map((g) => (
             <SkillCard
@@ -366,29 +367,25 @@ export default function MySkillsView({
 
       <ToolPicker
         open={!!uninstallGroup}
-        title={uninstallGroup ? `卸载 ${uninstallGroup.name}` : '卸载'}
-        subtitle={
-          uninstallGroup
-            ? '从哪些工具卸载？内置工具不可卸载（已置灰）。'
-            : ''
-        }
+        title={uninstallGroup ? t('my.picker.uninstallTitle', { name: uninstallGroup.name }) : undefined}
+        subtitle={uninstallGroup ? t('my.picker.uninstallSubtitle') : ''}
         defaultSelected={
           uninstallGroup
-            ? uninstallGroup.tools.filter((t) => !uninstallGroup.byTool[t]?.isBuiltin)
+            ? uninstallGroup.tools.filter((tool) => !uninstallGroup.byTool[tool]?.isBuiltin)
             : []
         }
         excludeTools={
           // 只展示本组已装的工具
-          uninstallGroup ? ALL_TOOLS.filter((t) => !uninstallGroup.tools.includes(t)) : []
+          uninstallGroup ? ALL_TOOLS.filter((tool) => !uninstallGroup.tools.includes(tool)) : []
         }
         disableTools={
           uninstallGroup
-            ? uninstallGroup.tools.filter((t) => uninstallGroup.byTool[t]?.isBuiltin)
+            ? uninstallGroup.tools.filter((tool) => uninstallGroup.byTool[tool]?.isBuiltin)
             : []
         }
         busy={uninstalling}
-        confirmLabel="确认卸载"
-        busyLabel="卸载中"
+        confirmLabel={t('my.picker.uninstallConfirm')}
+        busyLabel={t('my.picker.uninstallBusy')}
         tone="danger"
         onCancel={() => !uninstalling && setUninstallGroup(null)}
         onConfirm={(targets) => {
@@ -398,21 +395,21 @@ export default function MySkillsView({
 
       <ToolPicker
         open={!!copyGroup}
-        title={copyGroup ? `复制 ${copyGroup.name} 到其他工具` : '复制到其他工具'}
+        title={copyGroup ? t('my.picker.copyTitle', { name: copyGroup.name }) : undefined}
         subtitle={
           copyGroup
-            ? `从 ${TOOL_LABELS[copyGroup.primary.tool]} 复制到选中的工具，目标位置已存在的同名 skill 会被覆盖（先备份再回滚）。`
+            ? t('my.picker.copySubtitle', { tool: TOOL_LABELS[copyGroup.primary.tool] })
             : ''
         }
         defaultSelected={
           copyGroup
-            ? (installed.filter((t) => !copyGroup.tools.includes(t)).slice(0, 1) as Tool[])
+            ? (installed.filter((tool) => !copyGroup.tools.includes(tool)).slice(0, 1) as Tool[])
             : []
         }
         excludeTools={copyGroup ? copyGroup.tools : []}
         busy={copying}
-        confirmLabel="确认复制"
-        busyLabel="复制中"
+        confirmLabel={t('my.picker.copyConfirm')}
+        busyLabel={t('my.picker.copyBusy')}
         onCancel={() => !copying && setCopyGroup(null)}
         onConfirm={handleCopy}
       />
@@ -420,36 +417,34 @@ export default function MySkillsView({
       <ToolPicker
         open={!!revealGroup}
         multiple={false}
-        title={revealGroup ? `打开 ${revealGroup.name} 的目录` : '打开目录'}
-        subtitle={
-          revealGroup ? '该 skill 装在多个工具下，选择要打开哪个工具的目录。' : ''
-        }
+        title={revealGroup ? t('my.picker.revealTitle', { name: revealGroup.name }) : undefined}
+        subtitle={revealGroup ? t('my.picker.revealSubtitle') : ''}
         defaultSelected={revealGroup ? [revealGroup.primary.tool] : []}
         excludeTools={
           // 只展示本组已装的工具（内置也可打开，不置灰）
-          revealGroup ? ALL_TOOLS.filter((t) => !revealGroup.tools.includes(t)) : []
+          revealGroup ? ALL_TOOLS.filter((tool) => !revealGroup.tools.includes(tool)) : []
         }
-        confirmLabel="打开目录"
-        busyLabel="打开中"
+        confirmLabel={t('my.picker.revealConfirm')}
+        busyLabel={t('my.picker.revealBusy')}
         onCancel={() => setRevealGroup(null)}
         onConfirm={(targets) => {
           if (!revealGroup) return;
-          const t = targets[0];
-          const p = revealGroup.byTool[t]?.path;
+          const target = targets[0];
+          const p = revealGroup.byTool[target]?.path;
           setRevealGroup(null);
           if (p) void window.skillkit.revealInFinder(p);
         }}
       />
 
-      {/* 全局仓库 → 安装到工具（锁定全局范围，仅选接入方式）*/}
+      {/* 全局仓库 -> 安装到工具（锁定全局范围，仅选接入方式）*/}
       <ToolPicker
         open={!!globalTarget}
         lockedScope="global"
-        title={globalTarget ? `把 ${globalTarget.name} 安装到哪些工具？` : ''}
-        subtitle="从全局仓库接入所选工具（软链推荐：单一数据源，改一处全更新）。"
+        title={globalTarget ? t('my.picker.globalTitle', { name: globalTarget.name }) : undefined}
+        subtitle={t('my.picker.globalSubtitle')}
         busy={installingGlobal}
-        confirmLabel="接入"
-        busyLabel="接入中"
+        confirmLabel={t('my.picker.globalConfirm')}
+        busyLabel={t('my.picker.globalBusy')}
         onCancel={() => !installingGlobal && setGlobalTarget(null)}
         onConfirm={(targets, opts) => {
           void handleInstallGlobalTo(targets, opts.method ?? 'symlink');
