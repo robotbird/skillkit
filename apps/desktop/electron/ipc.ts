@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell } from 'electron';
+import { ipcMain, dialog, shell, app } from 'electron';
 import { scanAll, listInstalled, installedTools } from './scan.js';
 import { TOOLS } from './tools.js';
 import { refreshMarket, listMarketSkills, fetchMarketDetail } from './market.js';
@@ -16,9 +16,19 @@ import {
   scanGlobalRepo,
   removeFromGlobalRepo,
   installGlobalToTools,
+  globalRepoRoot,
 } from './global-repo.js';
-import { applyUpdate, getUpdateStatus } from './updater.js';
-import type { Tool, InstalledFilter, MarketListQuery, InstallOpts } from '../shared/types.js';
+import { applyUpdate, getUpdateStatus, checkForUpdate } from './updater.js';
+import { metaGet, metaSet } from './db.js';
+import { applyTheme, getThemeState } from './theme.js';
+import { loginAccount, getAccountInfo, logoutAccount, openAccountPage } from './account.js';
+import type {
+  Tool,
+  InstalledFilter,
+  MarketListQuery,
+  InstallOpts,
+  Theme,
+} from '../shared/types.js';
 
 export function registerIpc() {
   ipcMain.handle('scan:all', async () => scanAll());
@@ -35,6 +45,10 @@ export function registerIpc() {
   });
   ipcMain.handle('installed:reveal', async (_e, p: string) => {
     shell.showItemInFolder(p);
+  });
+  ipcMain.handle('shell:openPath', async (_e, p: string) => {
+    const err = await shell.openPath(p);
+    if (err) console.error('[openPath] failed:', err);
   });
 
   ipcMain.handle(
@@ -129,7 +143,43 @@ export function registerIpc() {
 
   // 自动更新
   ipcMain.handle('update:status', async () => getUpdateStatus());
+  ipcMain.handle('update:check', async () => checkForUpdate());
   ipcMain.handle('update:apply', async () => applyUpdate());
+
+  // ===== 设置（meta KV 通用读写）=====
+  ipcMain.handle('setting:get', (_e, key: string) => metaGet(key));
+  ipcMain.handle('setting:set', (_e, key: string, value: string) => metaSet(key, value));
+
+  // ===== 外观 / 版本 / 外链 / 全局仓库路径 =====
+  ipcMain.handle('theme:get', async () => getThemeState());
+  ipcMain.handle('theme:set', async (_e, theme: Theme) => {
+    applyTheme(theme);
+  });
+  ipcMain.handle('external:open', async (_e, url: string) => {
+    // 仅放行 http(s)，避免 file:// / 任意协议被当作跳板
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new Error('非法 URL');
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      throw new Error('仅支持 http/https 链接');
+    }
+    await shell.openExternal(url);
+  });
+  ipcMain.handle('app:version', async () => app.getVersion());
+  ipcMain.handle('globalRepo:root', async () => globalRepoRoot());
+
+  // ===== 账号（token 鉴权）=====
+  ipcMain.handle('account:login', async (_e, email: string, password: string) =>
+    loginAccount(email, password),
+  );
+  ipcMain.handle('account:info', async () => getAccountInfo());
+  ipcMain.handle('account:logout', async () => logoutAccount());
+  ipcMain.handle('account:openPage', async (_e, page: 'login' | 'register' | 'account') =>
+    openAccountPage(page),
+  );
 }
 
 // 仅供主进程内部用，避免循环引用

@@ -1,0 +1,92 @@
+/*
+ * Tailwind v4 + shadcn/ui token 层。
+ *
+ * 设计要点（与现有 theme.css 共存，零破坏）：
+ * - 故意跳过 tailwindcss/preflight，避免 base reset 冲掉 app 现有 1426 行原生 CSS。
+ * - dark 变体映射到 app 已有的 [data-theme="dark"] 机制（useTheme 落在 <html>），无需 .dark class。
+ * - shadcn 语义 token 全部引用 theme.css 的暖色变量（--bg-0/--ink/--accent/--line-strong…），
+ *   这些变量已在 :root(暗)/[data-theme="light"](亮) 各自定义并按主题翻转，
+ *   所以 shadcn 组件自动跟随 app 主题，无需在此重复 light 块。
+ * - --accent 不在此重定义：复用 app 的橙色品牌色（与 .seg-item.checked 一致），
+ *   只补 --accent-foreground。
+ */
+@import "tailwindcss/theme";
+@import "tailwindcss/utilities";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --background: var(--bg-0);
+  --foreground: var(--ink);
+  --card: var(--card-bg);
+  --card-foreground: var(--ink);
+  --popover: var(--bg-1);
+  --popover-foreground: var(--ink);
+  --primary: var(--pill-active-bg);
+  --primary-foreground: var(--pill-active-ink);
+  --secondary: var(--pill-bg);
+  --secondary-foreground: var(--ink);
+  --muted: var(--pill-bg);
+  --muted-foreground: var(--ink-mute);
+  /* --accent 复用 app 橙色（不重定义），仅补前景色 */
+  --accent-foreground: var(--pill-active-ink);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--pill-active-ink);
+  --border: var(--line-strong);
+  --input: var(--line-strong);
+  --ring: var(--accent);
+  --radius: var(--radius-input);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/*
+ * 最小元素重置：preflight 跳过后，shadcn 组件依赖的 button/input 原生外壳需要兜底。
+ * 用 :where()（specificity 0）确保永远不盖过 app 的类样式（.btn/.field input 等）与
+ * shadcn 的 utility 类——只在没有任何更具体样式时才生效。
+ * 放在 @layer base，优先级低于 unlayered 的 theme.css，对现有 app 零影响。
+ */
+@layer base {
+  :where(button) {
+    background-color: transparent;
+    background-image: none;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    line-height: inherit;
+    cursor: pointer;
+  }
+  :where(input, textarea, select) {
+    font: inherit;
+    color: inherit;
+  }
+  :where(input) {
+    background-color: transparent;
+  }
+}

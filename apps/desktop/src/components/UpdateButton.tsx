@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { UpdateAvailableInfo } from '@shared/types';
+import { useI18n } from '../i18n';
 
 type Phase = 'idle' | 'downloading' | 'done' | 'error';
 
 export default function UpdateButton() {
+  const { t } = useI18n();
   const [info, setInfo] = useState<UpdateAvailableInfo | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
 
@@ -33,12 +35,12 @@ export default function UpdateButton() {
 
   const label =
     phase === 'downloading'
-      ? '正在下载更新…'
+      ? t('update.downloading')
       : phase === 'done'
-        ? `已下载 v${info.version}，请在弹出的安装窗口完成更新（安装完会替换当前版本）`
+        ? t('update.done', { version: info.version })
         : phase === 'error'
-          ? '下载失败，点此重试（或稍后再试）'
-          : `发现新版本 v${info.version}（当前 v${info.currentVersion}），点此下载并更新`;
+          ? t('update.error')
+          : t('update.idle', { version: info.version, currentVersion: info.currentVersion });
 
   return (
     <button

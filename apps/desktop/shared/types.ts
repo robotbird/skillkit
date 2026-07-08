@@ -23,6 +23,7 @@ export type {
   ShareMeta,
   ShareCreateResult,
   ShareSourceInfo,
+  PublicUser,
 } from '@skillkit/types';
 
 import type {
@@ -35,6 +36,7 @@ import type {
   MarketListResult,
   ShareCreateResult,
   ShareSourceInfo,
+  PublicUser,
 } from '@skillkit/types';
 
 // ===== 多 skill 仓库批量安装（GitHub）=====
@@ -92,6 +94,29 @@ export interface UpdateAvailableInfo {
   downloadName: string; // 安装包文件名
 }
 
+// ===== 设置（持久化于 desktop 主进程 meta KV；desktop 专用）=====
+/** 外观主题。system 跟随 OS。 */
+export type Theme = 'dark' | 'light' | 'system';
+/** 界面语言。 */
+export type Locale = 'zh' | 'en';
+
+/** meta KV 键名。auth_token 存 safeStorage 加密串（降级明文带 `plain:` 前缀）。 */
+export const SETTING_KEYS = {
+  theme: 'theme',
+  locale: 'locale',
+  authToken: 'auth_token',
+} as const;
+
+/** 主进程解析后的有效主题（system 已解析为 dark/light）。 */
+export type EffectiveTheme = 'dark' | 'light';
+
+/** 桌面账号登录结果：成功带 user，失败带 error 文案。 */
+export interface AccountLoginResult {
+  ok: boolean;
+  user?: PublicUser;
+  error?: string;
+}
+
 // ===== preload 暴露在 window.skillkit 上的 IPC 契约(desktop 专用) =====
 export interface SkillkitApi {
   scanAll(): Promise<InstalledSkill[]>;
@@ -104,10 +129,14 @@ export interface SkillkitApi {
   onUpdateAvailable(cb: (info: UpdateAvailableInfo) => void): void;
   /** 查询当前已知的更新状态(渲染进程挂载时用,避免错过启动期推送)。 */
   getUpdateStatus(): Promise<{ available: boolean; info: UpdateAvailableInfo | null }>;
+  /** 主动检查更新（实时请求 GitHub releases）。 */
+  checkUpdate(): Promise<{ available: boolean; info: UpdateAvailableInfo | null }>;
   /** 触发更新:下载安装包到 ~/Downloads 并打开。 */
   applyUpdate(): Promise<string>;
   uninstallSkill(tool: Tool, name: string): Promise<void>;
   revealInFinder(absPath: string): Promise<void>;
+  /** 在系统文件管理器中打开目录（shell.openPath）。 */
+  openPath(absPath: string): Promise<void>;
   copyToTools(sourceTool: Tool, name: string, targets: Tool[]): Promise<InstallResult[]>;
 
   marketRefresh(force?: boolean): Promise<MarketRefreshResult>;
@@ -151,6 +180,34 @@ export interface SkillkitApi {
 
   // 分享页深链（skillkit://share/<id>）唤起应用时，主进程通过它把 share id 推给渲染进程
   onDeepLink(cb: (input: string) => void): void;
+
+  // ===== 设置（meta KV 通用读写）=====
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
+
+  // ===== 外观 / 语言 / 版本 / 外链 / 全局仓库路径 =====
+  /** 取当前主题设置 + 已解析的有效主题（system→dark/light）。 */
+  getTheme(): Promise<{ setting: Theme; effective: EffectiveTheme }>;
+  /** 持久化主题并即时应用（nativeTheme + 窗口色 + 推送 effective 给渲染层）。 */
+  setTheme(theme: Theme): Promise<void>;
+  /** 监听主进程推送的有效主题变化（system 模式下 OS 切换 / setTheme 后触发）。 */
+  onThemeChange(cb: (effective: EffectiveTheme) => void): void;
+  /** 用系统浏览器打开外链（handler 内校验 https）。 */
+  openExternal(url: string): Promise<void>;
+  /** 当前应用版本（app.getVersion()）。 */
+  getVersion(): Promise<string>;
+  /** 全局仓库根目录（~/.agents/skills，跨平台）。 */
+  getGlobalRepoRoot(): Promise<string>;
+
+  // ===== 账号（token 鉴权）=====
+  /** 邮箱+密码登录：成功存 token（safeStorage 加密），返回 user。 */
+  loginAccount(email: string, password: string): Promise<AccountLoginResult>;
+  /** 取当前账号信息（未登录或 token 失效返回 null）。 */
+  getAccountInfo(): Promise<PublicUser | null>;
+  /** 登出：清除本地 token。 */
+  logoutAccount(): Promise<void>;
+  /** 用系统浏览器打开账号网页（注册/登录/账号管理）。 */
+  openAccountPage(page: 'login' | 'register' | 'account'): Promise<void>;
 }
 
 declare global {

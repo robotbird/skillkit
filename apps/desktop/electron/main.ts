@@ -8,6 +8,7 @@ import { scanAll } from './scan.js';
 import { parseShareId } from './share.js';
 import { checkForUpdate } from './updater.js';
 import { disposeGithubCache, cleanStaleTmpDirs } from './installer.js';
+import { initTheme, effectiveTheme } from './theme.js';
 import type { UpdateAvailableInfo } from '../shared/types.js';
 
 // macOS 菜单栏 / Dock 等处显示的应用名（dev 模式下默认会显示 "Electron"）
@@ -62,12 +63,16 @@ const RENDERER_DIST = path.join(__dirname, '../dist');
 
 function createWindow() {
   const isMac = process.platform === 'darwin';
+  // 窗口底色按当前有效主题定（dark 暖暗 / light 暖白），防首帧闪烁；
+  // 运行时切主题由 theme.ts 的 updateWindowColors 处理。
+  const eff = effectiveTheme();
+  const bgColor = eff === 'dark' ? '#1a1410' : '#f5f0e8';
   const w = new BrowserWindow({
     width: 1240,
     height: 820,
     minWidth: 980,
     minHeight: 640,
-    backgroundColor: '#1a1410',
+    backgroundColor: bgColor,
     // macOS:hiddenInset + 毛玻璃(左上角红绿灯)。
     // Windows:'hidden' + titleBarOverlay(右上角原生最小化/最大化/关闭),
     //         无框但整条 .topbar 仍可拖拽,居中 tabs 不与右上角按钮重叠。
@@ -76,7 +81,7 @@ function createWindow() {
     visualEffectState: isMac ? 'active' : undefined,
     titleBarOverlay: isMac
       ? undefined
-      : { color: '#1a1410', symbolColor: '#e8dcc8', height: 40 },
+      : { color: bgColor, symbolColor: eff === 'dark' ? '#e8dcc8' : '#3a2a1a', height: 40 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
@@ -97,6 +102,13 @@ function createWindow() {
     }
   });
 
+  // 在 React 挂载前先设 data-theme，避免亮色用户首帧闪一下深色（useTheme 挂载后会再设一次，幂等）
+  w.webContents.on('dom-ready', () => {
+    w.webContents
+      .executeJavaScript(`document.documentElement.dataset.theme='${effectiveTheme()}'`)
+      .catch(() => {});
+  });
+
   if (VITE_DEV_SERVER_URL) {
     w.loadURL(VITE_DEV_SERVER_URL);
     // w.webContents.openDevTools({ mode: 'detach' });
@@ -110,6 +122,7 @@ function bootstrap() {
 
   app.whenReady().then(() => {
     initDb();
+    initTheme(); // 在 createWindow 之前：nativeTheme.themeSource + 窗口底色就位
     registerIpc();
     createWindow();
 

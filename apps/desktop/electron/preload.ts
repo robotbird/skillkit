@@ -6,6 +6,10 @@ import type {
   MarketListQuery,
   InstallOpts,
   UpdateAvailableInfo,
+  Theme,
+  EffectiveTheme,
+  AccountLoginResult,
+  PublicUser,
 } from '../shared/types.js';
 
 const api: SkillkitApi = {
@@ -15,6 +19,7 @@ const api: SkillkitApi = {
   uninstallSkill: (tool: Tool, name: string) =>
     ipcRenderer.invoke('installed:uninstall', tool, name),
   revealInFinder: (p: string) => ipcRenderer.invoke('installed:reveal', p),
+  openPath: (p: string) => ipcRenderer.invoke('shell:openPath', p),
   copyToTools: (sourceTool: Tool, name: string, targets: Tool[]) =>
     ipcRenderer.invoke('installed:copyToTools', sourceTool, name, targets),
 
@@ -60,7 +65,32 @@ const api: SkillkitApi = {
     ipcRenderer.on('update:available', (_e, info: UpdateAvailableInfo) => cb(info));
   },
   getUpdateStatus: () => ipcRenderer.invoke('update:status'),
+  checkUpdate: () => ipcRenderer.invoke('update:check'),
   applyUpdate: () => ipcRenderer.invoke('update:apply'),
+
+  // 设置（meta KV）
+  getSetting: (key: string) => ipcRenderer.invoke('setting:get', key),
+  setSetting: (key: string, value: string) => ipcRenderer.invoke('setting:set', key, value),
+
+  // 外观
+  getTheme: () => ipcRenderer.invoke('theme:get'),
+  setTheme: (theme: Theme) => ipcRenderer.invoke('theme:set', theme),
+  onThemeChange: (cb: (effective: EffectiveTheme) => void) => {
+    ipcRenderer.on('theme:effective', (_e, eff: EffectiveTheme) => cb(eff));
+  },
+
+  // 外链 / 版本 / 全局仓库路径
+  openExternal: (url: string) => ipcRenderer.invoke('external:open', url),
+  getVersion: () => ipcRenderer.invoke('app:version'),
+  getGlobalRepoRoot: () => ipcRenderer.invoke('globalRepo:root'),
+
+  // 账号（token 鉴权）
+  loginAccount: (email: string, password: string) =>
+    ipcRenderer.invoke('account:login', email, password),
+  getAccountInfo: () => ipcRenderer.invoke('account:info') as Promise<PublicUser | null>,
+  logoutAccount: () => ipcRenderer.invoke('account:logout'),
+  openAccountPage: (page: 'login' | 'register' | 'account') =>
+    ipcRenderer.invoke('account:openPage', page),
 };
 
 contextBridge.exposeInMainWorld('skillkit', api);
