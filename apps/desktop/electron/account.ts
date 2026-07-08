@@ -1,12 +1,15 @@
-import { safeStorage, shell } from 'electron';
+import { app, safeStorage, shell } from 'electron';
 import { metaGet, metaSet } from './db.js';
 import { SETTING_KEYS } from '../shared/types.js';
 import type { PublicUser, AccountLoginResult } from '../shared/types.js';
 
-// 账号服务基地址：account.skillkit.net 子域（需 Vercel/DNS 配置指向现有 /login）。
-// 未就绪前可用 SKILLKIT_ACCOUNT_BASE_URL 临时指向 https://skillkit.net。
+// 账号服务基地址：
+// - 本地开发（未打包）默认指向本地 server (http://localhost:3000)，方便联调注册/登录；
+// - 打包发布默认指向 account.skillkit.net 子域（需 Vercel/DNS 配置指向现有 /login）；
+// - 任意环境都可用 SKILLKIT_ACCOUNT_BASE_URL 覆盖。
 export const ACCOUNT_BASE_URL =
-  process.env.SKILLKIT_ACCOUNT_BASE_URL || 'https://account.skillkit.net';
+  process.env.SKILLKIT_ACCOUNT_BASE_URL ||
+  (app.isPackaged ? 'https://account.skillkit.net' : 'http://localhost:3000');
 
 /** 用系统浏览器打开账号网页（注册 / 登录 / 账号管理）。URL 由主进程拼，渲染层不感知域名。 */
 export async function openAccountPage(page: 'login' | 'register' | 'account'): Promise<void> {
