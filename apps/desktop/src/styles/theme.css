@@ -1373,60 +1373,188 @@ html, body, #root {
    浅色主题（[data-theme="light"]）：覆盖 :root 变量 + 硬编码深色处
    ========================================================= */
 [data-theme="light"] {
-  --bg-0: #f5f0e8;
-  --bg-1: #efe8db;
-  --ink: #2a2018;
-  --ink-soft: rgba(42, 32, 24, 0.72);
-  --ink-mute: rgba(42, 32, 24, 0.5);
-  --line: rgba(60, 40, 20, 0.1);
-  --line-strong: rgba(60, 40, 20, 0.16);
-  --pill-bg: rgba(255, 255, 255, 0.6);
-  --pill-bg-hover: rgba(255, 255, 255, 0.85);
-  --pill-active-bg: #2a2018;
-  --pill-active-ink: #f5f0e8;
-  --card-bg: rgba(255, 255, 255, 0.72);
-  --card-bg-hover: rgba(255, 255, 255, 0.92);
-  --card-line: rgba(120, 90, 50, 0.14);
+  /* Codex 中性：冷中性近白画布 / 近黑文字 / 发丝边框 / 不透明表面（视觉去玻璃）/ 近黑胶囊选中 / 极轻中性阴影。
+     点缀橙仅靠 --accent（聚焦环/builtin 标签/复选框/spinner）保留，其余暖色一律中性化。 */
+  --bg-0: #fafafa;
+  --bg-1: #f2f2f3;
+  --ink: #1a1a1a;
+  --ink-soft: rgba(26, 26, 26, 0.72);
+  --ink-mute: rgba(26, 26, 26, 0.5);
+  --line: rgba(0, 0, 0, 0.08);
+  --line-strong: rgba(0, 0, 0, 0.14);
+  --pill-bg: #ffffff;
+  --pill-bg-hover: #f4f4f5;
+  --pill-active-bg: #1a1a1a;
+  --pill-active-ink: #ffffff;
+  --card-bg: #ffffff;
+  --card-bg-hover: #fafafa;
+  --card-line: rgba(0, 0, 0, 0.08);
   --accent: #c9761a;
-  --accent-soft: rgba(201, 118, 26, 0.16);
+  --accent-soft: rgba(201, 118, 26, 0.14);
   --danger: #d24a38;
-  --shadow-pill: 0 6px 18px rgba(120, 90, 50, 0.16), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 8px 24px rgba(120, 90, 50, 0.1);
+  --shadow-pill: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 [data-theme="light"] .bg {
-  background:
-    radial-gradient(1200px 600px at 50% -10%, rgba(255, 190, 110, 0.35), transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, rgba(210, 150, 90, 0.22), transparent 65%),
-    linear-gradient(180deg, #fbf5ea 0%, #f3ebde 50%, #ece1d0 100%);
+  background: #fafafa;
 }
 [data-theme="light"] .bg-vignette {
-  background: radial-gradient(120% 80% at 50% 60%, transparent 50%, rgba(120, 90, 50, 0.12) 100%);
+  background: transparent;
 }
 [data-theme="light"] .modal {
-  background: linear-gradient(180deg, #fbf5ea 0%, #f1e8da 100%);
-  border-color: rgba(120, 90, 50, 0.16);
-  box-shadow: 0 20px 60px rgba(120, 90, 50, 0.22);
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
 }
 [data-theme="light"] .modal-mask {
-  background: rgba(60, 40, 20, 0.35);
+  background: rgba(0, 0, 0, 0.32);
 }
 [data-theme="light"] .settings-rail {
-  background: rgba(120, 90, 50, 0.06);
+  background: transparent;
 }
-/* 硬编码 rgba(255,255,255,*) 在亮色下不可见，改为深色透明（仅覆盖关键可见项） */
+/* 半透明 rgba(255,255,255,*) 在白底不可见 → 改中性深色透明 */
 [data-theme="light"] .modal .opts label:hover,
 [data-theme="light"] .btn-ghost:hover {
-  background: rgba(60, 40, 20, 0.06);
+  background: rgba(0, 0, 0, 0.04);
 }
 [data-theme="light"] .tabs-logo {
-  background: rgba(60, 40, 20, 0.06);
+  background: rgba(0, 0, 0, 0.03);
 }
 [data-theme="light"] .main::-webkit-scrollbar-thumb {
-  background: rgba(60, 40, 20, 0.16);
+  background: rgba(0, 0, 0, 0.14);
 }
 [data-theme="light"] .main::-webkit-scrollbar-thumb:hover {
-  background: rgba(60, 40, 20, 0.26);
+  background: rgba(0, 0, 0, 0.22);
 }
 [data-theme="light"] .muted-hint code {
-  background: rgba(60, 40, 20, 0.06);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* =========================================================
+   浅色模式：补齐「无覆盖」的暖色 / 白底不可见字面量（Codex 中性化）
+   原深色规则一律不动，仅以 [data-theme="light"] 前缀覆盖配色。
+   ========================================================= */
+
+/* A. 装饰性暖琥珀图标底 / 暖灰标签 → 中性 */
+[data-theme="light"] .skill-ico {
+  background: #f4f4f5;
+  color: #1a1a1a;
+  border-color: rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .install-icon {
+  background: #f4f4f5;
+  color: #1a1a1a;
+  border-color: rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .skill-tag.tag-multi {
+  color: rgba(26, 26, 26, 0.55);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+[data-theme="light"] .skill:hover {
+  border-color: rgba(0, 0, 0, 0.12);
+}
+[data-theme="light"] .dropzone {
+  border-color: rgba(0, 0, 0, 0.14);
+}
+
+/* B. 主按钮 → 近黑胶囊（shadcn Button default 已自动跟随 --pill-active-bg） */
+[data-theme="light"] .btn-primary {
+  color: #ffffff;
+  background: #1a1a1a;
+  box-shadow: none;
+}
+
+/* C. 半透明白在白底不可见的悬停 / 基态 → 中性。
+   Tab（顶部「我的/安装 Skill」+ 安装页「分享链接/GitHub/上传压缩包」）hover 不换背景，
+   仅靠 color 加深作反馈；:not(.is-active) 避免悬停选中态时把近黑底色闪没。 */
+[data-theme="light"] .tab:not(.is-active):hover {
+  background: transparent;
+}
+[data-theme="light"] .btn-ghost {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+/* D. kebab 下拉（原深色渐变，原本无浅色覆盖）→ 白底中性 */
+[data-theme="light"] .kebab-menu {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* E. 危险态文字：浅底上 #ffb1a5 偏淡 → 提到 --danger 保证对比 */
+[data-theme="light"] .btn-danger,
+[data-theme="light"] .share-error {
+  color: var(--danger);
+}
+
+/* 分享链接展示框：去掉硬编码暖深底，浅色下透明（白底 + 发丝边框，Codex 平面） */
+[data-theme="light"] .share-link {
+  background: transparent;
+}
+
+/* F. 复查补漏：白底不可见的半透明白悬停 / kebab 危险项 / 次级表面 / 隐藏市场搜索的硬编码深底 */
+[data-theme="light"] .icon-btn:hover,
+[data-theme="light"] .kebab-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+[data-theme="light"] .kebab-item.danger,
+[data-theme="light"] .kebab-item.danger:hover {
+  color: var(--danger);
+}
+[data-theme="light"] .skill-subpath {
+  background: rgba(0, 0, 0, 0.04);
+}
+[data-theme="light"] .recent-list li {
+  background: rgba(0, 0, 0, 0.025);
+}
+/* 市场 Tab 当前隐藏；修掉硬编码深棕底，避免日后启用时浅色下穿帮 */
+[data-theme="light"] .search {
+  background: var(--pill-bg);
+}
+[data-theme="light"] .search:focus-within {
+  background: var(--pill-bg-hover);
+}
+
+/* =========================================================
+   设置弹窗 Codex 化（浅色 + 深色双主题）
+   依 Codex 规范：导轨去底色（与内容同面，仅靠发丝线分割）；设置侧栏属低强调导航，
+   选中态用柔和灰胶囊 + 全色文字 + semibold（取代强反相填充）；未选中文字弱化。
+   深色同步把暖白选中胶囊 / 暖悬停去暖为中性柔灰。详见 apps/desktop/DESIGN.md。
+   ========================================================= */
+
+/* —— 浅色 —— */
+[data-theme="light"] .settings-nav {
+  color: var(--ink-mute);
+}
+[data-theme="light"] .settings-nav:hover {
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.04);
+}
+[data-theme="light"] .settings-nav.is-active {
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.07);
+  box-shadow: none;
+  font-weight: 600;
+}
+
+/* —— 深色：导轨去底色；选中/悬停去暖为中性柔灰 —— */
+[data-theme="dark"] .settings-rail {
+  background: transparent;
+}
+[data-theme="dark"] .settings-nav {
+  color: var(--ink-mute);
+}
+[data-theme="dark"] .settings-nav:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+}
+[data-theme="dark"] .settings-nav.is-active {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+  font-weight: 600;
+}
+[data-theme="dark"] .settings-close:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
 }
