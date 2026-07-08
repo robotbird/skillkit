@@ -22,7 +22,7 @@
   --card-foreground: var(--ink);
   --popover: var(--bg-1);
   --popover-foreground: var(--ink);
-  --primary: var(--accent);
+  --primary: var(--pill-active-bg);
   --primary-foreground: var(--pill-active-ink);
   --secondary: var(--pill-bg);
   --secondary-foreground: var(--ink);

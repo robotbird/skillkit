@@ -246,7 +246,7 @@ html, body, #root {
 /* 视图切换 */
 .seg {
   display: inline-flex; padding: 3px;
-  background: rgba(20, 14, 10, 0.55);
+  background: var(--pill-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
 }
@@ -545,14 +545,14 @@ html, body, #root {
   height: 36px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(20, 14, 10, 0.55);
+  background: var(--pill-bg);
   color: var(--ink-soft);
   cursor: pointer;
   overflow: hidden;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .rescan-btn:hover:not(:disabled) {
-  background: rgba(40, 28, 20, 0.7);
+  background: var(--pill-bg-hover);
   color: var(--ink);
   border-color: var(--line-strong);
 }
@@ -590,18 +590,18 @@ html, body, #root {
   height: 36px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(20, 14, 10, 0.55);
+  background: var(--pill-bg);
   color: var(--ink-soft);
   cursor: text;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .search-toggle:hover {
-  background: rgba(40, 28, 20, 0.7);
+  background: var(--pill-bg-hover);
   border-color: var(--line-strong);
   color: var(--ink);
 }
 .search-toggle:focus-within {
-  background: rgba(30, 22, 16, 0.7);
+  background: var(--pill-bg-hover);
   border-color: rgba(255, 177, 74, 0.45);
   color: var(--ink);
 }
@@ -640,7 +640,7 @@ html, body, #root {
 }
 .chip {
   appearance: none;
-  background: rgba(20, 14, 10, 0.55);
+  background: var(--pill-bg);
   border: 1px solid var(--line);
   color: var(--ink-soft);
   padding: 6px 14px;
@@ -746,7 +746,7 @@ html, body, #root {
 .install-input input {
   flex: 1; font-family: inherit; font-size: 13px;
   color: var(--ink);
-  background: rgba(20, 14, 10, 0.6);
+  background: var(--pill-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-input);
   padding: 10px 12px; outline: 0;
@@ -762,7 +762,7 @@ html, body, #root {
   margin-top: 4px;
   border: 1.5px dashed rgba(255, 200, 140, 0.22);
   border-radius: var(--radius-input);
-  background: rgba(20, 14, 10, 0.4);
+  background: var(--pill-bg);
   padding: 22px;
   transition: background 0.18s, border-color 0.18s;
 }
@@ -1087,20 +1087,22 @@ html, body, #root {
   justify-content: center;
   width: 36px;
   height: 36px;
-  border: 0;
+  border: 1px solid var(--line);
   border-radius: var(--radius-pill);
-  background: transparent;
+  background: var(--pill-bg);
   color: var(--ink-soft);
   cursor: pointer;
-  transition: color 0.18s, background 0.18s;
+  transition: color 0.18s, background 0.18s, border-color 0.18s;
 }
 .settings-btn:hover {
   color: var(--ink);
   background: var(--pill-bg-hover);
+  border-color: var(--line-strong);
 }
 
 /* 设置弹窗：左导航 + 右内容（覆盖默认 .modal 的窄宽） */
 .modal.settings-dialog {
+  position: relative;
   width: 640px;
   max-width: 92vw;
   min-height: 420px;
@@ -1145,12 +1147,15 @@ html, body, #root {
 }
 .settings-nav.is-active {
   color: var(--pill-active-ink);
-  background: var(--accent);
+  background: var(--pill-active-bg);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  font-weight: 600;
 }
 .settings-close {
   position: absolute;
   top: 14px;
-  right: 10px;
+  right: 14px;
+  z-index: 5;
   width: 26px;
   height: 26px;
   border: 0;
@@ -1409,7 +1414,6 @@ html, body, #root {
   background: rgba(120, 90, 50, 0.06);
 }
 /* 硬编码 rgba(255,255,255,*) 在亮色下不可见，改为深色透明（仅覆盖关键可见项） */
-[data-theme="light"] .tab:hover,
 [data-theme="light"] .modal .opts label:hover,
 [data-theme="light"] .btn-ghost:hover {
   background: rgba(60, 40, 20, 0.06);

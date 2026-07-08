@@ -62,9 +62,6 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
                 {n.label}
               </button>
             ))}
-            <button className="settings-close" onClick={onClose} title={t('settings.close')} aria-label={t('settings.close')}>
-              ✕
-            </button>
           </nav>
           <div className="settings-content">
             {section === 'account' && <AccountSection busy={busy} onBusyChange={setBusy} />}
@@ -73,6 +70,9 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
             {section === 'space' && <SpaceSection />}
             {section === 'about' && <AboutSection />}
           </div>
+          <button className="settings-close" onClick={onClose} title={t('settings.close')} aria-label={t('settings.close')}>
+            ✕
+          </button>
         </div>
       </div>
     </ModalPortal>
