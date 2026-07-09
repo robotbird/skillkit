@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import type { MyShare } from '@skillkit/types';
+import { formatBytes } from '@/lib/format';
 import {
   Table,
   TableBody,
@@ -28,12 +29,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-
-function formatSize(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
 
 function formatTime(ms: number): string {
   return new Date(ms).toLocaleString('zh-CN', {
@@ -104,7 +99,7 @@ function ShareRow({ s }: { s: MyShare }) {
         </a>
       </TableCell>
       <TableCell className="text-muted-foreground">{formatTime(s.createdAt)}</TableCell>
-      <TableCell className="text-muted-foreground">{formatSize(s.sizeBytes)}</TableCell>
+      <TableCell className="text-muted-foreground">{formatBytes(s.sizeBytes)}</TableCell>
       <TableCell>
         <AlertDialog>
           <DropdownMenu>
