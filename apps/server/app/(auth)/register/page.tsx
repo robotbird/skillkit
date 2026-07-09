@@ -1,8 +1,19 @@
 'use client';
+
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -32,44 +43,60 @@ export default function RegisterPage() {
   }
 
   return (
-    <form onSubmit={submit}>
-      <div className="card">
-        <h1>注册 Skillkit</h1>
-        <p className="muted">创建账号,开始管理团队 skill。</p>
-        <div className="field" style={{ marginTop: 16 }}>
-          <label>邮箱</label>
-          <input
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </div>
-        <div className="field">
-          <label>密码</label>
-          <input
-            type="password"
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={8}
-          />
-          <div className="hint">至少 8 位</div>
-        </div>
-        <div className="field">
-          <label>昵称(可选)</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} />
-        </div>
-        {error && <div className="error">{error}</div>}
-        <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%' }}>
-          {loading ? '注册中…' : '注册'}
-        </button>
-        <div className="auth-foot">
-          已有账号？<Link href="/login">登录</Link>
-        </div>
-      </div>
-    </form>
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>注册 Skillkit</CardTitle>
+        <CardDescription>创建账号，开始管理分享。</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={submit} className="space-y-4">
+          <FieldGroup className="gap-4">
+            <Field>
+              <FieldLabel htmlFor="email">邮箱</FieldLabel>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="password">密码</FieldLabel>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+              />
+              <p className="text-xs text-muted-foreground">至少 8 位</p>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="name">昵称（可选）</FieldLabel>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={40}
+              />
+            </Field>
+            {error && <FieldError>{error}</FieldError>}
+          </FieldGroup>
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? '注册中…' : '注册'}
+          </Button>
+          <div className="text-center text-sm text-muted-foreground">
+            已有账号？
+            <Link href="/login" className="text-foreground underline-offset-4 hover:underline">
+              登录
+            </Link>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

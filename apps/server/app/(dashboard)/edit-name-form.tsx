@@ -1,7 +1,12 @@
 'use client';
+
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 export function EditNameForm({ initial }: { initial: string | null }) {
   const router = useRouter();
@@ -29,16 +34,31 @@ export function EditNameForm({ initial }: { initial: string | null }) {
   }
 
   return (
-    <form onSubmit={save} style={{ marginBottom: 14 }}>
-      <div className="field">
-        <label>昵称</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="可选" maxLength={40} />
-      </div>
-      <div className="actions">
-        <button className="btn btn-primary btn-sm" disabled={loading}>
-          {loading ? '保存中…' : '保存昵称'}
-        </button>
-        {msg && <span className={msg.kind}>{msg.text}</span>}
+    <form onSubmit={save} className="space-y-3">
+      <Field>
+        <FieldLabel htmlFor="name">昵称</FieldLabel>
+        <Input
+          id="name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="可选"
+          maxLength={40}
+        />
+      </Field>
+      <div className="flex items-center gap-3">
+        <Button type="submit" size="sm" disabled={loading}>
+          {loading ? '保存中…' : '保存'}
+        </Button>
+        {msg && (
+          <span
+            className={cn(
+              'text-sm',
+              msg.kind === 'ok' ? 'text-emerald-600' : 'text-destructive',
+            )}
+          >
+            {msg.text}
+          </span>
+        )}
       </div>
     </form>
   );
