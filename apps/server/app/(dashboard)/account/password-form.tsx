@@ -1,7 +1,12 @@
 'use client';
+
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 export function PasswordForm() {
   const router = useRouter();
@@ -29,7 +34,7 @@ export function PasswordForm() {
       setCurrent('');
       setNew('');
       setConfirm('');
-      setMsg({ kind: 'ok', text: '密码已更新,其他设备需用新密码重新登录' });
+      setMsg({ kind: 'ok', text: '密码已更新，其他设备需用新密码重新登录' });
       router.refresh();
     } else {
       const d = await res.json().catch(() => null);
@@ -39,43 +44,57 @@ export function PasswordForm() {
 
   return (
     <form onSubmit={submit}>
-      <div className="field">
-        <label>当前密码</label>
-        <input
-          type="password"
-          autoComplete="current-password"
-          value={currentPassword}
-          onChange={(e) => setCurrent(e.target.value)}
-          required
-        />
-      </div>
-      <div className="field">
-        <label>新密码</label>
-        <input
-          type="password"
-          autoComplete="new-password"
-          value={newPassword}
-          onChange={(e) => setNew(e.target.value)}
-          required
-          minLength={8}
-        />
-        <div className="hint">至少 8 位</div>
-      </div>
-      <div className="field">
-        <label>确认新密码</label>
-        <input
-          type="password"
-          autoComplete="new-password"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          required
-          minLength={8}
-        />
-      </div>
-      {msg && <div className={msg.kind}>{msg.text}</div>}
-      <button className="btn btn-primary btn-sm" disabled={loading}>
-        {loading ? '更新中…' : '更新密码'}
-      </button>
+      <FieldGroup className="gap-4">
+        <Field>
+          <FieldLabel htmlFor="current-password">当前密码</FieldLabel>
+          <Input
+            id="current-password"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrent(e.target.value)}
+            required
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="new-password">新密码</FieldLabel>
+          <Input
+            id="new-password"
+            type="password"
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={(e) => setNew(e.target.value)}
+            required
+            minLength={8}
+          />
+          <p className="text-xs text-muted-foreground">至少 8 位</p>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="confirm-password">确认新密码</FieldLabel>
+          <Input
+            id="confirm-password"
+            type="password"
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            required
+            minLength={8}
+          />
+        </Field>
+        {msg && (
+          <p
+            className={cn(
+              'text-sm',
+              msg.kind === 'ok' ? 'text-emerald-600' : 'text-destructive',
+            )}
+          >
+            {msg.text}
+          </p>
+        )}
+        <Button type="submit" size="sm" disabled={loading}>
+          {loading ? '更新中…' : '更新密码'}
+        </Button>
+      </FieldGroup>
     </form>
   );
 }

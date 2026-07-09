@@ -31,8 +31,8 @@ function storeToken(token: string): void {
   }
 }
 
-/** 读出 token（解密；空或损坏返回 null）。 */
-function loadToken(): string | null {
+/** 读出 token（解密；空或损坏返回 null）。导出供 share.ts 在分享时附带归因。 */
+export function loadToken(): string | null {
   const v = metaGet(SETTING_KEYS.authToken);
   if (!v) return null;
   if (v.startsWith(ENC_PREFIX)) {

@@ -91,6 +91,18 @@ export interface ShareSourceInfo {
   exists: boolean; // false 表示已过期 / 不存在
 }
 
+// 当前用户的分享列表项(个人中心「分享的 skill」用)。
+// 与 ShareMeta 区别:带 url(完整短链)、不含 description;userId 不外泄。
+export interface MyShare {
+  id: string;
+  name: string;
+  sourceTool: Tool;
+  sizeBytes: number;
+  createdAt: number; // epoch ms
+  expiresAt: number; // epoch ms
+  url: string; // /share/<id> 完整链接
+}
+
 // 分享服务的基地址。默认指向云端;本地开发可用 SKILLKIT_SHARE_BASE_URL 覆盖(如 http://127.0.0.1:3000)
 export const SHARE_BASE_URL =
   (typeof process !== 'undefined' &&

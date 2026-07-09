@@ -6,6 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import AdmZip from 'adm-zip';
 import { listInstalled, getShareLink, upsertShareLink, type ShareLinkRow } from './db.js';
 import { installFromZip } from './installer.js';
+import { loadToken } from './account.js';
 import {
   SHARE_BASE_URL,
   SHARE_MAX_BYTES,
@@ -63,11 +64,19 @@ export async function shareSkill(tool: Tool, name: string): Promise<ShareCreateR
   form.append('sourceTool', skill.tool);
   form.append('file', new Blob([buf], { type: 'application/zip' }), `${skill.name}.zip`);
 
+  // 归因:若已登录(本地存了 token),带 Authorization: Bearer,服务端 /share 据此把分享记到该用户名下。
+  // 无 token(未登录)不带,回退匿名分享(向后兼容,只是不入个人中心列表)。
+  // 注意:不要手动设 content-type,FormData 需由运行时自动加 multipart boundary。
+  const headers: Record<string, string> = {};
+  const token = loadToken();
+  if (token) headers.authorization = `Bearer ${token}`;
+
   let res: Response;
   try {
     res = await fetch(`${SHARE_BASE_URL}/share`, {
       method: 'POST',
       body: form,
+      headers,
       signal: AbortSignal.timeout(60000),
     });
   } catch (e: any) {

@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { getStore } from '@/lib/store';
 import { newShareId } from '@/lib/id';
+import { getCurrentUser } from '@/lib/auth/session';
+import { createShareRecord } from '@/lib/shares/repo';
 import {
   SHARE_TTL_MS,
   SHARE_MAX_BYTES,
@@ -61,6 +63,15 @@ export async function POST(req: NextRequest) {
     expiresAt: now + SHARE_TTL_MS,
   };
   await store.writeShare(meta, buf);
+
+  // 归因:若请求带有效 session(cookie 或桌面端 bearer),记录「谁分享的」供个人中心列表。
+  // 失败不阻断分享(分享本身已成功);匿名分享(无 token)跳过。
+  try {
+    const cur = await getCurrentUser();
+    if (cur) await createShareRecord(cur.user.id, meta);
+  } catch (e) {
+    console.error('[share] attribution failed for', id, e);
+  }
 
   const proto = req.headers.get('x-forwarded-proto') ?? 'https';
   const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? 'skillkit.net';

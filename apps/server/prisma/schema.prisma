@@ -26,5 +26,23 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  shares Share[]
+
   @@index([email])
+}
+
+// 分享归因:记录「谁分享了什么」(zip 字节仍在 ShareStore:Vercel Blob / 本地文件)。
+// id = store 的 6 位 nanoid(与 ShareMeta.id 一致),不 default -- 由 /share 流程生成后写入。
+// 删除用户时级联删其分享记录(blob 不自动删,sweep 按 expiresAt 过期清理)。
+model Share {
+  id         String   @id
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  sourceTool String
+  sizeBytes  Int
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+
+  @@index([userId])
 }

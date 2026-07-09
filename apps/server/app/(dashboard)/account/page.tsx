@@ -1,45 +1,49 @@
 import { getCurrentUser } from '@/lib/auth/session';
 import { PasswordForm } from './password-form';
-import { LogoutAllButton } from './logout-all-button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 
 export const dynamic = 'force-dynamic';
 
+// 账号设置:账号信息(只读)+ 修改密码。保持最简(原「会话/登出所有设备」已移除)。
 export default async function AccountPage() {
   const cur = await getCurrentUser();
   if (!cur) return null;
   const { user } = cur;
+
   return (
-    <div>
-      <h1>账号管理</h1>
-      <p className="muted">密码与会话安全。</p>
-
-      <div className="section" style={{ marginTop: 18 }}>
-        <div className="card">
-          <h2>修改密码</h2>
-          <PasswordForm />
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">账号设置</h1>
+        <p className="text-sm text-muted-foreground">账号信息与密码。</p>
       </div>
 
-      <div className="section">
-        <div className="card">
-          <h2>会话</h2>
-          <p className="muted">
-            登出所有设备会使其他设备上的登录立即失效(当前设备也会退出,需重新登录)。
+      <Card>
+        <CardHeader>
+          <CardTitle>账号信息</CardTitle>
+          <CardDescription>你的账号基本资料。</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Field>
+            <FieldLabel htmlFor="account-email">邮箱</FieldLabel>
+            <Input id="account-email" value={user.email} disabled />
+          </Field>
+          <p className="text-xs text-muted-foreground">
+            注册于 {new Date(user.createdAt).toLocaleDateString('zh-CN')}
           </p>
-          <LogoutAllButton />
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      <div className="section">
-        <div className="card">
-          <h2>账号信息</h2>
-          <div className="field">
-            <label>邮箱</label>
-            <input value={user.email} disabled />
-          </div>
-          <p className="muted">注册于 {new Date(user.createdAt).toLocaleDateString('zh-CN')}</p>
-        </div>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>修改密码</CardTitle>
+          <CardDescription>更新后其他设备需用新密码重新登录。</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PasswordForm />
+        </CardContent>
+      </Card>
     </div>
   );
 }
