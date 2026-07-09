@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db';
+import { formatBytes } from '@/lib/format';
 import { EditNameForm } from './edit-name-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -11,7 +12,14 @@ export default async function OverviewPage() {
   const cur = await getCurrentUser();
   if (!cur) return null;
   const { user } = cur;
-  const shareCount = await prisma.share.count({ where: { userId: user.id } });
+  const [shareCount, agg] = await Promise.all([
+    prisma.share.count({ where: { userId: user.id } }),
+    prisma.share.aggregate({
+      where: { userId: user.id },
+      _sum: { sizeBytes: true },
+    }),
+  ]);
+  const totalBytes = agg._sum.sizeBytes ?? 0;
   const displayName = user.name || user.email.split('@')[0];
 
   return (
@@ -19,6 +27,19 @@ export default async function OverviewPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">你好，{displayName}</h1>
         <p className="text-sm text-muted-foreground">管理你的账号与分享的 skill。</p>
+      </div>
+
+      <div className="flex gap-8">
+        <div>
+          <div className="text-2xl font-semibold tracking-tight tabular-nums">{shareCount}</div>
+          <div className="text-xs text-muted-foreground">个分享</div>
+        </div>
+        <div>
+          <div className="text-2xl font-semibold tracking-tight tabular-nums">
+            {formatBytes(totalBytes)}
+          </div>
+          <div className="text-xs text-muted-foreground">存储占用</div>
+        </div>
       </div>
 
       <Card>
