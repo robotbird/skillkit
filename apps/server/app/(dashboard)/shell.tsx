@@ -16,7 +16,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         {isAccount ? (
           <Link
             href="/"
-            className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="ml-auto flex w-fit items-center gap-1 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <svg
               width="16"

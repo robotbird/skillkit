@@ -34,7 +34,7 @@ export function UserMenu({ name, email }: { name: string | null; email: string }
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="cursor-pointer rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           aria-label="账号菜单"
         >
           <Avatar className="size-8 border">
