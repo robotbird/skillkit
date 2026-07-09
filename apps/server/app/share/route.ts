@@ -4,6 +4,7 @@ import { newShareId } from '@/lib/id';
 import { getCurrentUser } from '@/lib/auth/session';
 import { createShareRecord } from '@/lib/shares/repo';
 import {
+  SHARE_BASE_URL,
   SHARE_TTL_MS,
   SHARE_MAX_BYTES,
   type ShareMeta,
@@ -73,9 +74,8 @@ export async function POST(req: NextRequest) {
     console.error('[share] attribution failed for', id, e);
   }
 
-  const proto = req.headers.get('x-forwarded-proto') ?? 'https';
-  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? 'skillkit.net';
-  const url = `${proto}://${host}/share/${id}`;
+  // 对外短链用稳定基地址 SHARE_BASE_URL(而非当前请求 host),避免 account 子域污染链接。
+  const url = `${SHARE_BASE_URL}/share/${id}`;
   const result: ShareCreateResult = { id, url, expiresAt: meta.expiresAt };
   return Response.json(result, { status: 201 });
 }

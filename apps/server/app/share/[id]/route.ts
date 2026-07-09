@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { getStore } from '@/lib/store';
-import { TOOL_LABELS, type Tool } from '@skillkit/types';
+import { TOOL_LABELS, SHARE_BASE_URL, type Tool } from '@skillkit/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +17,7 @@ const TOOL_COLOR: Record<Tool, string> = {
 
 // 分享接收页:返回完整 HTML 文档(自带内联 CSS/JS、OG/Twitter card、主题切换、复制链接)。
 // 用 route handler 而非 page.tsx,以 1:1 保留原 app.ts 返回的完整文档、避开 layout 嵌套。
-export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const store = await getStore();
   const meta = await store.readMeta(id);
@@ -27,9 +27,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const esc = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-  const proto = req.headers.get('x-forwarded-proto') ?? 'https';
-  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? 'skillkit.net';
-  const fullUrl = `${proto}://${host}/share/${id}`;
+  // 对外短链用稳定基地址 SHARE_BASE_URL(而非当前请求 host),避免 account 子域污染链接。
+  const fullUrl = `${SHARE_BASE_URL}/share/${id}`;
 
   const title = meta && !expired ? `${meta.name} · Skillkit 分享` : 'Skillkit 分享';
   const ogDesc =
