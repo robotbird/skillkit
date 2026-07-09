@@ -18,10 +18,9 @@ function initials(name: string | null, email: string): string {
   return src.slice(0, 1).toUpperCase() || '?';
 }
 
-/** 右上角头像 + 下拉(鼠标移上展开):账号设置 / 退出登录。 */
+/** 右上角头像 + 下拉(点击展开):账号设置 / 退出登录。 */
 export function UserMenu({ name, email }: { name: string | null; email: string }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [out, setOut] = useState(false);
 
   async function logout() {
@@ -32,33 +31,31 @@ export function UserMenu({ name, email }: { name: string | null; email: string }
   }
 
   return (
-    <div onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <DropdownMenu open={open} onOpenChange={setOpen}>
-        <DropdownMenuTrigger asChild>
-          <button
-            className="rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            aria-label="账号菜单"
-          >
-            <Avatar className="size-8 border">
-              <AvatarFallback className="text-xs">{initials(name, email)}</AvatarFallback>
-            </Avatar>
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuLabel className="truncate">{name || email}</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <Link href="/account">账号设置</Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={logout}
-            disabled={out}
-            className="text-destructive focus:text-destructive"
-          >
-            {out ? '退出中…' : '退出登录'}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          aria-label="账号菜单"
+        >
+          <Avatar className="size-8 border">
+            <AvatarFallback className="text-xs">{initials(name, email)}</AvatarFallback>
+          </Avatar>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuLabel className="truncate">{name || email}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/account">账号设置</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={logout}
+          disabled={out}
+          className="text-destructive focus:text-destructive"
+        >
+          {out ? '退出中…' : '退出登录'}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
