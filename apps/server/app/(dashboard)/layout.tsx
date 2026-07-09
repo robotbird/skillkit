@@ -20,7 +20,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         <UserMenu name={cur?.user.name ?? null} email={cur?.user.email ?? ''} />
       </header>
       <div className="mx-auto flex w-full max-w-6xl">
-        <aside className="sticky top-14 h-[calc(100vh-3.5rem)] w-52 shrink-0 border-r p-3">
+        <aside className="sticky top-14 h-[calc(100vh-3.5rem)] w-52 shrink-0 p-3">
           <Nav />
         </aside>
         <main className="min-w-0 flex-1 p-8">{children}</main>
