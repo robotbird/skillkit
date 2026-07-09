@@ -89,7 +89,11 @@ jobs:
       # 未签名的 dmg，用户首次打开需右键「打开」绕过 Gatekeeper。
       # ---------------------------------------------------------------
 
+      # 仅在手动触发(workflow_dispatch)时上传产物。普通 push 到 main 只验证构建/打包能通过,
+      # 不产生 artifact —— 这些产物只有 release job 会下载,平时上传只在保留期内空耗 GitHub 存储额度。
+      # 发版时走 workflow_dispatch -> build 上传 -> release 下载,链路不变。
       - name: Upload artifacts
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
