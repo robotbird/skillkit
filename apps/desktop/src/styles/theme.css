@@ -633,10 +633,56 @@ html, body, #root {
   padding: 0 12px 0 2px;
 }
 
-/* chips —— 工具栏下方的分类栏（scope bar） */
+/* chips —— 工具栏下方的分类栏（scope bar），单行 + 左右滚动 */
+.chips-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0 14px;
+  min-width: 0;
+}
+.chips-scroll-btn {
+  appearance: none;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--pill-bg);
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: color 0.15s, background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+.chips-scroll-btn:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--line-strong, var(--line));
+}
+.chips-scroll-btn:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
 .chips {
-  display: flex; flex-wrap: wrap; gap: 8px;
-  padding: 8px 4px 14px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/old Edge */
+  padding: 2px 2px;
+}
+.chips::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 .chip {
   appearance: none;
@@ -649,6 +695,8 @@ html, body, #root {
   cursor: pointer;
   font-family: inherit;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 .chip:hover { color: var(--ink); }
 .chip.is-active {

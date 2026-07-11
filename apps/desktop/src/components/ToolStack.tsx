@@ -1,19 +1,5 @@
 import { ALL_TOOLS, TOOL_LABELS, type Tool } from '@shared/types';
-import claudeIcon from '../assets/agents/claude-code.svg';
-import codexIcon from '../assets/agents/codex.svg';
-import cursorIcon from '../assets/agents/cursor.svg';
-import traeIcon from '../assets/agents/trae.svg';
-import workbuddyIcon from '../assets/agents/workbuddy.svg';
-import qoderIcon from '../assets/agents/qoder.svg';
-
-const ICONS: Record<Tool, string> = {
-  claude: claudeIcon,
-  codex: codexIcon,
-  cursor: cursorIcon,
-  trae: traeIcon,
-  workbuddy: workbuddyIcon,
-  qoder: qoderIcon,
-};
+import { TOOL_ICON } from '../lib/toolIcons';
 
 interface Props {
   /** 要展示的工具（无需预排序，内部按 ALL_TOOLS 顺序排列）。 */
@@ -41,7 +27,7 @@ export default function ToolStack({ tools, builtinTools = [], size = 'sm' }: Pro
           key={t}
           className={`tool-stack-ico${i > 0 ? ' is-overlap' : ''}${builtinSet.has(t) ? ' is-builtin' : ''}`}
         >
-          <img src={ICONS[t]} alt={TOOL_LABELS[t]} draggable={false} />
+          <img src={TOOL_ICON[t]} alt={TOOL_LABELS[t]} draggable={false} />
         </span>
       ))}
     </span>

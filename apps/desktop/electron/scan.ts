@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { TOOLS, ALL_TOOLS } from './tools.js';
+import { TOOLS, ALL_TOOLS, isGlobalAgentsOnlyTool } from './tools.js';
 import { readSkillMd } from './skill-md.js';
 import { clearInstalled, upsertInstalled, listInstalled as dbListInstalled } from './db.js';
 import { dirSize } from './fs-util.js';
@@ -59,20 +59,40 @@ export function scanTool(tool: Tool): InstalledSkill[] {
   return out;
 }
 
-/** 工具是否「已安装」:其用户级根目录(~/.<tool>,即 installRoot 的父目录)存在。
- *  不检查 skills 子目录本身——工具装了但还没 skill 时也应可见/可选(否则无法安装第一个 skill)。 */
+/**
+ * 本机是否存在该 agent 的配置/数据目录（`TOOLS[tool].detectRoots`）。
+ * 纯全局仓工具（skill 路径完全等同 ~/.agents/skills）恒为 false。
+ * 用于扫描范围；UI 展示另见 installedTools()（还需 skill 数 > 0）。
+ */
 export function isToolInstalled(tool: Tool): boolean {
-  return fs.existsSync(path.dirname(TOOLS[tool].installRoot));
+  // 完全沿用 ~/.agents/skills → 不单独显示/扫描为独立工具
+  if (isGlobalAgentsOnlyTool(tool)) return false;
+
+  const roots = TOOLS[tool].detectRoots;
+  for (const p of roots) {
+    if (p && fs.existsSync(p)) return true;
+  }
+  return false;
 }
 
-/** 所有已安装工具(按 ALL_TOOLS 顺序),用于 UI 只展示这些工具。 */
+/** 该工具 skill 目录下是否至少有一个有效 skill（含 SKILL.md）。 */
+export function toolHasSkills(tool: Tool): boolean {
+  return scanTool(tool).length > 0;
+}
+
+/**
+ * UI 可展示的工具：本机有 agent 配置，且至少有 1 个 skill。
+ * skill 数为 0 的不出现在 chip / 安装选择器（避免空壳工具占位）。
+ */
 export function installedTools(): Tool[] {
-  return ALL_TOOLS.filter(isToolInstalled);
+  return ALL_TOOLS.filter((tool) => isToolInstalled(tool) && toolHasSkills(tool));
 }
 
 export function scanAll(): InstalledSkill[] {
   const all: InstalledSkill[] = [];
+  // 只扫本机有配置且非「纯全局仓」的工具；共享目录 skill 见 scanGlobalRepo
   for (const tool of ALL_TOOLS) {
+    if (!isToolInstalled(tool)) continue;
     all.push(...scanTool(tool));
   }
   // 重写 db：清空 + 重新写入（一次扫描就是真相，简单可靠）

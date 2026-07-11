@@ -4,6 +4,7 @@ import { newShareId } from '@/lib/id';
 import { getCurrentUser } from '@/lib/auth/session';
 import { createShareRecord } from '@/lib/shares/repo';
 import {
+  ALL_TOOLS,
   SHARE_BASE_URL,
   SHARE_TTL_MS,
   SHARE_MAX_BYTES,
@@ -12,7 +13,7 @@ import {
   type Tool,
 } from '@skillkit/types';
 
-const VALID_TOOLS: Tool[] = ['claude', 'codex', 'cursor', 'trae', 'workbuddy'];
+const VALID_TOOLS: Tool[] = ALL_TOOLS;
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

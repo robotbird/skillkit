@@ -13,6 +13,20 @@ const TOOL_COLOR: Record<Tool, string> = {
   trae: '#1FAE6B',
   workbuddy: '#6C4DFF',
   qoder: '#2ADB5C',
+  grok: '#1DA1F2',
+  opencode: '#FF5C00',
+  gemini: '#4285F4',
+  antigravity: '#8B5CF6',
+  windsurf: '#0EA5E9',
+  augment: '#F59E0B',
+  codebuddy: '#10B981',
+  pi: '#EC4899',
+  kiro: '#6366F1',
+  hermes: '#EF4444',
+  openclaw: '#14B8A6',
+  cline: '#A855F7',
+  warp: '#52525B',
+  kimi: '#3B82F6',
 };
 
 // 分享接收页:返回完整 HTML 文档(自带内联 CSS/JS、OG/Twitter card、主题切换、复制链接)。
