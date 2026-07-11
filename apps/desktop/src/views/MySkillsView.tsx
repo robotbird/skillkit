@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ALL_TOOLS, TOOL_LABELS, type InstalledSkill, type Tool, type GlobalRepoSkill } from '@shared/types';
 import SkillCard from '../components/SkillCard';
@@ -10,21 +10,7 @@ import type { ToastState } from '../components/Toast';
 import { groupBySkill, type SkillGroup } from '../lib/groupSkills';
 import { useInstalledTools } from '../lib/useInstalledTools';
 import { useI18n } from '../i18n';
-import claudeIcon from '../assets/agents/claude-code.svg';
-import codexIcon from '../assets/agents/codex.svg';
-import cursorIcon from '../assets/agents/cursor.svg';
-import traeIcon from '../assets/agents/trae.svg';
-import workbuddyIcon from '../assets/agents/workbuddy.svg';
-import qoderIcon from '../assets/agents/qoder.svg';
-
-const TOOL_ICON: Record<Tool, string> = {
-  claude: claudeIcon,
-  codex: codexIcon,
-  cursor: cursorIcon,
-  trae: traeIcon,
-  workbuddy: workbuddyIcon,
-  qoder: qoderIcon,
-};
+import { TOOL_ICON } from '../lib/toolIcons';
 
 type ViewMode = 'grid' | 'list';
 
@@ -52,8 +38,34 @@ export default function MySkillsView({
   const [globalTarget, setGlobalTarget] = useState<GlobalRepoSkill | null>(null);
   const [installingGlobal, setInstallingGlobal] = useState(false);
 
-  // 只展示「已安装」工具的 chip;未安装工具不出现
-  const { tools: installed } = useInstalledTools();
+  // 只展示「有 skill 的已装工具」chip；未装或 skill 数为 0 的不出现
+  const { tools: installed, refresh: refreshInstalledTools } = useInstalledTools();
+
+  // 工具 chip 单行横向滚动
+  const chipsRef = useRef<HTMLDivElement>(null);
+  const [chipScroll, setChipScroll] = useState({ left: false, right: false });
+
+  const updateChipScroll = useCallback(() => {
+    const el = chipsRef.current;
+    if (!el) {
+      setChipScroll({ left: false, right: false });
+      return;
+    }
+    const max = el.scrollWidth - el.clientWidth;
+    const left = el.scrollLeft > 2;
+    const right = max > 2 && el.scrollLeft < max - 2;
+    setChipScroll((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+  }, []);
+
+  const scrollChips = useCallback(
+    (dir: -1 | 1) => {
+      const el = chipsRef.current;
+      if (!el) return;
+      const step = Math.max(160, Math.floor(el.clientWidth * 0.6));
+      el.scrollBy({ left: dir * step, behavior: 'smooth' });
+    },
+    [],
+  );
 
   // 统一工具栏槽位：把搜索/视图切换/重新扫描 注入到顶部 TopBar
   const toolbarHost = useToolbarSlot();
@@ -64,6 +76,7 @@ export default function MySkillsView({
       const [r, g] = await Promise.all([
         window.skillkit.scanAll(),
         window.skillkit.scanGlobalRepo(),
+        refreshInstalledTools(),
       ]);
       setItems(r);
       setGlobalSkills(g);
@@ -108,10 +121,27 @@ export default function MySkillsView({
 
   // 每个 chip 的计数 = 包含该工具的「组」数（而非行数）
   const counts = useMemo(() => {
-    const map: Record<Tool, number> = { claude: 0, codex: 0, cursor: 0, trae: 0, workbuddy: 0, qoder: 0 };
+    const map = Object.fromEntries(ALL_TOOLS.map((t) => [t, 0])) as Record<Tool, number>;
     for (const g of groups) for (const tl of g.tools) map[tl]++;
     return map;
   }, [groups]);
+
+  // 工具列表变化或窗口缩放时，刷新左右滚动按钮可用性
+  useEffect(() => {
+    const el = chipsRef.current;
+    if (!el) return;
+    const tick = () => requestAnimationFrame(updateChipScroll);
+    tick();
+    el.addEventListener('scroll', updateChipScroll, { passive: true });
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(tick) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', tick);
+    return () => {
+      el.removeEventListener('scroll', updateChipScroll);
+      ro?.disconnect();
+      window.removeEventListener('resize', tick);
+    };
+  }, [updateChipScroll, installed.length, groups.length]);
 
   // ===== 打开目录 =====
   // 入口：一个 skill 只装在一个工具下时直接打开；装在多个工具下时弹窗让用户选要打开哪个。
@@ -285,33 +315,57 @@ export default function MySkillsView({
     <section>
       {toolbarHost && createPortal(toolbar, toolbarHost)}
 
-      <div className="chips">
+      <div className="chips-bar">
         <button
-          className={`chip${tool === 'all' ? ' is-active' : ''}`}
-          onClick={() => setTool('all')}
+          type="button"
+          className="chips-scroll-btn"
+          aria-label={t('my.chips.scrollLeft')}
+          disabled={!chipScroll.left}
+          onClick={() => scrollChips(-1)}
         >
-          {t('my.chipAll', { count: groups.length })}
-        </button>
-        <button
-          className={`chip chip-global${tool === 'global' ? ' is-active' : ''}`}
-          onClick={() => setTool('global')}
-          title={t('my.chipGlobalTitle')}
-        >
-          <svg className="chip-ico" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-            <path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 2c1.7 0 3.3 2.5 3.8 6h-7.6C8.7 6.5 10.3 4 12 4zm-5.7 6h-2A8 8 0 015.5 6.6 12.4 12.4 0 006.3 10zm0 4a12.4 12.4 0 00-.8 3.4A8 8 0 014.3 14h2zm1.9 0h7.6c-.5 3.5-2.1 6-3.8 6s-3.3-2.5-3.8-6zm9.5 0h2a8 8 0 01-1.2 3.4A12.4 12.4 0 0018.5 14zm0-4a12.4 12.4 0 00.8-3.4A8 8 0 0119.7 10h-2z"/>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path fill="currentColor" d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
           </svg>
-          {t('my.chipGlobal', { count: globalSkills?.length ?? 0 })}
         </button>
-        {installed.map((tl) => (
+        <div className="chips" ref={chipsRef}>
           <button
-            key={tl}
-            className={`chip chip-tool${tool === tl ? ' is-active' : ''}`}
-            onClick={() => setTool(tl)}
+            className={`chip${tool === 'all' ? ' is-active' : ''}`}
+            onClick={() => setTool('all')}
           >
-            <img className="chip-ico" src={TOOL_ICON[tl]} alt="" draggable={false} />
-            {t('my.chipTool', { label: TOOL_LABELS[tl], count: counts[tl] })}
+            {t('my.chipAll', { count: groups.length })}
           </button>
-        ))}
+          <button
+            className={`chip chip-global${tool === 'global' ? ' is-active' : ''}`}
+            onClick={() => setTool('global')}
+            title={t('my.chipGlobalTitle')}
+          >
+            <svg className="chip-ico" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 2c1.7 0 3.3 2.5 3.8 6h-7.6C8.7 6.5 10.3 4 12 4zm-5.7 6h-2A8 8 0 015.5 6.6 12.4 12.4 0 006.3 10zm0 4a12.4 12.4 0 00-.8 3.4A8 8 0 014.3 14h2zm1.9 0h7.6c-.5 3.5-2.1 6-3.8 6s-3.3-2.5-3.8-6zm9.5 0h2a8 8 0 01-1.2 3.4A12.4 12.4 0 0018.5 14zm0-4a12.4 12.4 0 00.8-3.4A8 8 0 0119.7 10h-2z"/>
+            </svg>
+            {t('my.chipGlobal', { count: globalSkills?.length ?? 0 })}
+          </button>
+          {installed.map((tl) => (
+            <button
+              key={tl}
+              className={`chip chip-tool${tool === tl ? ' is-active' : ''}`}
+              onClick={() => setTool(tl)}
+            >
+              <img className="chip-ico" src={TOOL_ICON[tl]} alt="" draggable={false} />
+              {t('my.chipTool', { label: TOOL_LABELS[tl], count: counts[tl] })}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="chips-scroll-btn"
+          aria-label={t('my.chips.scrollRight')}
+          disabled={!chipScroll.right}
+          onClick={() => scrollChips(1)}
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path fill="currentColor" d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+          </svg>
+        </button>
       </div>
 
       <div className="skills" data-mode={mode}>

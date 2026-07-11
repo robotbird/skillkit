@@ -1,20 +1,7 @@
 import { ALL_TOOLS, TOOL_LABELS, type Tool } from '@shared/types';
-import claudeIcon from '../assets/agents/claude-code.svg';
-import codexIcon from '../assets/agents/codex.svg';
-import cursorIcon from '../assets/agents/cursor.svg';
-import traeIcon from '../assets/agents/trae.svg';
-import workbuddyIcon from '../assets/agents/workbuddy.svg';
-import qoderIcon from '../assets/agents/qoder.svg';
+import { TOOL_ICON } from '../lib/toolIcons';
 
-/** 工具 → 图标映射；ToolPicker 与 RepoSkillPicker 共用。 */
-export const TOOL_ICON: Record<Tool, string> = {
-  claude: claudeIcon,
-  codex: codexIcon,
-  cursor: cursorIcon,
-  trae: traeIcon,
-  workbuddy: workbuddyIcon,
-  qoder: qoderIcon,
-};
+export { TOOL_ICON };
 
 interface Props {
   tool: Tool;

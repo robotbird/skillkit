@@ -2,7 +2,28 @@
 // desktop 专用的 IPC 契约(SkillkitApi)与自动更新类型(UpdateAvailableInfo)不在此处,
 // 留在 apps/desktop 内。
 
-export type Tool = 'claude' | 'codex' | 'cursor' | 'trae' | 'workbuddy' | 'qoder';
+// 短 key（skillkit 内部/DB/分享协议）。与 npx skills 的 --agent 名可能不同（如 claude ≠ claude-code）。
+export type Tool =
+  | 'claude'
+  | 'codex'
+  | 'cursor'
+  | 'trae'
+  | 'workbuddy'
+  | 'qoder'
+  | 'grok'
+  | 'opencode'
+  | 'gemini'
+  | 'antigravity'
+  | 'windsurf'
+  | 'augment'
+  | 'codebuddy'
+  | 'pi'
+  | 'kiro'
+  | 'hermes'
+  | 'openclaw'
+  | 'cline'
+  | 'warp'
+  | 'kimi';
 
 export const TOOL_LABELS: Record<Tool, string> = {
   claude: 'Claude Code',
@@ -11,9 +32,45 @@ export const TOOL_LABELS: Record<Tool, string> = {
   trae: 'Trae',
   workbuddy: 'Workbuddy',
   qoder: 'Qoder',
+  grok: 'Grok',
+  opencode: 'OpenCode',
+  gemini: 'Gemini CLI',
+  antigravity: 'Antigravity',
+  windsurf: 'Windsurf',
+  augment: 'Augment',
+  codebuddy: 'CodeBuddy',
+  pi: 'Pi',
+  kiro: 'Kiro CLI',
+  hermes: 'Hermes',
+  openclaw: 'OpenClaw',
+  cline: 'Cline',
+  warp: 'Warp',
+  kimi: 'Kimi Code CLI',
 };
 
-export const ALL_TOOLS: Tool[] = ['claude', 'codex', 'cursor', 'trae', 'workbuddy', 'qoder'];
+/** UI / 扫描顺序：现有工具在前，其余按常用度与字母大致排列。 */
+export const ALL_TOOLS: Tool[] = [
+  'claude',
+  'codex',
+  'cursor',
+  'trae',
+  'workbuddy',
+  'qoder',
+  'grok',
+  'opencode',
+  'gemini',
+  'antigravity',
+  'windsurf',
+  'augment',
+  'codebuddy',
+  'pi',
+  'kiro',
+  'hermes',
+  'openclaw',
+  'cline',
+  'warp',
+  'kimi',
+];
 
 export interface InstalledSkill {
   tool: Tool;
