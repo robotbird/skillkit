@@ -1,78 +1,129 @@
+<div align="center">
+
+<img src="apps/desktop/build/icon.png" width="110" height="110" alt="Skillkit logo" />
+
 # Skillkit
 
-Skill 管理工具 — 跨工具（Claude Code / Codex / Cursor / Trae / Workbuddy）浏览 [skills.sh](https://www.skills.sh) 市场，安装 / 卸载 skill，并通过短链分享。
+**One home for AI coding skills — across 20 agents.**
 
-技术栈：Electron（React 18 + TypeScript + Vite + better-sqlite3）桌面端 + Next.js 服务端，组织为 **pnpm workspace monorepo**。
+[English](./README.md) · [简体中文](./README.zh-CN.md)
 
-## 仓库结构
+[![GitHub release](https://img.shields.io/github/v/release/robotbird/skillkit?color=orange&logo=github)](https://github.com/robotbird/skillkit/releases)
+[![License: MIT](https://img.shields.io/github/license/robotbird/skillkit?color=green)](./LICENSE)
+[![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-blue)](https://github.com/robotbird/skillkit/releases)
+[![Built with Electron](https://img.shields.io/badge/built%20with-Electron-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](#-contributing)
 
-- `apps/desktop` — Electron 桌面客户端
-- `apps/server` — Next.js 服务端（分享短链 API + 未来 web 个人中心 / 团队管理）
-- `packages/types` — `@skillkit/types`，跨端共享类型与常量（单一真相源）
+<br />
 
-> 官网（skillkit.net）是**独立仓库**，不在本仓库内。
+Install & uninstall skills across all your AI coding tools, and share your own skills with anyone via a short link — all from one place.
 
-## 启动
+**[⬇️ Download for macOS / Windows](https://github.com/robotbird/skillkit/releases)**
+
+</div>
+
+<br />
+
+<div align="center">
+  <img src="screenshot/skill-list-light_en.png" width="800" alt="Skillkit — My Skills (light)" />
+</div>
+
+## ✨ Features
+
+- **📥 Install anywhere** — install a skill into one or more agents at once, from a **GitHub URL**, a **share link**, or a local **`.zip`**.
+- **🧹 Uninstall cleanly** — auto-scans every agent's skill directory. One-click uninstall (built-in skills are protected and can't be removed).
+- **🔗 Share via short link** — turn any installed skill into a `skillkit.net/share/<id>` link valid for 7 days. Recipients install it with a single click.
+- **🌗 Light & dark** — a warm, calm UI in both themes.
+- **🌐 Bilingual** — runs in **English** or **简体中文**.
+
+## 🤖 Supported agents (20)
+
+Skillkit reads and writes the skill directories of:
+
+> Claude Code · Codex · Cursor · Trae · Workbuddy · Qoder · Grok · OpenCode · Gemini CLI · Antigravity · Windsurf · Augment · CodeBuddy · Pi · Kiro CLI · Hermes · OpenClaw · Cline · Warp · Kimi Code CLI
+
+Directory paths align with [`vercel-labs/skills`](https://github.com/vercel-labs/skills). Cline, Warp, and Kimi Code CLI share the global `~/.agents/skills` store.
+
+## 📥 Download
+
+Grab the latest build for your platform from **[GitHub Releases](https://github.com/robotbird/skillkit/releases)**:
+
+| Platform | Artifact |
+| --- | --- |
+| **macOS** (Apple Silicon) | `.dmg` / `.zip` |
+| **Windows** | `.exe` (NSIS installer) |
+
+> The app checks for updates in the background and self-updates via `electron-updater`, so you only need to install manually once.
+
+## 🗂️ Tabs
+
+- **My Skills** — every skill found across all your agents, filterable by tool, searchable, in a grid or list. Uninstall or share any of them.
+- **Install** — three ways to add a skill: paste a GitHub URL, paste a share link (or full URL / bare ID), or drop a `.zip`.
+
+## 🔗 Share
+
+- **Create** — hit *Share* on any installed skill. Skillkit zips it, uploads to the server, and gives you a short link (`https://skillkit.net/share/<id>`) that's installable for 7 days.
+- **Install** — paste the short link, the full URL, or just the ID into the *Install* tab.
+- **Receiver page** — opening the link in a browser shows a clean HTML page with the skill's details and a one-click `skillkit://` deep link.
+- Limits: a single skill ≤ 4 MB; links expire after 7 days (expired reads return `410 Gone`).
+
+## 🖼️ Screenshots
+
+<div align="center">
+  <img src="screenshot/skill-list-light_en.png" width="780" alt="Skillkit — My Skills" />
+  <br /><br />
+  <img src="screenshot/skill-install-light_en.png" width="780" alt="Skillkit — Install" />
+</div>
+
+---
+
+## 🧑‍💻 For developers
+
+Skillkit is a **pnpm-workspace monorepo**:
+
+| Package | What it is |
+| --- | --- |
+| [`apps/desktop`](./apps/desktop) | Electron client (React 18 + TypeScript + Vite + better-sqlite3) |
+| [`apps/server`](./apps/server) | Next.js 16 (App Router) — share short-link API + web 个人中心 |
+| [`packages/types`](./packages/types) | `@skillkit/types` — cross-end shared types & constants (single source of truth) |
+
+For the full architecture deep-dive — three-process Electron model, the share link contract, Vercel deploy notes, the dashboard/auth design — read [`CLAUDE.md`](./CLAUDE.md).
+
+### Quick start
 
 ```bash
 pnpm install
-pnpm --filter desktop rebuild   # 适配 better-sqlite3 的 Electron ABI
+pnpm --filter desktop rebuild   # rebuilds better-sqlite3 against Electron's ABI
 
-pnpm --filter desktop dev       # 桌面端（vite + electron）
-SHARE_STORE=local pnpm --filter server dev   # 服务端（本地文件存储，无需 Blob token）
-pnpm dev                        # turbo 并行起两端
+pnpm --filter desktop dev       # desktop app (vite + electron, watches all 3 bundles)
+SHARE_STORE=local pnpm --filter server dev   # server (local file store, no Blob token)
+pnpm dev                        # turbo: runs both in parallel
 ```
 
-客户端默认连 `https://skillkit.net`；本地联调覆盖基地址：`SKILLKIT_SHARE_BASE_URL=http://127.0.0.1:3000 pnpm --filter desktop dev`（next dev 默认 3000）。
+The client defaults to `https://skillkit.net`. To point it at a local server:
 
-## 三个 tab（桌面端）
-
-- **我的 Skill** — 自动扫描 `~/.claude/skills`、`~/.codex/skills`、`~/.cursor/skills(-cursor)`、`~/.trae/skills` 与 `~/.trae/builtin_skills`，按工具筛选 / 搜索 / grid·list 切换 / 卸载（内置 skill 不可卸载）/ 分享（生成 7 天短链）
-- **Skill 市场** — 从 skills.sh 的 sitemap 拉全量 skill 列表（24h 缓存于 SQLite），分页 + 搜索；卡片描述按需懒加载（解析详情页 JSON-LD）
-- **安装 Skill** — 顶部多选要安装到的工具，下方三种方式：GitHub URL / 分享链接 / 上传 .zip
-
-## 数据存储
-
-- SQLite：`~/Library/Application Support/skillkit/skillkit.db`（表 `installed_skills`、`market_skills`、`meta`）
-- 已安装 skill：各工具用户目录（`~/.claude/skills` 等）
-
-## 安装行为
-
-- 从市场 / GitHub：调用 `https://codeload.github.com/<owner>/<repo>/tar.gz/HEAD`，解出对应 skill 子目录后复制到目标工具的 install root（已存在会先备份再覆盖，失败回滚）
-- 从 zip：本地解压找含 `SKILL.md` 的最浅目录，按同样规则复制
-- 多目标：每个目标独立处理；单个失败不影响其他
-
-## 分享
-
-- **创建**：在「我的 Skill」对某个 skill 点分享 → 打包成 zip 上传到服务端，返回短链（`https://skillkit.net/share/<id>`），7 天内可安装
-- **安装**：「安装 Skill」粘贴短链 / 完整 URL / 裸 ID 即可
-- **接收页**：浏览器打开链接看到一个 HTML 说明页
-- 限制：单个 skill ≤ 4MB；7 天后过期（过期读时即返回 410）
-
-服务端（`apps/server`，Next.js App Router）的公开路径是干净的 `/share`、`/share/:id`、`/share/:id/meta`、`/share/:id/zip`、`/sweep`（**不带 `/api` 前缀**，客户端契约依赖于此）。存储由 `SHARE_STORE` 选：`local`（本地文件 `apps/server/data/`，默认）或 `blob`（Vercel Blob）；常量集中在 `packages/types`。
-
-### Vercel 部署（服务端）
-
-- Vercel 项目 Root Directory = **`apps/server`**，Framework Preset 自动识别为 Next.js（Build/Install/Output 留空自动）
-- 环境变量：`SHARE_STORE=blob`、`BLOB_READ_WRITE_TOKEN`、`CRON_SECRET`（保护 `/sweep`）
-- `apps/server/vercel.json` 配置每日 cron 命中 `/sweep`
-
-### 打包发布（桌面端）
-
-CI（`.github/workflows/build.yml`）在 push main 时用 pnpm 打包 mac（dmg/zip）+ win（nsis）；`workflow_dispatch` 触发 GitHub Release，electron-updater 据此推送更新。
-
-## 目录
-
+```bash
+SKILLKIT_SHARE_BASE_URL=http://127.0.0.1:3000 pnpm --filter desktop dev
 ```
-apps/desktop/
-  electron/    主进程（main/ipc/preload/db/scan/installer/market/share/skill-md/tools/updater）
-  src/         React 渲染端（components/views/styles/lib）
-  shared/      桥接层 types.ts（re-export @skillkit/types + desktop 专用 SkillkitApi 等）
-  build/ public/ vite.config.ts tsconfig*.json
-apps/server/
-  app/         Next.js App Router：share/ sweep/ api/health（+ (dashboard) 预留）
-  lib/         store.ts（接口 + 本地实现）/ store-blob.ts（Vercel Blob）/ id.ts
-  next.config.ts  vercel.json  tsconfig.json
-packages/types/    @skillkit/types（跨端类型与常量，单一真相源）
-pnpm-workspace.yaml  turbo.json
+
+### Build & package
+
+```bash
+pnpm --filter desktop build     # typecheck (tsc, both tsconfigs) + vite build
+pnpm --filter desktop dist      # → release/ (mac dmg/zip, win nsis)
+pnpm --filter server build      # next build (also typechecks)
 ```
+
+CI (`.github/workflows/build.yml`) packages mac + win on push to `main`; `workflow_dispatch` publishes a GitHub Release that `electron-updater` rolls out.
+
+### Tech stack
+
+Electron · React 18 · TypeScript · Vite · Tailwind v4 + shadcn/ui · better-sqlite3 · Next.js 16 · Prisma 6 · Vercel Blob · pnpm + Turborepo
+
+## 🤝 Contributing
+
+Issues and pull requests are welcome! For anything beyond a small fix, please open an issue first to align on the approach.
+
+## 📄 License
+
+Licensed under the [MIT License](./LICENSE).
