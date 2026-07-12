@@ -838,6 +838,11 @@ html, body, #root {
   border-radius: 8px;
   object-fit: contain;
   flex: 0 0 auto;
+  /* 白底 chip：与 .tool-stack-ico / .opt-ico / .chip-ico 一致。
+     单色 logo（grok/opencode/cline/hermes/qoder 等 fill=currentColor 的 svg）
+     经 <img> 渲染时 currentColor 退化为黑色，若无白底在深色安装卡片上不可见。 */
+  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 .install-tool-name {
   font-size: 10.5px;
