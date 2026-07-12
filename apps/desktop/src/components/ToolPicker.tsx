@@ -20,6 +20,11 @@ interface Props {
   /** 显示但置灰、不可勾选的工具（如内置不可卸载）。 */
   disableTools?: Tool[];
   /**
+   * 若传入：隐藏弹窗内工具列表，确认时直接使用该列表作为 targets。
+   * 用于安装页已在页级完成工具多选的场景。
+   */
+  fixedTargets?: Tool[];
+  /**
    * 安装场景：固定 scope='global'（skill 统一下载到全局仓库 ~/.agents/skills），
    * 并显示「接入方式（软链/拷贝）」选择。省略则不显示接入方式（卸载/复制/打开目录等场景）。
    */
@@ -42,6 +47,7 @@ export default function ToolPicker({
   defaultSelected = [],
   excludeTools,
   disableTools,
+  fixedTargets,
   lockedScope,
   busy,
   confirmLabel,
@@ -51,12 +57,14 @@ export default function ToolPicker({
   onConfirm,
 }: Props) {
   const { t } = useI18n();
+  const hideTools = fixedTargets != null;
   const titleText = title ?? t('toolpicker.title');
   const subtitleText = subtitle ?? t('toolpicker.subtitle');
   const confirmText = confirmLabel ?? t('toolpicker.confirm');
   const busyText = busyLabel ?? t('toolpicker.busy');
 
   // 只展示「已安装」工具(其 ~/.<tool> 根目录存在),未安装工具既不显示也不可选。
+  // fixedTargets 场景不需要本机探测列表。
   const { tools: installed } = useInstalledTools();
   const availableSet = useMemo(() => new Set(installed), [installed]);
 
@@ -111,6 +119,8 @@ export default function ToolPicker({
   // 安装场景：固定全局仓库，显示接入方式选择。
   const showMethod = lockedScope === 'global';
   const scope: 'tools' | 'global' = lockedScope === 'global' ? 'global' : 'tools';
+  const confirmTargets = hideTools ? fixedTargets! : picked;
+  const confirmDisabled = !!busy || confirmTargets.length === 0;
 
   return (
     <ModalPortal>
@@ -151,31 +161,33 @@ export default function ToolPicker({
             </div>
           )}
 
-          <div className="opts opts-tools">
-            {visibleTools.map((tool) => {
-              const disabled = disabledSet.has(tool);
-              return (
-                <ToolCheckRow
-                  key={tool}
-                  tool={tool}
-                  checked={picked.includes(tool)}
-                  multiple={multiple}
-                  disabled={disabled}
-                  note={disabled ? t('toolpicker.builtinNote') : undefined}
-                  parentBusy={busy}
-                  onToggle={toggle}
-                />
-              );
-            })}
-          </div>
+          {!hideTools && (
+            <div className="opts opts-tools">
+              {visibleTools.map((tool) => {
+                const rowDisabled = disabledSet.has(tool);
+                return (
+                  <ToolCheckRow
+                    key={tool}
+                    tool={tool}
+                    checked={picked.includes(tool)}
+                    multiple={multiple}
+                    disabled={rowDisabled}
+                    note={rowDisabled ? t('toolpicker.builtinNote') : undefined}
+                    parentBusy={busy}
+                    onToggle={toggle}
+                  />
+                );
+              })}
+            </div>
+          )}
           <div className="modal-actions">
             <button className="btn-ghost" onClick={onCancel} disabled={busy}>
               {t('common.cancel')}
             </button>
             <button
               className={tone === 'danger' ? 'btn-danger' : 'btn-primary'}
-              onClick={() => onConfirm(picked, { scope, method })}
-              disabled={busy || picked.length === 0}
+              onClick={() => onConfirm(confirmTargets, { scope, method })}
+              disabled={confirmDisabled}
             >
               {busy ? <><span className="spinner" /> {busyText}</> : confirmText}
             </button>

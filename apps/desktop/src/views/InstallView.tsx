@@ -3,6 +3,7 @@ import { TOOL_LABELS, type Tool, type InstallResult, type InstallOpts, type Gith
 import type { ToastState } from '../components/Toast';
 import ToolPicker from '../components/ToolPicker';
 import RepoSkillPicker from '../components/RepoSkillPicker';
+import InstallToolGrid from '../components/InstallToolGrid';
 import { useI18n } from '../i18n';
 import type { MessageKey } from '../i18n/messages';
 
@@ -61,6 +62,7 @@ export default function InstallView({
   const [mode, setMode] = useState<InstallMode>('share');
   const [ghUrl, setGhUrl] = useState('');
   const [shareUrl, setShareUrl] = useState('');
+  const [selectedTools, setSelectedTools] = useState<Tool[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
@@ -77,14 +79,21 @@ export default function InstallView({
   // 深链预填用的 ref：规避 setState 异步竞态，确认安装时优先取它
   const pendingShareRef = useRef<string | null>(null);
 
-  // 分享页「从 Skillkit 打开」-> App 传入 share id：切到 share tab、预填输入框、直接弹工具选择器
+  // 分享页「从 Skillkit 打开」-> App 传入 share id：切到 share tab、预填输入框；
+  // 已选工具则打开接入方式确认，否则 toast 提示先选工具。
   useEffect(() => {
     if (!pendingShare) return;
     setMode('share');
     setShareUrl(pendingShare);
     pendingShareRef.current = pendingShare;
     onPendingConsumed?.();
+    if (selectedTools.length === 0) {
+      toast.show(t('inst.toast.needTools'), 'error');
+      return;
+    }
     setPickerOpen(true);
+    // selectedTools / toast / t 有意不进 deps：仅在 pendingShare 到达时触发一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingShare, onPendingConsumed]);
 
   function pushRecent(name: string, source: string) {
@@ -97,7 +106,7 @@ export default function InstallView({
     if (p) setZipPath(p);
   }
 
-  // 点击「安装」：先做当前 tab 的输入校验，通过后弹框选择目标工具
+  // 点击「安装」：先做当前 tab 的输入校验 + 工具选择校验，通过后弹框选接入方式
   function startInstall() {
     if (mode === 'github' && !ghUrl.trim()) {
       setHint({ msg: t('inst.hint.needGithub'), error: true });
@@ -109,6 +118,10 @@ export default function InstallView({
     }
     if (mode === 'zip' && !zipPath) {
       toast.show(t('inst.toast.needZip'), 'error');
+      return;
+    }
+    if (selectedTools.length === 0) {
+      toast.show(t('inst.toast.needTools'), 'error');
       return;
     }
     if (mode === 'github') {
@@ -152,7 +165,7 @@ export default function InstallView({
     }
   }
 
-  // RepoSkillPicker 确认：批量安装选中的 skill 到所选工具
+  // RepoSkillPicker 确认：批量安装选中的 skill 到页级已选工具
   async function handleRepoConfirm(pickedSubpaths: string[], targets: Tool[], opts: InstallOpts) {
     const result = repoPicker.result;
     if (!result) return;
@@ -175,7 +188,7 @@ export default function InstallView({
     }
   }
 
-  // 在弹框里确认目标工具后真正执行安装
+  // 在弹框里确认接入方式后真正执行安装（targets 来自页级选择）
   async function handleConfirm(targets: Tool[], opts: InstallOpts) {
     setBusy(true);
     try {
@@ -236,8 +249,6 @@ export default function InstallView({
 
   return (
     <section>
-      <p className="view-intro">{t('inst.intro')}</p>
-
       <div className="tabs install-tabs">
         {(['share', 'github', 'zip'] as InstallMode[]).map((m) => (
           <button
@@ -249,6 +260,15 @@ export default function InstallView({
             {t(MODE_LABELS[m])}
           </button>
         ))}
+      </div>
+
+      <div className="install-tools-block">
+        <div className="install-tools-title">{t('inst.intro')}</div>
+        <InstallToolGrid
+          selected={selectedTools}
+          onChange={setSelectedTools}
+          disabled={busy}
+        />
       </div>
 
       <div className="install-grid is-single">
@@ -383,7 +403,9 @@ export default function InstallView({
       <ToolPicker
         open={pickerOpen}
         busy={busy}
+        title={t('inst.methodTitle')}
         subtitle={pickerSubtitle}
+        fixedTargets={selectedTools}
         lockedScope="global"
         onCancel={() => !busy && setPickerOpen(false)}
         onConfirm={handleConfirm}
@@ -393,6 +415,7 @@ export default function InstallView({
         open={repoPicker.open}
         result={repoPicker.result}
         busy={busy}
+        fixedTargets={selectedTools}
         lockedScope="global"
         onCancel={() => !busy && setRepoPicker({ open: false, result: null })}
         onConfirm={handleRepoConfirm}
