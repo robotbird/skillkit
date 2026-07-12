@@ -1,6 +1,6 @@
 {
   "name": "desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "productName": "Skillkit",
   "private": true,
   "description": "Skillkit 桌面端 — 跨 Claude Code / Codex / Cursor / Trae / Workbuddy 的 skill 管理",
