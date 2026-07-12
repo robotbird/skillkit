@@ -10,6 +10,7 @@ build/icon.iconset/
 .cache/
 .turbo/
 .next/
+.claude/
 
 # 本地分享存储(local store)
 apps/server/data/*
