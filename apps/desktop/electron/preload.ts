@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import type { IpcRendererEvent } from 'electron';
 import type {
   SkillkitApi,
   Tool,
@@ -10,6 +11,7 @@ import type {
   EffectiveTheme,
   AccountLoginResult,
   PublicUser,
+  OAuthProvider,
 } from '../shared/types.js';
 
 const api: SkillkitApi = {
@@ -60,6 +62,12 @@ const api: SkillkitApi = {
   onDeepLink: (cb: (input: string) => void) => {
     ipcRenderer.on('skillkit:deep-link', (_e, input: string) => cb(input));
   },
+  // OAuth 回调（skillkit://auth?code=...）换 token 后，主进程经此通道把结果推给渲染进程
+  onOAuthResult: (cb: (r: AccountLoginResult) => void) => {
+    const listener = (_e: IpcRendererEvent, r: AccountLoginResult) => cb(r);
+    ipcRenderer.on('account:oauth-result', listener);
+    return () => ipcRenderer.removeListener('account:oauth-result', listener);
+  },
 
   onUpdateAvailable: (cb) => {
     ipcRenderer.on('update:available', (_e, info: UpdateAvailableInfo) => cb(info));
@@ -89,6 +97,7 @@ const api: SkillkitApi = {
     ipcRenderer.invoke('account:login', email, password),
   getAccountInfo: () => ipcRenderer.invoke('account:info') as Promise<PublicUser | null>,
   logoutAccount: () => ipcRenderer.invoke('account:logout'),
+  startOAuth: (provider: OAuthProvider) => ipcRenderer.invoke('account:startOAuth', provider),
   openAccountPage: (page: 'login' | 'register' | 'account') =>
     ipcRenderer.invoke('account:openPage', page),
 };

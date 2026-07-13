@@ -10,7 +10,7 @@ Skillkit — manage "skills" across AI coding tools (Claude Code, Codex, Cursor,
 - **`apps/desktop`** — Electron desktop client (React 18 + TypeScript + Vite + better-sqlite3). This is what's open-sourced here.
 - **`packages/types`** — `@skillkit/types`: cross-process shared types & constants (single source of truth).
 
-The **server** (share short-link API + web 个人中心, Next.js 16) used to live here as `apps/server` but has **moved to a separate repo** at `../skillkit.net` (the product 官网 + backend). The desktop client talks to it over HTTPS at `https://skillkit.net` (share endpoints) and `https://account.skillkit.net` (auth). `packages/types` is mirrored (vendored) into that repo so the wire contract stays in sync — **when you change share/auth types or the tool list here, update the vendored copy in `skillkit.net/lib/shared-types.ts` too**.
+The **server** (share short-link API + web 个人中心, Next.js 16) used to live here as `apps/server` but has **moved to a separate repo** at `../skillkit.net` (the product 官网 + backend). The desktop client talks to it over HTTPS at `https://skillkit.net` (share + auth endpoints; login = `https://skillkit.net/login`, no `account.` subdomain). `packages/types` is mirrored (vendored) into that repo so the wire contract stays in sync — **when you change share/auth types or the tool list here, update the vendored copy in `skillkit.net/lib/shared-types.ts` too**.
 
 ## Commands
 
@@ -76,7 +76,7 @@ The project is `"type": "module"`. Files under `apps/desktop/electron/` import e
 - **`market.ts`** — pulls `skills.sh` sitemap XML, lazy-scrapes card descriptions from detail-page JSON-LD (`SoftwareApplication`), cached in SQLite with a **24h TTL**. `OFFICIAL_OWNERS = {anthropics, vercel-labs, microsoft}`.
 - **`skill-md.ts`** — dependency-free YAML frontmatter parser; reads `SKILL.md` **or** `AGENTS.md`.
 - **`share.ts`** — client side of sharing: zip an installed skill, POST to the server, inspect/install from a share link. Calls `${SHARE_BASE_URL}/share`, `/share/:id/meta`, `/share/:id/zip` (no `/api` prefix). The server is the private `../skillkit.net` repo.
-- **`account.ts`** — desktop account auth: `ACCOUNT_BASE_URL` (packaged → `https://account.skillkit.net`, dev → `http://localhost:3000`) → `/api/auth/token` (login → bearer JWT) + `/api/me`. Token stored via Electron `safeStorage`; also attached to share uploads for attribution.
+- **`account.ts`** — desktop account auth: `ACCOUNT_BASE_URL` (dev / packaged → `https://skillkit.net`) → `/api/auth/token` (login → bearer JWT) + `/api/me`. Token stored via Electron `safeStorage`; also attached to share uploads for attribution.
 - **`updater.ts`** — electron-updater: background check, pushes "update available" to the renderer.
 
 ### Share / auth contract (with the private server)

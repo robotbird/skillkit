@@ -24,6 +24,8 @@ export type {
   ShareCreateResult,
   ShareSourceInfo,
   PublicUser,
+  OAuthProvider,
+  TokenAuthResponse,
 } from '@skillkit/types';
 
 import type {
@@ -37,6 +39,7 @@ import type {
   ShareCreateResult,
   ShareSourceInfo,
   PublicUser,
+  OAuthProvider,
 } from '@skillkit/types';
 
 // ===== 多 skill 仓库批量安装（GitHub）=====
@@ -180,6 +183,8 @@ export interface SkillkitApi {
 
   // 分享页深链（skillkit://share/<id>）唤起应用时，主进程通过它把 share id 推给渲染进程
   onDeepLink(cb: (input: string) => void): void;
+  // OAuth 回调（skillkit://auth?code=...）换 token 后，主进程通过它把登录结果推给渲染进程
+  onOAuthResult(cb: (r: AccountLoginResult) => void): () => void;
 
   // ===== 设置（meta KV 通用读写）=====
   getSetting(key: string): Promise<string | null>;
@@ -206,6 +211,8 @@ export interface SkillkitApi {
   getAccountInfo(): Promise<PublicUser | null>;
   /** 登出：清除本地 token。 */
   logoutAccount(): Promise<void>;
+  /** 第三方登录：在系统浏览器打开 OAuth 起点；回调经 skillkit://auth 深链回应用。 */
+  startOAuth(provider: OAuthProvider): Promise<void>;
   /** 用系统浏览器打开账号网页（注册/登录/账号管理）。 */
   openAccountPage(page: 'login' | 'register' | 'account'): Promise<void>;
 }

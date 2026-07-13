@@ -21,13 +21,14 @@ import {
 import { applyUpdate, getUpdateStatus, checkForUpdate } from './updater.js';
 import { metaGet, metaSet } from './db.js';
 import { applyTheme, getThemeState } from './theme.js';
-import { loginAccount, getAccountInfo, logoutAccount, openAccountPage } from './account.js';
+import { loginAccount, getAccountInfo, logoutAccount, openAccountPage, startOAuth } from './account.js';
 import type {
   Tool,
   InstalledFilter,
   MarketListQuery,
   InstallOpts,
   Theme,
+  OAuthProvider,
 } from '../shared/types.js';
 
 export function registerIpc() {
@@ -177,6 +178,7 @@ export function registerIpc() {
   );
   ipcMain.handle('account:info', async () => getAccountInfo());
   ipcMain.handle('account:logout', async () => logoutAccount());
+  ipcMain.handle('account:startOAuth', async (_e, provider: OAuthProvider) => startOAuth(provider));
   ipcMain.handle('account:openPage', async (_e, page: 'login' | 'register' | 'account') =>
     openAccountPage(page),
   );

@@ -6,10 +6,11 @@ import { registerIpc } from './ipc.js';
 import { refreshMarket } from './market.js';
 import { scanAll } from './scan.js';
 import { parseShareId } from './share.js';
+import { completeOAuth } from './account.js';
 import { checkForUpdate } from './updater.js';
 import { disposeGithubCache, cleanStaleTmpDirs } from './installer.js';
 import { initTheme, effectiveTheme } from './theme.js';
-import type { UpdateAvailableInfo } from '../shared/types.js';
+import type { UpdateAvailableInfo, AccountLoginResult } from '../shared/types.js';
 
 // macOS 菜单栏 / Dock 等处显示的应用名（dev 模式下默认会显示 "Electron"）
 app.setName('Skillkit');
@@ -18,23 +19,87 @@ app.setName('Skillkit');
 const PROTOCOL = 'skillkit';
 // 冷启动时（window 还没建好）收到的深链，先缓存，等页面加载完再发给渲染进程
 let pendingDeepLink: string | null = null;
+// OAuth 回调(skillkit://auth?code=...)在窗口就绪前到达时缓存，等 did-finish-load 补发
+let pendingOAuthResult: AccountLoginResult | null = null;
 // 启动期检查到的更新信息（渲染进程就绪前先缓存，就绪后补发）
 let pendingUpdate: UpdateAvailableInfo | null = null;
 
 let win: BrowserWindow | null = null;
 
-/**
- * 处理 skillkit://share/<id> 深链：解析出 share id，转发给渲染进程去走「从分享链接安装」流程。
- * parseShareId 对整条 `skillkit://share/<id>` 也能匹配出 id；非法 URL 抛错被吞掉。
- */
-function handleDeepLink(url: string) {
+/** 把 share 深链 id 转发给渲染进程；窗口没建好则缓存到 pendingDeepLink。 */
+function deliverDeepLink(input: string) {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('skillkit:deep-link', input);
+  } else {
+    pendingDeepLink = input;
+  }
+}
+
+/** 把 OAuth 结果推给渲染进程；窗口没建好则缓存到 pendingOAuthResult。 */
+function notifyOAuthResult(r: AccountLoginResult) {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('account:oauth-result', r);
+  } else {
+    pendingOAuthResult = r;
+  }
+}
+
+/** 服务端 OAuth 错误码 -> 桌面文案（与 web 端 i18n 文案对齐）。 */
+function mapOAuthError(code: string): string {
+  switch (code) {
+    case 'oauthDenied':
+      return '已取消第三方登录';
+    case 'oauthEmailConflict':
+      return '该邮箱已用其他方式注册，请先用原方式登录';
+    case 'oauthProfile':
+      return '无法获取账号信息';
+    case 'oauthState':
+      return '登录状态校验失败，请重试';
+    case 'oauthUnavailable':
+      return '该登录方式未启用';
+    case 'oauthFailed':
+    default:
+      return '第三方登录失败，请重试';
+  }
+}
+
+/** 处理 skillkit://auth?code=<code>（或 ?error=<code>）：换 token 后推结果给渲染进程。 */
+async function handleOAuthDeepLink(url: URL) {
   try {
-    const input = parseShareId(url);
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('skillkit:deep-link', input);
-    } else {
-      pendingDeepLink = input;
+    const code = url.searchParams.get('code');
+    const error = url.searchParams.get('error');
+    if (code) {
+      const r = await completeOAuth(code);
+      notifyOAuthResult(r);
+    } else if (error) {
+      notifyOAuthResult({ ok: false, error: mapOAuthError(error) });
     }
+  } catch (e) {
+    console.error('[oauth] deep-link handling failed', e);
+    notifyOAuthResult({ ok: false, error: '第三方登录失败，请重试' });
+  }
+}
+
+/**
+ * 处理 skillkit:// 深链，按 host 分发：
+ * - skillkit://auth?code=<code>  -> 桌面 OAuth 回调（换 token）
+ * - skillkit://share/<id>（或裸 id）-> 分享安装（parseShareId 解析）
+ * 其余形式忽略。auth 分支早于 share，避免 auth 的 code 被当作 id 误解析。
+ */
+function handleDeepLink(rawUrl: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return; // 非法 URL，忽略
+  }
+  if (parsed.protocol === 'skillkit:' && parsed.host === 'auth') {
+    void handleOAuthDeepLink(parsed);
+    return;
+  }
+  try {
+    const input = parseShareId(rawUrl);
+    deliverDeepLink(input);
   } catch {
     // 不是 skillkit://share/<id> 形式，忽略
   }
@@ -95,6 +160,10 @@ function createWindow() {
     if (pendingDeepLink) {
       w.webContents.send('skillkit:deep-link', pendingDeepLink);
       pendingDeepLink = null;
+    }
+    if (pendingOAuthResult) {
+      w.webContents.send('account:oauth-result', pendingOAuthResult);
+      pendingOAuthResult = null;
     }
     if (pendingUpdate) {
       w.webContents.send('update:available', pendingUpdate);

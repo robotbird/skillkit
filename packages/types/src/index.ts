@@ -218,3 +218,14 @@ export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
 }
+
+// ===== 第三方登录（OAuth）=====
+// 支持的 OAuth provider。桌面端 / web 登录页用同一组。
+export type OAuthProvider = 'github' | 'google';
+
+// 桌面端 OAuth 回调换取长期 token：桌面端通过 skillkit:// 深链拿到一次性 code，
+// POST /api/auth/exchange 换回与邮箱登录同一套 TokenAuthResponse（token + user）。
+// code 由服务端 OAuth 成功后写入 DesktopAuthTicket（60s、单次消费），长期凭据不进 URL。
+export interface DesktopExchangeRequest {
+  code: string;
+}

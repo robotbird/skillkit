@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { GitHubIcon, GoogleIcon } from './oauth-icons';
 
 type Section = 'account' | 'appearance' | 'language' | 'space' | 'about';
 
@@ -82,7 +83,7 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
 // ===== 账号 =====
 function AccountSection({ busy, onBusyChange }: { busy: boolean; onBusyChange: (b: boolean) => void }) {
   const { t } = useI18n();
-  const { user, loading, login, logout } = useAccount();
+  const { user, loading, login, logout, startOAuth, oauthPending, oauthError } = useAccount();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -153,13 +154,41 @@ function AccountSection({ busy, onBusyChange }: { busy: boolean; onBusyChange: (
         {error && <FieldError>{error}</FieldError>}
       </FieldGroup>
       <div className="settings-actions">
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy || oauthPending}>
           {busy ? t('account.loggingIn') : t('account.loginBtn')}
         </Button>
         <Button type="button" variant="link" onClick={() => window.skillkit.openAccountPage('register')}>
           {t('account.register')}
         </Button>
       </div>
+      <div className="flex items-center gap-3 py-1 text-xs text-muted-foreground">
+        <div className="h-px flex-1 bg-border" />
+        <span>{t('account.or')}</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+      <div className="space-y-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full justify-center gap-2"
+          disabled={busy || oauthPending}
+          onClick={() => startOAuth('github')}
+        >
+          <GitHubIcon className="size-[18px]" />
+          {oauthPending ? t('account.oauthInProgress') : t('account.oauthGithub')}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full justify-center gap-2"
+          disabled={busy || oauthPending}
+          onClick={() => startOAuth('google')}
+        >
+          <GoogleIcon className="size-[18px]" />
+          {oauthPending ? t('account.oauthInProgress') : t('account.oauthGoogle')}
+        </Button>
+      </div>
+      {oauthError && <FieldError>{oauthError}</FieldError>}
     </form>
   );
 }

@@ -61,6 +61,12 @@
     "asarUnpack": [
       "**/node_modules/better-sqlite3/**"
     ],
+    "protocols": [
+      {
+        "name": "Skillkit",
+        "schemes": ["skillkit"]
+      }
+    ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.icns",

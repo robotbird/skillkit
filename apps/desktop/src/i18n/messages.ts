@@ -30,6 +30,10 @@ const zh = {
   'account.register': '没有账号？去注册',
   'account.manage': '在网页中管理账号',
   'account.nameFallback': '（未设置昵称）',
+  'account.or': '或',
+  'account.oauthGithub': '使用 GitHub 登录',
+  'account.oauthGoogle': '使用 Google 登录',
+  'account.oauthInProgress': '正在浏览器中完成登录…',
 
   'appearance.label': '主题外观',
   'appearance.dark': '深色',
@@ -256,6 +260,10 @@ const en: Record<keyof typeof zh, string> = {
   'account.register': "Don't have an account? Register",
   'account.manage': 'Manage account on the web',
   'account.nameFallback': '(no nickname set)',
+  'account.or': 'or',
+  'account.oauthGithub': 'Continue with GitHub',
+  'account.oauthGoogle': 'Continue with Google',
+  'account.oauthInProgress': 'Complete sign-in in your browser…',
 
   'appearance.label': 'Theme',
   'appearance.dark': 'Dark',

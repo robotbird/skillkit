@@ -1,19 +1,54 @@
-import { app, safeStorage, shell } from 'electron';
+import { safeStorage, shell } from 'electron';
 import { metaGet, metaSet } from './db.js';
 import { SETTING_KEYS } from '../shared/types.js';
-import type { PublicUser, AccountLoginResult } from '../shared/types.js';
+import type { PublicUser, AccountLoginResult, OAuthProvider, TokenAuthResponse } from '../shared/types.js';
 
-// 账号服务基地址：
-// - 本地开发（未打包）默认指向本地 server (http://localhost:3000)，方便联调注册/登录；
-// - 打包发布默认指向 account.skillkit.net 子域（需 Vercel/DNS 配置指向现有 /login）；
-// - 任意环境都可用 SKILLKIT_ACCOUNT_BASE_URL 覆盖。
+// 账号服务基地址：dev / 打包均默认直连正式 skillkit.net（与分享服务同域，不走 account 子域）。
+// 登录页即 https://skillkit.net/login；GitHub/Google OAuth 也走正式（直接用线上凭据）。
+// 需要本地联调时设 SKILLKIT_ACCOUNT_BASE_URL=http://localhost:3000。
+// 注意：登录 / 换票 / /api/me 必须打到同一服务，否则别处签发的 token 会被 /api/me 拒签清除，
+// 故整个账号基址统一指向 skillkit.net（含 OAuth 与邮箱密码登录）。web 与桌面端都从此域发起 OAuth，
+// state cookie 与回调同域自洽，不存在跨子域问题。
 export const ACCOUNT_BASE_URL =
-  process.env.SKILLKIT_ACCOUNT_BASE_URL ||
-  (app.isPackaged ? 'https://account.skillkit.net' : 'http://localhost:3000');
+  process.env.SKILLKIT_ACCOUNT_BASE_URL || 'https://skillkit.net';
 
 /** 用系统浏览器打开账号网页（注册 / 登录 / 账号管理）。URL 由主进程拼，渲染层不感知域名。 */
 export async function openAccountPage(page: 'login' | 'register' | 'account'): Promise<void> {
   await shell.openExternal(`${ACCOUNT_BASE_URL}/${page}`);
+}
+
+/**
+ * 第三方登录（GitHub / Google）：在系统浏览器打开服务端 OAuth 起点（?return=app）。
+ * 用户在浏览器完成授权后，服务端写一次性 ticket 并重定向到 skillkit://auth?code=<code>，
+ * 由主进程 handleDeepLink 捕获 -> completeOAuth(code) 换长期 token。本函数只负责「打开浏览器」。
+ */
+export async function startOAuth(provider: OAuthProvider): Promise<void> {
+  await shell.openExternal(`${ACCOUNT_BASE_URL}/api/auth/oauth/${provider}/start?return=app`);
+}
+
+/**
+ * 桌面端 OAuth 换票：用 skillkit://auth?code=<code> 拿到的一次性 code 调 /api/auth/exchange，
+ * 换回长期 bearer token（与邮箱登录同一套 JWT）。成功存 token（safeStorage 加密）并返回 user；
+ * 失败返回错误文案（超时 / code 失效）。由主进程 handleDeepLink 调用，token 处理留在主进程。
+ */
+export async function completeOAuth(code: string): Promise<AccountLoginResult> {
+  try {
+    const r = await fetch(`${ACCOUNT_BASE_URL}/api/auth/exchange`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    const body = await r.json().catch(() => null);
+    if (!r.ok) {
+      return { ok: false, error: body?.error || '登录失败' };
+    }
+    const { token, user } = body as TokenAuthResponse;
+    storeToken(token);
+    return { ok: true, user };
+  } catch (e) {
+    // 网络错误 / 子域未就绪
+    return { ok: false, error: '无法连接账号服务，请检查网络后重试' };
+  }
 }
 
 // 桌面 token 鉴权：与 web cookie session 同源 JWT（signSession），只是 token 走响应体给桌面存储。
