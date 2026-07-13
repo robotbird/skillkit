@@ -407,7 +407,7 @@ export default function MySkillsView({
               onUninstall={startUninstall}
               onReveal={startReveal}
               onShare={(grp) => setShareSkill(grp.primary)}
-              onCopyTo={g.tools.length < installed.length ? setCopyGroup : undefined}
+              onCopyTo={g.tools.length < ALL_TOOLS.length ? setCopyGroup : undefined}
             />
           ))
         )}
@@ -449,6 +449,7 @@ export default function MySkillsView({
 
       <ToolPicker
         open={!!copyGroup}
+        allTools
         title={copyGroup ? t('my.picker.copyTitle', { name: copyGroup.name }) : undefined}
         subtitle={
           copyGroup
