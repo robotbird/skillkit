@@ -1,8 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "pnpm install --filter server...",
-  "buildCommand": "prisma generate && next build",
-  "crons": [
-    { "path": "/sweep", "schedule": "17 3 * * *" }
-  ]
-}

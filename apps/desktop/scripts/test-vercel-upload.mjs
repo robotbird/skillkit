@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 诊断脚本:能否把本地文件上传到 Vercel(apps/server)。分两段独立测试:
+// 诊断脚本:能否把本地文件上传到 Vercel(skillkit.net 服务端,独立仓)。分两段独立测试:
 //
 //   A) 直接用 @vercel/blob 的 put() 上传
 //      —— 验证「Blob 存储 + BLOB_READ_WRITE_TOKEN」本身通不通(完全绕开 HTTP / 路由)

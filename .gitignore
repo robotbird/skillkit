@@ -11,7 +11,3 @@ build/icon.iconset/
 .turbo/
 .next/
 .claude/
-
-# 本地分享存储(local store)
-apps/server/data/*
-!apps/server/data/README.md
