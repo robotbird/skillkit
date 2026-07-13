@@ -7,9 +7,11 @@ import { cn } from '@/lib/utils';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useT } from '@/components/locale-provider';
 
 export function PasswordForm() {
   const router = useRouter();
+  const { t } = useT();
   const [currentPassword, setCurrent] = useState('');
   const [newPassword, setNew] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -19,7 +21,7 @@ export function PasswordForm() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (newPassword !== confirm) {
-      setMsg({ kind: 'error', text: '两次输入的新密码不一致' });
+      setMsg({ kind: 'error', text: t('errors.passwordMismatch') });
       return;
     }
     setLoading(true);
@@ -34,11 +36,11 @@ export function PasswordForm() {
       setCurrent('');
       setNew('');
       setConfirm('');
-      setMsg({ kind: 'ok', text: '密码已更新，其他设备需用新密码重新登录' });
+      setMsg({ kind: 'ok', text: t('password.success') });
       router.refresh();
     } else {
       const d = await res.json().catch(() => null);
-      setMsg({ kind: 'error', text: d?.error || '修改失败' });
+      setMsg({ kind: 'error', text: d?.error || t('errors.passwordUpdateFailed') });
     }
   }
 
@@ -46,7 +48,7 @@ export function PasswordForm() {
     <form onSubmit={submit}>
       <FieldGroup className="gap-4">
         <Field>
-          <FieldLabel htmlFor="current-password">当前密码</FieldLabel>
+          <FieldLabel htmlFor="current-password">{t('password.currentLabel')}</FieldLabel>
           <Input
             id="current-password"
             type="password"
@@ -57,7 +59,7 @@ export function PasswordForm() {
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="new-password">新密码</FieldLabel>
+          <FieldLabel htmlFor="new-password">{t('password.newLabel')}</FieldLabel>
           <Input
             id="new-password"
             type="password"
@@ -67,10 +69,10 @@ export function PasswordForm() {
             required
             minLength={8}
           />
-          <p className="text-xs text-muted-foreground">至少 8 位</p>
+          <p className="text-xs text-muted-foreground">{t('password.hint')}</p>
         </Field>
         <Field>
-          <FieldLabel htmlFor="confirm-password">确认新密码</FieldLabel>
+          <FieldLabel htmlFor="confirm-password">{t('password.confirmLabel')}</FieldLabel>
           <Input
             id="confirm-password"
             type="password"
@@ -92,7 +94,7 @@ export function PasswordForm() {
           </p>
         )}
         <Button type="submit" size="sm" disabled={loading}>
-          {loading ? '更新中…' : '更新密码'}
+          {loading ? t('password.submitting') : t('password.submit')}
         </Button>
       </FieldGroup>
     </form>

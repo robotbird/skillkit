@@ -14,10 +14,12 @@ import {
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useT } from '@/components/locale-provider';
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
+  const { t } = useT();
   const next = params.get('next') || '/';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -39,21 +41,21 @@ function LoginForm() {
     } else {
       setLoading(false);
       const d = await res.json().catch(() => null);
-      setError(d?.error || '登录失败');
+      setError(d?.error || t('errors.loginFailed'));
     }
   }
 
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>登录 Skillkit</CardTitle>
-        <CardDescription>登录后管理你的分享。</CardDescription>
+        <CardTitle>{t('auth.login.title')}</CardTitle>
+        <CardDescription>{t('auth.login.desc')}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-4">
           <FieldGroup className="gap-4">
             <Field>
-              <FieldLabel htmlFor="email">邮箱</FieldLabel>
+              <FieldLabel htmlFor="email">{t('auth.login.email')}</FieldLabel>
               <Input
                 id="email"
                 type="email"
@@ -64,7 +66,7 @@ function LoginForm() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="password">密码</FieldLabel>
+              <FieldLabel htmlFor="password">{t('auth.login.password')}</FieldLabel>
               <Input
                 id="password"
                 type="password"
@@ -77,12 +79,12 @@ function LoginForm() {
             {error && <FieldError>{error}</FieldError>}
           </FieldGroup>
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? '登录中…' : '登录'}
+            {loading ? t('auth.login.submitting') : t('auth.login.submit')}
           </Button>
           <div className="text-center text-sm text-muted-foreground">
-            还没账号？
+            {t('auth.login.noAccount')}
             <Link href="/register" className="text-foreground underline-offset-4 hover:underline">
-              注册
+              {t('auth.login.register')}
             </Link>
           </div>
         </form>

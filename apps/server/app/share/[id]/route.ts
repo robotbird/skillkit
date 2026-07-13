@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { getStore } from '@/lib/store';
 import { TOOL_LABELS, SHARE_BASE_URL, type Tool } from '@skillkit/types';
+import { detectLocale } from '@/lib/i18n/detect';
+import { translate } from '@/lib/i18n/t';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -31,8 +33,11 @@ const TOOL_COLOR: Record<Tool, string> = {
 
 // 分享接收页:返回完整 HTML 文档(自带内联 CSS/JS、OG/Twitter card、主题切换、复制链接)。
 // 用 route handler 而非 page.tsx,以 1:1 保留原 app.ts 返回的完整文档、避开 layout 嵌套。
-export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+// 文案按请求的 Accept-Language 自动中/英(默认英文)。
+export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  const locale = detectLocale(req.headers.get('accept-language'));
+  const t = (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars);
   const store = await getStore();
   const meta = await store.readMeta(id);
   const expired = meta && meta.expiresAt <= Date.now();
@@ -44,33 +49,34 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   // 对外短链用稳定基地址 SHARE_BASE_URL(而非当前请求 host),避免 account 子域污染链接。
   const fullUrl = `${SHARE_BASE_URL}/share/${id}`;
 
-  const title = meta && !expired ? `${meta.name} · Skillkit 分享` : 'Skillkit 分享';
+  const titleWord = t('share.titleWord');
+  const title = meta && !expired ? `${meta.name} · Skillkit ${titleWord}` : `Skillkit ${titleWord}`;
   const ogDesc =
     meta && !expired && meta.description
       ? meta.description
-      : '通过 Skillkit 分享的 AI skill —— 7 天内可一键安装到 Claude Code / Codex / Cursor / Trae / Workbuddy。';
+      : t('share.ogDescDefault');
   const ogImage = 'https://www.skillkit.net/assets/logo.png';
 
   let body: string;
   if (!meta) {
     body = `
-      <p class="kicker">SKILLKIT 分享</p>
-      <h1>链接不存在</h1>
-      <p class="desc">分享 <code>${esc(id)}</code> 不存在或已被清理。</p>`;
+      <p class="kicker">${t('share.kicker')}</p>
+      <h1>${t('share.notFoundTitle')}</h1>
+      <p class="desc">${t('share.notFoundDesc', { id: `<code>${esc(id)}</code>` })}</p>`;
   } else if (expired) {
     body = `
-      <p class="kicker">SKILLKIT 分享</p>
-      <h1>已过期</h1>
-      <p class="desc">分享 <code>${esc(id)}</code> 已经过期。</p>`;
+      <p class="kicker">${t('share.kicker')}</p>
+      <h1>${t('share.expiredTitle')}</h1>
+      <p class="desc">${t('share.expiredDesc', { id: `<code>${esc(id)}</code>` })}</p>`;
   } else {
     const expIn = Math.max(0, Math.ceil((meta.expiresAt - Date.now()) / (24 * 3600 * 1000)));
-    const expText = expIn === 0 ? '今天到期' : `${expIn} 天后过期`;
+    const expText = expIn === 0 ? t('share.expiresToday') : t('share.expiresIn', { n: expIn });
     const sizeText =
       meta.sizeBytes >= 1024 * 1024
         ? `${(meta.sizeBytes / 1024 / 1024).toFixed(1)} MB`
         : `${(meta.sizeBytes / 1024).toFixed(1)} KB`;
     body = `
-      <p class="kicker">SKILLKIT 分享</p>
+      <p class="kicker">${t('share.kicker')}</p>
       <h1>${esc(meta.name)}</h1>
       ${meta.description ? `<p class="desc">${esc(meta.description)}</p>` : ''}
       <div class="meta">
@@ -79,17 +85,23 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         <span class="chip">${expText}</span>
       </div>
       <div class="actions">
-        <a class="btn btn-primary" href="skillkit://share/${esc(id)}">从 Skillkit 打开</a>
-        <a class="btn" href="/share/${esc(id)}/zip" download="${esc(meta.name)}.zip">下载压缩包</a>
+        <a class="btn btn-primary" href="skillkit://share/${esc(id)}">${t('share.openInSkillkit')}</a>
+        <a class="btn" href="/share/${esc(id)}/zip" download="${esc(meta.name)}.zip">${t('share.downloadZip')}</a>
       </div>
       <div class="share">
-        <div class="link"><code id="u">${esc(fullUrl)}</code><button type="button" onclick="copyLink(this)">复制链接</button></div>
-        <p class="muted">没有 Skillkit？<a href="https://github.com/robotbird/skillkit/releases" target="_blank" rel="noopener">下载桌面端 →</a></p>
+        <div class="link"><code id="u">${esc(fullUrl)}</code><button type="button" onclick="copyLink(this)">${t('share.copyLink')}</button></div>
+        <p class="muted">${t('share.noApp')}<a href="https://github.com/robotbird/skillkit/releases" target="_blank" rel="noopener">${t('share.downloadApp')}</a></p>
       </div>`;
   }
 
+  const lang = locale === 'zh' ? 'zh-CN' : 'en';
+  // 底部 <script> 里运行时切换的文案:用 JSON.stringify 注入为 JS 字符串字面量(引号自动转义)。
+  const jsToggleDark = JSON.stringify(t('share.toggleToDark'));
+  const jsToggleLight = JSON.stringify(t('share.toggleToLight'));
+  const jsCopied = JSON.stringify(t('share.copied'));
+
   const html = `<!doctype html>
-<html lang="zh-CN">
+<html lang="${lang}">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -162,16 +174,16 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="#ffb14a"/><path fill="#1a1410" d="M12 5l1.8 5.2L19 12l-5.2 1.8L12 19l-1.8-5.2L5 12l5.2-1.8z"/></svg>
     <span>Skillkit</span>
   </a>
-  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换深色 / 浅色主题">
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="${esc(t('share.toggleInitialAria'))}">
     <svg class="ico-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.6M12 19.4V22M2 12h2.6M19.4 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
     <svg class="ico-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5z"/></svg>
   </button>
 </header>
 <main class="wrap"><div class="card">${body}</div></main>
-<footer class="wrap">由 <a href="https://skillkit.net">Skillkit</a> 分享 · 链接 7 天内有效</footer>
+<footer class="wrap">${t('share.footer')}</footer>
 <script>
-  (function(){var root=document.documentElement,btn=document.getElementById('theme-toggle');if(!btn)return;function sync(){var l=root.getAttribute('data-theme')==='light';btn.setAttribute('aria-label',l?'切换到深色模式':'切换到浅色模式');}btn.addEventListener('click',function(){var next=root.getAttribute('data-theme')==='light'?'dark':'light';try{localStorage.setItem('theme',next);}catch(e){}root.setAttribute('data-theme',next);sync();});try{var mq=window.matchMedia('(prefers-color-scheme: light)');mq.addEventListener('change',function(e){if(localStorage.getItem('theme'))return;root.setAttribute('data-theme',e.matches?'light':'dark');sync();});}catch(e){}sync();})();
-  function copyLink(btn){var el=document.getElementById('u');if(!el||!btn)return;navigator.clipboard.writeText(el.textContent).then(function(){var old=btn.textContent;btn.textContent='已复制';setTimeout(function(){btn.textContent=old;},1400);});}
+  (function(){var root=document.documentElement,btn=document.getElementById('theme-toggle');if(!btn)return;function sync(){var l=root.getAttribute('data-theme')==='light';btn.setAttribute('aria-label',l?${jsToggleDark}:${jsToggleLight});}btn.addEventListener('click',function(){var next=root.getAttribute('data-theme')==='light'?'dark':'light';try{localStorage.setItem('theme',next);}catch(e){}root.setAttribute('data-theme',next);sync();});try{var mq=window.matchMedia('(prefers-color-scheme: light)');mq.addEventListener('change',function(e){if(localStorage.getItem('theme'))return;root.setAttribute('data-theme',e.matches?'light':'dark');sync();});}catch(e){}sync();})();
+  function copyLink(btn){var el=document.getElementById('u');if(!el||!btn)return;navigator.clipboard.writeText(el.textContent).then(function(){var old=btn.textContent;btn.textContent=${jsCopied};setTimeout(function(){btn.textContent=old;},1400);});}
 </script>
 </body>
 </html>`;

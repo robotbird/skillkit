@@ -1,29 +1,39 @@
 import { z } from 'zod';
+import type { Locale } from '@/lib/i18n/config';
+import { translate } from '@/lib/i18n/t';
 
 // 所有 API 入口的 zod schema。.strict 拒绝多余字段,字段限长防滥用。
+// 浏览器侧的 schema 接收 locale,错误文案按语言返回;桌面端/未用的团队 schema 保持原样。
 
-const email = z.email({ message: '邮箱格式不正确' });
+export function registerSchema(locale: Locale) {
+  return z
+    .object({
+      email: z.email({ message: translate(locale, 'errors.emailInvalid') }),
+      password: z
+        .string()
+        .min(8, translate(locale, 'errors.passwordMin'))
+        .max(72, translate(locale, 'errors.passwordMax')),
+      name: z.string().trim().min(1).max(40).optional(),
+    })
+    .strict();
+}
 
-export const registerSchema = z
-  .object({
-    email,
-    password: z.string().min(8, '密码至少 8 位').max(72, '密码最多 72 位'),
-    name: z.string().trim().min(1).max(40).optional(),
-  })
-  .strict();
+export function loginSchema(locale: Locale) {
+  return z
+    .object({
+      email: z.email({ message: translate(locale, 'errors.emailInvalid') }),
+      password: z.string().min(1, translate(locale, 'errors.passwordRequired')),
+    })
+    .strict();
+}
 
-export const loginSchema = z
-  .object({
-    email,
-    password: z.string().min(1, '请输入密码'),
-  })
-  .strict();
-
-export const updateMeSchema = z
-  .object({
-    name: z.string().trim().max(40).nullable(),
-  })
-  .strict();
+export function updateMeSchema(locale: Locale) {
+  return z
+    .object({
+      name: z.string().trim().max(40, translate(locale, 'errors.nameMax')).nullable(),
+    })
+    .strict();
+}
 
 export const createTeamSchema = z
   .object({
@@ -57,9 +67,14 @@ export const updateSkillSchema = z
   })
   .strict();
 
-export const changePasswordSchema = z
-  .object({
-    currentPassword: z.string().min(1, '请输入当前密码'),
-    newPassword: z.string().min(8, '新密码至少 8 位').max(72, '密码最多 72 位'),
-  })
-  .strict();
+export function changePasswordSchema(locale: Locale) {
+  return z
+    .object({
+      currentPassword: z.string().min(1, translate(locale, 'errors.currentPasswordRequired')),
+      newPassword: z
+        .string()
+        .min(8, translate(locale, 'errors.newPasswordMin'))
+        .max(72, translate(locale, 'errors.passwordMax')),
+    })
+    .strict();
+}

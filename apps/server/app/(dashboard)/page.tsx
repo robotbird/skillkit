@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db';
 import { formatBytes } from '@/lib/format';
+import { getLocaleFromHeaders } from '@/lib/i18n/server';
+import { translate } from '@/lib/i18n/t';
 import { EditNameForm } from './edit-name-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -11,6 +13,8 @@ export const dynamic = 'force-dynamic';
 export default async function OverviewPage() {
   const cur = await getCurrentUser();
   if (!cur) return null;
+  const locale = await getLocaleFromHeaders();
+  const t = (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars);
   const { user } = cur;
   const [shareCount, agg] = await Promise.all([
     prisma.share.count({ where: { userId: user.id } }),
@@ -21,58 +25,61 @@ export default async function OverviewPage() {
   ]);
   const totalBytes = agg._sum.sizeBytes ?? 0;
   const displayName = user.name || user.email.split('@')[0];
+  const dateLocale = locale === 'zh' ? 'zh-CN' : 'en-US';
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">你好，{displayName}</h1>
-        <p className="text-sm text-muted-foreground">管理你的账号与分享的 skill。</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('dashboard.greeting', { name: displayName })}</h1>
+        <p className="text-sm text-muted-foreground">{t('dashboard.subtitle')}</p>
       </div>
 
       <div className="flex gap-8">
         <div>
           <div className="text-2xl font-semibold tracking-tight tabular-nums">{shareCount}</div>
-          <div className="text-xs text-muted-foreground">个分享</div>
+          <div className="text-xs text-muted-foreground">{t('dashboard.sharesStatLabel')}</div>
         </div>
         <div>
           <div className="text-2xl font-semibold tracking-tight tabular-nums">
             {formatBytes(totalBytes)}
           </div>
-          <div className="text-xs text-muted-foreground">存储占用</div>
+          <div className="text-xs text-muted-foreground">{t('dashboard.storageLabel')}</div>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>分享</CardTitle>
-          <CardDescription>你分享过的 skill 短链。</CardDescription>
+          <CardTitle>{t('dashboard.sharesCardTitle')}</CardTitle>
+          <CardDescription>{t('dashboard.sharesCardDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
-            已分享 <span className="font-medium text-foreground">{shareCount}</span> 个 skill
+            {t('dashboard.sharesCountPrefix')}<span className="font-medium text-foreground">{shareCount}</span>{t('dashboard.sharesCountSuffix')}
           </div>
           <Link
             href="/shares"
             className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
           >
-            查看 →
+            {t('dashboard.viewAll')}
           </Link>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>账号</CardTitle>
-          <CardDescription>昵称与邮箱。</CardDescription>
+          <CardTitle>{t('dashboard.accountCardTitle')}</CardTitle>
+          <CardDescription>{t('dashboard.accountCardDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <EditNameForm initial={user.name} />
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>邮箱</span>
+            <span>{t('dashboard.emailLabel')}</span>
             <span className="text-foreground">{user.email}</span>
           </div>
           <p className="text-xs text-muted-foreground">
-            注册于 {new Date(user.createdAt).toLocaleDateString('zh-CN')}
+            {t('dashboard.joinedAt', {
+              date: new Date(user.createdAt).toLocaleDateString(dateLocale),
+            })}
           </p>
         </CardContent>
       </Card>

@@ -1,4 +1,6 @@
 import { getCurrentUser } from '@/lib/auth/session';
+import { getLocaleFromHeaders } from '@/lib/i18n/server';
+import { translate } from '@/lib/i18n/t';
 import { listMyShares } from '@/lib/shares/repo';
 import { SharesTable } from './shares-table';
 import { SHARE_BASE_URL } from '@skillkit/types';
@@ -10,13 +12,15 @@ export const dynamic = 'force-dynamic';
 export default async function SharesPage() {
   const cur = await getCurrentUser();
   if (!cur) return null;
+  const locale = await getLocaleFromHeaders();
+  const t = (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars);
   const shares = await listMyShares(cur.user.id, SHARE_BASE_URL);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">分享的 skill</h1>
-        <p className="text-sm text-muted-foreground">你分享过的 skill 短链，共 {shares.length} 条。</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('shares.title')}</h1>
+        <p className="text-sm text-muted-foreground">{t('shares.subtitle', { count: shares.length })}</p>
       </div>
       <SharesTable shares={shares} />
     </div>

@@ -5,6 +5,8 @@ import { signSession } from '@/lib/auth/jwt';
 import { toPublicUser } from '@/lib/auth/session';
 import { errorResponse } from '@/lib/auth/guards';
 import { loginSchema } from '@/lib/validation';
+import { detectLocale } from '@/lib/i18n/detect';
+import { translate } from '@/lib/i18n/t';
 import type { TokenAuthResponse } from '@skillkit/types';
 
 export const runtime = 'nodejs';
@@ -15,12 +17,13 @@ export const dynamic = 'force-dynamic';
 // `Authorization: Bearer <token>` 调 /api/me 等接口（getCurrentUser 已支持 bearer）。
 // 失效复用 tokenVersion（改密 / 全设备登出会 bump）。
 export async function POST(req: NextRequest) {
+  const locale = detectLocale(req.headers.get('accept-language'));
   try {
     const body = await req.json().catch(() => null);
-    const parsed = loginSchema.safeParse(body);
+    const parsed = loginSchema(locale).safeParse(body);
     if (!parsed.success) {
       return Response.json(
-        { error: parsed.error.issues[0]?.message ?? '参数不合法' },
+        { error: parsed.error.issues[0]?.message ?? translate(locale, 'errors.invalidParams') },
         { status: 400 },
       );
     }
@@ -29,12 +32,12 @@ export async function POST(req: NextRequest) {
       where: { email: email.toLowerCase() },
     });
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
-      return Response.json({ error: '邮箱或密码错误' }, { status: 401 });
+      return Response.json({ error: translate(locale, 'errors.invalidCredentials') }, { status: 401 });
     }
     const token = await signSession(user.id, user.tokenVersion);
     const res: TokenAuthResponse = { token, user: toPublicUser(user) };
     return Response.json(res);
   } catch (e) {
-    return errorResponse(e);
+    return errorResponse(e, locale);
   }
 }

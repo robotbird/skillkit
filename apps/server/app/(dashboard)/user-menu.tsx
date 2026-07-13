@@ -12,6 +12,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { useT } from '@/components/locale-provider';
 
 function initials(name: string | null, email: string): string {
   const src = (name || email).trim();
@@ -21,6 +22,7 @@ function initials(name: string | null, email: string): string {
 /** 右上角头像 + 下拉(点击展开):账号设置 / 退出登录。 */
 export function UserMenu({ name, email }: { name: string | null; email: string }) {
   const router = useRouter();
+  const { t } = useT();
   const [out, setOut] = useState(false);
 
   async function logout() {
@@ -35,7 +37,7 @@ export function UserMenu({ name, email }: { name: string | null; email: string }
       <DropdownMenuTrigger asChild>
         <button
           className="cursor-pointer rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          aria-label="账号菜单"
+          aria-label={t('userMenu.ariaLabel')}
         >
           <Avatar className="size-8 border">
             <AvatarFallback className="text-xs">{initials(name, email)}</AvatarFallback>
@@ -46,14 +48,14 @@ export function UserMenu({ name, email }: { name: string | null; email: string }
         <DropdownMenuLabel className="truncate">{name || email}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href="/account">账号设置</Link>
+          <Link href="/account">{t('userMenu.accountSettings')}</Link>
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={logout}
           disabled={out}
           className="text-destructive focus:text-destructive"
         >
-          {out ? '退出中…' : '退出登录'}
+          {out ? t('userMenu.loggingOut') : t('userMenu.logout')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
