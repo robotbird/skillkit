@@ -84,10 +84,11 @@ Skillkit 是 **pnpm-workspace monorepo**:
 | 包 | 说明 |
 | --- | --- |
 | [`apps/desktop`](./apps/desktop) | Electron 桌面端(React 18 + TypeScript + Vite + better-sqlite3) |
-| [`apps/server`](./apps/server) | Next.js 16(App Router)—— 分享短链 API + web 个人中心 |
 | [`packages/types`](./packages/types) | `@skillkit/types` —— 跨端共享类型与常量(单一真相源) |
 
-完整架构细节 —— 三进程 Electron 模型、分享短链契约、Vercel 部署、个人中心 / 认证设计 —— 见 [`CLAUDE.md`](./CLAUDE.md)。
+> 分享服务端(短链 API + 个人中心)运行在 **`skillkit.net`** —— 独立仓库。
+
+完整架构细节 —— 三进程 Electron 模型、分享短链契约 —— 见 [`CLAUDE.md`](./CLAUDE.md)。
 
 ### 快速开始
 
@@ -96,8 +97,6 @@ pnpm install
 pnpm --filter desktop rebuild   # 适配 better-sqlite3 的 Electron ABI
 
 pnpm --filter desktop dev       # 桌面端(vite + electron,监听 3 个 bundle)
-SHARE_STORE=local pnpm --filter server dev   # 服务端(本地文件存储,无需 Blob token)
-pnpm dev                        # turbo:并行起两端
 ```
 
 客户端默认连 `https://skillkit.net`。本地联调覆盖基地址:
@@ -111,14 +110,13 @@ SKILLKIT_SHARE_BASE_URL=http://127.0.0.1:3000 pnpm --filter desktop dev
 ```bash
 pnpm --filter desktop build     # 类型检查(tsc,两个 tsconfig)+ vite build
 pnpm --filter desktop dist      # → release/(mac dmg/zip,win nsis)
-pnpm --filter server build      # next build(同时做类型检查)
 ```
 
 CI(`.github/workflows/build.yml`)在 push main 时打包 mac + win;`workflow_dispatch` 触发 GitHub Release,`electron-updater` 据此推送更新。
 
 ### 技术栈
 
-Electron · React 18 · TypeScript · Vite · Tailwind v4 + shadcn/ui · better-sqlite3 · Next.js 16 · Prisma 6 · Vercel Blob · pnpm + Turborepo
+Electron · React 18 · TypeScript · Vite · Tailwind v4 + shadcn/ui · better-sqlite3 · pnpm + Turborepo
 
 ## 🤝 贡献
 

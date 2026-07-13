@@ -8,8 +8,7 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
-    "dev:desktop": "pnpm --filter desktop dev",
-    "dev:server": "pnpm --filter server dev"
+    "dev:desktop": "pnpm --filter desktop dev"
   },
   "devDependencies": {
     "@types/node": "^20.16.5",

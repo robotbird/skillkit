@@ -84,10 +84,11 @@ Skillkit is a **pnpm-workspace monorepo**:
 | Package | What it is |
 | --- | --- |
 | [`apps/desktop`](./apps/desktop) | Electron client (React 18 + TypeScript + Vite + better-sqlite3) |
-| [`apps/server`](./apps/server) | Next.js 16 (App Router) — share short-link API + web 个人中心 |
 | [`packages/types`](./packages/types) | `@skillkit/types` — cross-end shared types & constants (single source of truth) |
 
-For the full architecture deep-dive — three-process Electron model, the share link contract, Vercel deploy notes, the dashboard/auth design — read [`CLAUDE.md`](./CLAUDE.md).
+> The share backend (short-link API + 个人中心) runs on **`skillkit.net`** — a separate repo.
+
+For the full architecture deep-dive — three-process Electron model and the share link contract — read [`CLAUDE.md`](./CLAUDE.md).
 
 ### Quick start
 
@@ -96,8 +97,6 @@ pnpm install
 pnpm --filter desktop rebuild   # rebuilds better-sqlite3 against Electron's ABI
 
 pnpm --filter desktop dev       # desktop app (vite + electron, watches all 3 bundles)
-SHARE_STORE=local pnpm --filter server dev   # server (local file store, no Blob token)
-pnpm dev                        # turbo: runs both in parallel
 ```
 
 The client defaults to `https://skillkit.net`. To point it at a local server:
@@ -111,14 +110,13 @@ SKILLKIT_SHARE_BASE_URL=http://127.0.0.1:3000 pnpm --filter desktop dev
 ```bash
 pnpm --filter desktop build     # typecheck (tsc, both tsconfigs) + vite build
 pnpm --filter desktop dist      # → release/ (mac dmg/zip, win nsis)
-pnpm --filter server build      # next build (also typechecks)
 ```
 
 CI (`.github/workflows/build.yml`) packages mac + win on push to `main`; `workflow_dispatch` publishes a GitHub Release that `electron-updater` rolls out.
 
 ### Tech stack
 
-Electron · React 18 · TypeScript · Vite · Tailwind v4 + shadcn/ui · better-sqlite3 · Next.js 16 · Prisma 6 · Vercel Blob · pnpm + Turborepo
+Electron · React 18 · TypeScript · Vite · Tailwind v4 + shadcn/ui · better-sqlite3 · pnpm + Turborepo
 
 ## 🤝 Contributing
 
