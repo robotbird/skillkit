@@ -4,6 +4,8 @@ import { requireUser, errorResponse } from '@/lib/auth/guards';
 import { verifyPassword, hashPassword } from '@/lib/auth/password';
 import { issueSession } from '@/lib/auth/session';
 import { changePasswordSchema } from '@/lib/validation';
+import { detectLocale } from '@/lib/i18n/detect';
+import { translate } from '@/lib/i18n/t';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,13 +13,14 @@ export const dynamic = 'force-dynamic';
 // 修改密码:验证当前密码 → hash 新密码 → bump tokenVersion(其他设备旧 JWT 立即失效)
 // → 重签当前 session(当前设备保持登录)。
 export async function PATCH(req: NextRequest) {
+  const locale = detectLocale(req.headers.get('accept-language'));
   try {
     const { user } = await requireUser();
     const body = await req.json().catch(() => null);
-    const parsed = changePasswordSchema.safeParse(body);
+    const parsed = changePasswordSchema(locale).safeParse(body);
     if (!parsed.success) {
       return Response.json(
-        { error: parsed.error.issues[0]?.message ?? '参数不合法' },
+        { error: parsed.error.issues[0]?.message ?? translate(locale, 'errors.invalidParams') },
         { status: 400 },
       );
     }
@@ -26,9 +29,9 @@ export async function PATCH(req: NextRequest) {
       where: { id: user.id },
       select: { passwordHash: true, tokenVersion: true },
     });
-    if (!full) return Response.json({ error: '用户不存在' }, { status: 404 });
+    if (!full) return Response.json({ error: translate(locale, 'errors.userNotFound') }, { status: 404 });
     if (!(await verifyPassword(currentPassword, full.passwordHash))) {
-      return Response.json({ error: '当前密码不正确' }, { status: 400 });
+      return Response.json({ error: translate(locale, 'errors.wrongCurrentPassword') }, { status: 400 });
     }
     const newHash = await hashPassword(newPassword);
     const newV = full.tokenVersion + 1;
@@ -40,6 +43,6 @@ export async function PATCH(req: NextRequest) {
     await issueSession(user.id, newV);
     return Response.json({ ok: true });
   } catch (e) {
-    return errorResponse(e);
+    return errorResponse(e, locale);
   }
 }

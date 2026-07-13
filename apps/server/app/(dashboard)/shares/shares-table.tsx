@@ -29,9 +29,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { useLocale, useT } from '@/components/locale-provider';
+import type { Locale } from '@/lib/i18n/config';
 
-function formatTime(ms: number): string {
-  return new Date(ms).toLocaleString('zh-CN', {
+function formatTime(ms: number, locale: Locale): string {
+  return new Date(ms).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -41,10 +43,11 @@ function formatTime(ms: number): string {
 }
 
 export function SharesTable({ shares }: { shares: MyShare[] }) {
+  const { t } = useT();
   if (!shares.length) {
     return (
       <div className="rounded-xl border bg-card py-16 text-center text-sm text-muted-foreground">
-        还没有分享过 skill。
+        {t('shares.empty')}
       </div>
     );
   }
@@ -54,10 +57,10 @@ export function SharesTable({ shares }: { shares: MyShare[] }) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>名称</TableHead>
-            <TableHead>链接</TableHead>
-            <TableHead>分享时间</TableHead>
-            <TableHead>大小</TableHead>
+            <TableHead>{t('shares.col.name')}</TableHead>
+            <TableHead>{t('shares.col.link')}</TableHead>
+            <TableHead>{t('shares.col.time')}</TableHead>
+            <TableHead>{t('shares.col.size')}</TableHead>
             <TableHead className="w-8" />
           </TableRow>
         </TableHeader>
@@ -73,6 +76,8 @@ export function SharesTable({ shares }: { shares: MyShare[] }) {
 
 function ShareRow({ s }: { s: MyShare }) {
   const router = useRouter();
+  const { t } = useT();
+  const locale = useLocale();
 
   async function del() {
     const r = await fetch(`/api/my/shares/${s.id}`, { method: 'DELETE' });
@@ -80,7 +85,7 @@ function ShareRow({ s }: { s: MyShare }) {
       router.refresh();
     } else {
       const d = await r.json().catch(() => null);
-      alert(d?.error || '删除失败');
+      alert(d?.error || t('errors.deleteFailed'));
     }
   }
 
@@ -98,13 +103,13 @@ function ShareRow({ s }: { s: MyShare }) {
           {s.url}
         </a>
       </TableCell>
-      <TableCell className="text-muted-foreground">{formatTime(s.createdAt)}</TableCell>
+      <TableCell className="text-muted-foreground">{formatTime(s.createdAt, locale)}</TableCell>
       <TableCell className="text-muted-foreground">{formatBytes(s.sizeBytes)}</TableCell>
       <TableCell>
         <AlertDialog>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="更多操作">
+              <Button variant="ghost" size="icon-sm" aria-label={t('shares.moreActions')}>
                 <MoreIcon />
               </Button>
             </DropdownMenuTrigger>
@@ -114,21 +119,21 @@ function ShareRow({ s }: { s: MyShare }) {
                   onSelect={(e) => e.preventDefault()}
                   className="text-destructive focus:text-destructive"
                 >
-                  删除
+                  {t('shares.delete')}
                 </DropdownMenuItem>
               </AlertDialogTrigger>
             </DropdownMenuContent>
           </DropdownMenu>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>删除这个分享？</AlertDialogTitle>
+              <AlertDialogTitle>{t('shares.deleteTitle')}</AlertDialogTitle>
               <AlertDialogDescription>
-                将删除短链与文件，此操作无法撤销。
+                {t('shares.deleteDesc')}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>取消</AlertDialogCancel>
-              <AlertDialogAction onClick={del}>删除</AlertDialogAction>
+              <AlertDialogCancel>{t('shares.cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={del}>{t('shares.delete')}</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

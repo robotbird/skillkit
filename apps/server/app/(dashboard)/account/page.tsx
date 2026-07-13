@@ -1,4 +1,6 @@
 import { getCurrentUser } from '@/lib/auth/session';
+import { getLocaleFromHeaders } from '@/lib/i18n/server';
+import { translate } from '@/lib/i18n/t';
 import { PasswordForm } from './password-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, FieldLabel } from '@/components/ui/field';
@@ -10,35 +12,40 @@ export const dynamic = 'force-dynamic';
 export default async function AccountPage() {
   const cur = await getCurrentUser();
   if (!cur) return null;
+  const locale = await getLocaleFromHeaders();
+  const t = (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars);
   const { user } = cur;
+  const dateLocale = locale === 'zh' ? 'zh-CN' : 'en-US';
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">账号设置</h1>
-        <p className="text-sm text-muted-foreground">账号信息与密码。</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('account.title')}</h1>
+        <p className="text-sm text-muted-foreground">{t('account.subtitle')}</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>账号信息</CardTitle>
-          <CardDescription>你的账号基本资料。</CardDescription>
+          <CardTitle>{t('account.infoCardTitle')}</CardTitle>
+          <CardDescription>{t('account.infoCardDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Field>
-            <FieldLabel htmlFor="account-email">邮箱</FieldLabel>
+            <FieldLabel htmlFor="account-email">{t('account.emailLabel')}</FieldLabel>
             <Input id="account-email" value={user.email} disabled />
           </Field>
           <p className="text-xs text-muted-foreground">
-            注册于 {new Date(user.createdAt).toLocaleDateString('zh-CN')}
+            {t('account.joinedAt', {
+              date: new Date(user.createdAt).toLocaleDateString(dateLocale),
+            })}
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>修改密码</CardTitle>
-          <CardDescription>更新后其他设备需用新密码重新登录。</CardDescription>
+          <CardTitle>{t('account.passwordCardTitle')}</CardTitle>
+          <CardDescription>{t('account.passwordCardDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           <PasswordForm />

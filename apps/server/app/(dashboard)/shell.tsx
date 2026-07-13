@@ -3,12 +3,14 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useT } from '@/components/locale-provider';
 import { Nav } from './nav';
 
 // dashboard 主体外壳:左侧统一侧栏(固定 w-52,保证内容区宽度跨页一致)+ 右侧功能区。
 // /account(经右上角头像进入)侧栏内容改为「‹ 返回」回到总览,而非导航项。
 export function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { t } = useT();
   const isAccount = pathname === '/account';
   return (
     <div className="mx-auto flex w-full max-w-6xl">
@@ -31,7 +33,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             >
               <path d="m15 18-6-6 6-6" />
             </svg>
-            返回
+            {t('shell.back')}
           </Link>
         ) : (
           <Nav />

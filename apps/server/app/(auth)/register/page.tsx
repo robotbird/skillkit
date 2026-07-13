@@ -14,9 +14,11 @@ import {
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useT } from '@/components/locale-provider';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { t } = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -38,21 +40,21 @@ export default function RegisterPage() {
     } else {
       setLoading(false);
       const d = await res.json().catch(() => null);
-      setError(d?.error || '注册失败');
+      setError(d?.error || t('errors.registerFailed'));
     }
   }
 
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>注册 Skillkit</CardTitle>
-        <CardDescription>创建账号，开始管理分享。</CardDescription>
+        <CardTitle>{t('auth.register.title')}</CardTitle>
+        <CardDescription>{t('auth.register.desc')}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-4">
           <FieldGroup className="gap-4">
             <Field>
-              <FieldLabel htmlFor="email">邮箱</FieldLabel>
+              <FieldLabel htmlFor="email">{t('auth.register.email')}</FieldLabel>
               <Input
                 id="email"
                 type="email"
@@ -63,7 +65,7 @@ export default function RegisterPage() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="password">密码</FieldLabel>
+              <FieldLabel htmlFor="password">{t('auth.register.password')}</FieldLabel>
               <Input
                 id="password"
                 type="password"
@@ -73,10 +75,10 @@ export default function RegisterPage() {
                 required
                 minLength={8}
               />
-              <p className="text-xs text-muted-foreground">至少 8 位</p>
+              <p className="text-xs text-muted-foreground">{t('auth.register.passwordHint')}</p>
             </Field>
             <Field>
-              <FieldLabel htmlFor="name">昵称（可选）</FieldLabel>
+              <FieldLabel htmlFor="name">{t('auth.register.name')}</FieldLabel>
               <Input
                 id="name"
                 value={name}
@@ -87,12 +89,12 @@ export default function RegisterPage() {
             {error && <FieldError>{error}</FieldError>}
           </FieldGroup>
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? '注册中…' : '注册'}
+            {loading ? t('auth.register.submitting') : t('auth.register.submit')}
           </Button>
           <div className="text-center text-sm text-muted-foreground">
-            已有账号？
+            {t('auth.register.haveAccount')}
             <Link href="/login" className="text-foreground underline-offset-4 hover:underline">
-              登录
+              {t('auth.register.login')}
             </Link>
           </div>
         </form>
