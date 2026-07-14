@@ -196,12 +196,20 @@ async function fetchAndExtractTar(ref: RepoRef): Promise<string> {
 }
 
 /** 从已经准备好的"skill 源目录"安装到一个 tool 的 installRoot/<name>/ */
-function installSourceToTool(srcDir: string, tool: Tool, sourceTag: string): InstallResult {
+function installSourceToTool(
+  srcDir: string,
+  tool: Tool,
+  sourceTag: string,
+  destName?: string,
+): InstallResult {
   const md = readSkillMd(srcDir);
   if (!md) {
     return { tool, ok: false, error: 'SKILL.md 缺失或不可解析' };
   }
-  const name = (md.name?.trim() || path.basename(srcDir)).replace(/[^A-Za-z0-9_.-]/g, '-');
+  // 目标目录名：调用方给了就用它（copy 时传源目录名，保证跨工具同名），
+  // 否则取 frontmatter name 再规范化（market/github/zip 来源的 name 通常已是合法标识）
+  const rawName = destName ?? (md.name?.trim() || path.basename(srcDir));
+  const name = rawName.replace(/[^A-Za-z0-9_.-]/g, '-');
   const cfg = TOOLS[tool];
   fs.mkdirSync(cfg.installRoot, { recursive: true });
   const dst = path.join(cfg.installRoot, name);
@@ -529,38 +537,77 @@ export async function installFromZip(
   }
 }
 
-/** 把已安装的 skill 复制到其他工具：源是某个 tool 的 roots/<name>/，目标是其他 tool 的 installRoot/<name>/ */
+/**
+ * 在某个工具的 roots 下解析 skill 的真实目录。
+ * `name` 可能是 SKILL.md frontmatter 里的展示名（与目录名不一致，例如
+ * "股票价值投资分析 (valuation-analysis)" 的目录其实是 `valuation-analysis`），
+ * 也可能就是目录名本身。先用 `name` 当目录名直查，命中不了再遍历目录按
+ * frontmatter name 精确匹配，确保展示名 ≠ 目录名的 skill 也能定位。
+ */
+function findInstalledSkillDir(tool: Tool, name: string): string | null {
+  const cfg = TOOLS[tool];
+  for (const root of cfg.roots) {
+    if (!fs.existsSync(root)) continue;
+    // (1) 把 name 当目录名直查（多数 skill 的 name == 目录名）
+    const direct = path.join(root, name);
+    if (readSkillMd(direct)) return direct;
+    // (2) 回退：按 frontmatter name 匹配（展示名 ≠ 目录名）
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(root, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (!e.isDirectory() && !e.isSymbolicLink()) continue;
+      if (e.name.startsWith('.')) continue;
+      const d = path.join(root, e.name);
+      const md = readSkillMd(d);
+      if (md && md.name?.trim() === name) return d;
+    }
+  }
+  return null;
+}
+
+/** 把已安装的 skill 复制到其他工具：源是某个 tool 的 roots/<dir>/，目标是其他 tool 的 installRoot/<dir>/ */
 export function copyInstalledToTools(
   sourceTool: Tool,
   name: string,
   targets: Tool[],
 ): InstallResult[] {
-  const cfg = TOOLS[sourceTool];
-  let srcDir: string | null = null;
-  for (const root of cfg.roots) {
-    const candidate = path.join(root, name);
-    if (fs.existsSync(candidate) && readSkillMd(candidate)) {
-      srcDir = candidate;
-      break;
-    }
-  }
+  const srcDir = findInstalledSkillDir(sourceTool, name);
   if (!srcDir) {
     return targets.map((t) => ({ tool: t, ok: false, error: `未找到源 skill：${name}` }));
   }
+  // 目标目录沿用源目录名（而非展示名），避免把 "股票价值投资分析 (valuation-analysis)"
+  // 这类 name 洗成全短横的乱码目录；跨工具身份仍由 frontmatter name 决定，分组不受影响。
+  const destName = path.basename(srcDir);
   return targets
     .filter((t) => t !== sourceTool)
-    .map((t) => installSourceToTool(srcDir!, t, `copy:${sourceTool}/${name}`));
+    .map((t) => installSourceToTool(srcDir, t, `copy:${sourceTool}/${name}`, destName));
 }
 
 /** 卸载：删除目录 */
 export function uninstall(tool: Tool, name: string): void {
   const cfg = TOOLS[tool];
-  // 在所有 root 下查找该 name 目录（不会动 builtinRoot）
+  // 先用 name 直查（多数 skill name == 目录名），再按 frontmatter name 兜底，
+  // 覆盖展示名 ≠ 目录名的情况；不动 builtinRoot。
+  const matched = new Set<string>();
   for (const root of cfg.roots) {
     if (cfg.builtinRoot && root === cfg.builtinRoot) continue;
-    const dir = path.join(root, name);
-    if (fs.existsSync(dir)) {
-      rmDir(dir);
+    if (!fs.existsSync(root)) continue;
+    const direct = path.join(root, name);
+    if (fs.existsSync(direct)) matched.add(direct);
+    try {
+      for (const e of fs.readdirSync(root, { withFileTypes: true })) {
+        if (!e.isDirectory() && !e.isSymbolicLink()) continue;
+        const d = path.join(root, e.name);
+        const md = readSkillMd(d);
+        if (md && md.name?.trim() === name) matched.add(d);
+      }
+    } catch {
+      /* ignore */
     }
   }
+  for (const dir of matched) rmDir(dir);
 }
