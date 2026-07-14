@@ -165,6 +165,23 @@ export function clearInstalled(): void {
   getDb().exec('DELETE FROM installed_skills');
 }
 
+/**
+ * 删除扫描集之外的旧行（已从文件系统卸载、或 frontmatter name 变更）。
+ * scanAll 不再整体清空，而是 merge-upsert 保留安装时写入的 source/installed_at（见 upsertInstalled 的 COALESCE），
+ * 再用本函数清掉不再存在的行。activeKeys 为 `${tool}|${name}` 集合（tool 取自 Tool 枚举，不含 '|'，故无歧义）。
+ */
+export function deleteStaleInstalled(activeKeys: Set<string>): void {
+  if (activeKeys.size === 0) {
+    getDb().exec('DELETE FROM installed_skills');
+    return;
+  }
+  const keys = Array.from(activeKeys);
+  const placeholders = keys.map(() => '?').join(',');
+  getDb()
+    .prepare(`DELETE FROM installed_skills WHERE (tool || '|' || name) NOT IN (${placeholders})`)
+    .run(...keys);
+}
+
 export function listInstalled(filter?: { tool?: Tool; q?: string }): InstalledSkill[] {
   const where: string[] = [];
   const params: any[] = [];

@@ -383,6 +383,8 @@ html, body, #root {
 .skill-tag.tag-builtin { color: var(--accent); border-color: rgba(255,177,74,.4); }
 .skill-tag.tag-official { color: #c9b3ff; border-color: rgba(201, 179, 255, 0.4); }
 .skill-tag.tag-multi { color: #cdbfa8; border-color: rgba(255, 200, 140, 0.22); }
+.skill-tag.tag-github { color: #9aa4ae; border-color: rgba(154, 164, 174, 0.3); display: inline-flex; align-items: center; gap: 4px; }
+.skill-tag.tag-github svg { width: 11px; height: 11px; }
 .skill-desc {
   font-size: 12.5px; color: var(--ink-soft);
   line-height: 1.5;
@@ -1039,6 +1041,16 @@ html, body, #root {
 }
 .modal .opts-skills .skill-row strong { font-weight: 600; color: var(--ink); }
 .modal .opts-skills .skill-row .opt-note { margin-left: 0; }
+/* 单 skill：占满整行、描述完整展示（平铺）；多 skill：每条描述限 3 行，保持精简 */
+.modal .opts.opts-skills.is-single label:not(.opts-skills-all) {
+  flex: 0 0 100%;
+}
+.modal .opts.opts-skills.is-multi .skill-row .opt-note {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .modal .opts-skills .skill-subpath {
   font-size: 10.5px;
   color: var(--ink-mute);
@@ -1166,6 +1178,22 @@ html, body, #root {
 .share-modal {
   width: 420px;
 }
+
+/* GitHub 来源条（链接型分享）*/
+.share-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  background: rgba(20, 14, 10, 0.5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-input);
+}
+.share-source-icon { width: 18px; height: 18px; flex: 0 0 auto; color: var(--ink-soft); }
+.share-source-label { font-size: 13px; color: var(--ink); font-family: "SF Mono", Monaco, Consolas, monospace; word-break: break-all; }
+.share-source-tag { font-size: 11px; color: var(--ink-mute); margin-left: auto; white-space: nowrap; }
+.share-link-secondary { margin-top: 12px; }
 
 .share-error {
   padding: 10px 14px;
@@ -1591,6 +1619,13 @@ html, body, #root {
   color: rgba(26, 26, 26, 0.55);
   border-color: rgba(0, 0, 0, 0.1);
 }
+[data-theme="light"] .skill-tag.tag-github {
+  color: #57606a;
+  border-color: rgba(36, 41, 47, 0.18);
+}
+[data-theme="light"] .share-source {
+  background: #f4f4f5;
+}
 [data-theme="light"] .skill:hover {
   border-color: rgba(0, 0, 0, 0.12);
 }
@@ -1699,3 +1734,253 @@ html, body, #root {
   color: var(--ink);
   background: rgba(255, 255, 255, 0.06);
 }
+
+/* =========================================================
+   「我的 skill」详情弹窗（SkillDetailModal）+ Markdown 正文
+   复用 .modal / .modal-mask / .btn-* 骨架；高弹窗头尾固定、中间滚动（仿 .repo-skill-modal）。
+   ========================================================= */
+
+/* 可点击卡片：仅当挂了 onOpenDetail 时显示手型 */
+.skill.is-clickable { cursor: pointer; }
+
+.skill-detail-modal {
+  width: 760px;
+  max-width: 95vw;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 头尾固定，仅中间滚动 */
+}
+.skill-detail-head {
+  flex-shrink: 0;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.skill-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.skill-detail-title h3 { margin: 0; }
+.skill-detail-head .modal-sub { margin: 6px 0 0; }
+
+/* 元信息：label/value 两列 */
+.skill-detail-meta {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.skill-detail-meta .meta-row {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+.meta-label { color: var(--ink-mute); }
+.meta-value {
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.meta-gh-ico { width: 14px; height: 14px; flex: 0 0 auto; color: var(--ink-soft); }
+.meta-sep { opacity: 0.5; margin: 0 2px; }
+/* 内联链接按钮（作者 / 地址）*/
+.link-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+  overflow-wrap: anywhere;
+  transition: color 0.15s;
+}
+.link-btn:hover { text-decoration: underline; }
+/* 本地路径行：路径 code + 复制按钮 */
+.meta-path code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "SF Mono", Monaco, Consolas, monospace;
+  font-size: 12px;
+  color: var(--ink);
+  background: rgba(20, 14, 10, 0.5);
+  border: 1px solid var(--line);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.skill-detail-meta .meta-act {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  font-size: 11.5px;
+}
+.skill-detail-meta .meta-act.icon-only {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.skill-detail-meta .meta-act.icon-only:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ink);
+}
+.skill-detail-meta .meta-act.icon-only svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 正文滚动区 */
+.skill-detail-scroll {
+  flex: 1;
+  min-height: 0; /* flex 子项滚动必需 */
+  overflow-y: auto;
+  padding-right: 4px; /* 滚动条不贴边 */
+}
+.skill-detail-status {
+  padding: 28px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+.skill-detail-status.is-error { color: var(--danger); }
+
+.skill-detail-foot {
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  margin-top: 10px;
+}
+.skill-detail-foot .modal-actions { margin-top: 0; }
+
+/* —— Markdown 正文排版 —— */
+.skill-md-body {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.skill-md-body > :first-child { margin-top: 0; }
+.skill-md-body > :last-child { margin-bottom: 0; }
+.skill-md-body h1,
+.skill-md-body h2,
+.skill-md-body h3,
+.skill-md-body h4 {
+  margin: 18px 0 8px;
+  color: var(--ink);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.skill-md-body h1 { font-size: 20px; }
+.skill-md-body h2 { font-size: 17px; }
+.skill-md-body h3 { font-size: 15px; }
+.skill-md-body h4 { font-size: 14px; }
+.skill-md-body p { margin: 0 0 12px; }
+.skill-md-body strong { color: var(--ink); font-weight: 600; }
+.skill-md-body ul,
+.skill-md-body ol { margin: 0 0 12px; padding-left: 22px; }
+.skill-md-body li { margin: 4px 0; }
+.skill-md-body a { color: var(--accent); text-decoration: none; }
+.skill-md-body a:hover { text-decoration: underline; }
+.skill-md-body blockquote {
+  margin: 0 0 12px;
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--line-strong);
+  color: var(--ink-mute);
+}
+.skill-md-body hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 16px 0;
+}
+.skill-md-body img { max-width: 100%; border-radius: 8px; }
+/* 行内 code */
+.skill-md-body code {
+  font-family: "SF Mono", Monaco, Consolas, monospace;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  padding: 1px 6px;
+  border-radius: 5px;
+  color: #ffd9a8;
+}
+/* 代码块：外层 pre 给底，内层 code 重置 */
+.skill-md-body pre {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  background: rgba(20, 14, 10, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-x: auto;
+}
+.skill-md-body pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--ink);
+  font-size: 12px;
+}
+.skill-md-body table {
+  width: 100%;
+  margin: 0 0 14px;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.skill-md-body th,
+.skill-md-body td {
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.skill-md-body th { color: var(--ink); background: rgba(255, 255, 255, 0.04); }
+
+/* —— 浅色态覆盖（Codex 中性化；原深色规则不动）—— */
+[data-theme="light"] .skill-md-body code {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: var(--line);
+  color: #1a1a1a;
+}
+[data-theme="light"] .skill-md-body pre {
+  background: #f4f4f5;
+  border-color: var(--line);
+}
+[data-theme="light"] .skill-md-body th {
+  background: rgba(0, 0, 0, 0.03);
+}
+[data-theme="light"] .meta-path code {
+  background: #f4f4f5;
+}
+[data-theme="light"] .skill-detail-meta .meta-act.icon-only {
+  background: rgba(0, 0, 0, 0.03);
+}
+[data-theme="light"] .skill-detail-meta .meta-act.icon-only:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+

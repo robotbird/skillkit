@@ -67,3 +67,33 @@ export function readSkillMd(skillDir: string): SkillMd | null {
   }
   return null;
 }
+
+/**
+ * 读取 SKILL.md 或 AGENTS.md 的完整正文，并剥掉开头 `---...---` frontmatter 块。
+ * 供「我的 skill」详情弹窗渲染 Markdown 用；找不到候选文件返回 null。
+ */
+export function readSkillMdFull(
+  skillDir: string,
+): { filename: string; body: string } | null {
+  const candidates = ['SKILL.md', 'AGENTS.md'];
+  for (const file of candidates) {
+    const full = path.join(skillDir, file);
+    if (!fs.existsSync(full)) continue;
+    try {
+      const text = fs.readFileSync(full, 'utf8');
+      let body = text;
+      // 与 parseFrontmatter 对齐：开头 `---` + 闭合的 `\n---` 才算 frontmatter
+      if (text.startsWith('---')) {
+        const end = text.indexOf('\n---', 3);
+        if (end >= 0) {
+          const nextLf = text.indexOf('\n', end + 1);
+          body = nextLf >= 0 ? text.slice(nextLf + 1) : '';
+        }
+      }
+      return { filename: file, body: body.trim() };
+    } catch {
+      // ignore unreadable file
+    }
+  }
+  return null;
+}

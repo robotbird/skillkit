@@ -127,6 +127,9 @@ export interface InstalledFilter {
 }
 
 // ===== 分享 =====
+// sourceUrl: 链接型分享的外部跳转地址(目前仅 GitHub 仓库 URL)。
+//   - 链接型(有 sourceUrl、无 zip):分享短链打开后跳转到该 URL,不上传 skill 包。
+//   - zip 型(sourceUrl=null):既有行为,下载安装 skill 包。
 export interface ShareMeta {
   id: string;
   name: string;
@@ -135,6 +138,7 @@ export interface ShareMeta {
   sizeBytes: number;
   createdAt: number;
   expiresAt: number;
+  sourceUrl?: string | null;
 }
 
 export interface ShareCreateResult {
@@ -158,6 +162,7 @@ export interface MyShare {
   createdAt: number; // epoch ms
   expiresAt: number; // epoch ms
   url: string; // /share/<id> 完整链接
+  sourceUrl?: string | null; // 链接型分享的 GitHub 跳转地址;null=zip 型
 }
 
 // 分享服务的基地址。默认指向云端;本地开发可用 SKILLKIT_SHARE_BASE_URL 覆盖(如 http://127.0.0.1:3000)

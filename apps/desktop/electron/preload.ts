@@ -21,6 +21,7 @@ const api: SkillkitApi = {
   uninstallSkill: (tool: Tool, name: string) =>
     ipcRenderer.invoke('installed:uninstall', tool, name),
   revealInFinder: (p: string) => ipcRenderer.invoke('installed:reveal', p),
+  readSkillMd: (dir: string) => ipcRenderer.invoke('installed:readMd', dir),
   openPath: (p: string) => ipcRenderer.invoke('shell:openPath', p),
   copyToTools: (sourceTool: Tool, name: string, targets: Tool[]) =>
     ipcRenderer.invoke('installed:copyToTools', sourceTool, name, targets),
@@ -48,6 +49,8 @@ const api: SkillkitApi = {
   getDroppedFilePath: (file: File) => webUtils.getPathForFile(file),
 
   shareSkill: (tool: Tool, name: string) => ipcRenderer.invoke('share:create', tool, name),
+  shareGithubLink: (tool: Tool, name: string) =>
+    ipcRenderer.invoke('share:githubLink', tool, name),
   inspectShare: (input: string) => ipcRenderer.invoke('share:inspect', input),
   installFromShare: (input: string, targets: Tool[], opts?: InstallOpts) =>
     ipcRenderer.invoke('share:installFromShare', input, targets, opts),

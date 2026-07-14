@@ -11,7 +11,7 @@ import {
   listGithubSkills,
   installGithubSkillsAt,
 } from './installer.js';
-import { shareSkill, inspectShare, installFromShare } from './share.js';
+import { shareSkill, shareGithubLink, inspectShare, installFromShare } from './share.js';
 import {
   scanGlobalRepo,
   removeFromGlobalRepo,
@@ -20,6 +20,7 @@ import {
 } from './global-repo.js';
 import { applyUpdate, getUpdateStatus, checkForUpdate } from './updater.js';
 import { metaGet, metaSet } from './db.js';
+import { readSkillMdFull } from './skill-md.js';
 import { applyTheme, getThemeState } from './theme.js';
 import { loginAccount, getAccountInfo, logoutAccount, openAccountPage, startOAuth } from './account.js';
 import type {
@@ -47,6 +48,8 @@ export function registerIpc() {
   ipcMain.handle('installed:reveal', async (_e, p: string) => {
     shell.showItemInFolder(p);
   });
+  // 读取 skill 目录下 SKILL.md/AGENTS.md 正文（详情弹窗渲染用；只读固定候选名）
+  ipcMain.handle('installed:readMd', async (_e, dir: string) => readSkillMdFull(dir));
   ipcMain.handle('shell:openPath', async (_e, p: string) => {
     const err = await shell.openPath(p);
     if (err) console.error('[openPath] failed:', err);
@@ -115,6 +118,9 @@ export function registerIpc() {
   // 分享
   ipcMain.handle('share:create', async (_e, tool: Tool, name: string) =>
     shareSkill(tool, name),
+  );
+  ipcMain.handle('share:githubLink', async (_e, tool: Tool, name: string) =>
+    shareGithubLink(tool, name),
   );
   ipcMain.handle('share:inspect', async (_e, input: string) => inspectShare(input));
   ipcMain.handle(

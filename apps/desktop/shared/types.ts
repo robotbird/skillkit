@@ -88,6 +88,12 @@ export interface GlobalRepoRemoveResult {
   leftCopies: Tool[];
 }
 
+/** 「我的 skill」详情弹窗读到的 SKILL.md/AGENTS.md 正文（已剥掉开头 frontmatter）。 */
+export interface SkillDoc {
+  filename: string; // 实际命中的文件名（SKILL.md / AGENTS.md）
+  body: string; // 剥掉开头 frontmatter 后的 Markdown 正文
+}
+
 // ===== 自动更新(desktop 专用) =====
 export interface UpdateAvailableInfo {
   version: string; // 最新版本号(去 v 前缀)
@@ -138,6 +144,8 @@ export interface SkillkitApi {
   applyUpdate(): Promise<string>;
   uninstallSkill(tool: Tool, name: string): Promise<void>;
   revealInFinder(absPath: string): Promise<void>;
+  /** 读取 skill 目录下 SKILL.md/AGENTS.md 的 Markdown 正文（详情弹窗用）。 */
+  readSkillMd(skillDir: string): Promise<SkillDoc | null>;
   /** 在系统文件管理器中打开目录（shell.openPath）。 */
   openPath(absPath: string): Promise<void>;
   copyToTools(sourceTool: Tool, name: string, targets: Tool[]): Promise<InstallResult[]>;
@@ -166,6 +174,8 @@ export interface SkillkitApi {
   getDroppedFilePath(file: File): string;
 
   shareSkill(tool: Tool, name: string): Promise<ShareCreateResult>;
+  /** GitHub 来源 skill 的链接型分享：不上传包，生成跳转到 GitHub 仓库的短链。 */
+  shareGithubLink(tool: Tool, name: string): Promise<ShareCreateResult>;
   inspectShare(input: string): Promise<ShareSourceInfo>;
   installFromShare(input: string, targets: Tool[], opts?: InstallOpts): Promise<InstallResult[]>;
 

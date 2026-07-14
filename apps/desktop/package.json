@@ -27,6 +27,8 @@
     "radix-ui": "^1.6.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.2",
     "tar": "^7.4.3"
@@ -64,7 +66,9 @@
     "protocols": [
       {
         "name": "Skillkit",
-        "schemes": ["skillkit"]
+        "schemes": [
+          "skillkit"
+        ]
       }
     ],
     "mac": {

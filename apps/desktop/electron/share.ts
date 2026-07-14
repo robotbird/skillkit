@@ -113,8 +113,67 @@ export async function shareSkill(tool: Tool, name: string): Promise<ShareCreateR
 }
 
 /**
- * 接受 url / `host/share/<id>` / 裸 id，返回短链 id。
+ * 解析 InstalledSkill.source 中的 GitHub 来源标签。
+ * 标签形如 `github:https://github.com/<owner>/<repo>[/tree/<branch>/<subpath>]`（由 installer 归一化写入）。
+ * 返回 { url, owner, repo, subpath? }；非 github 来源或解析失败返回 null。
  */
+export function parseGithubSource(
+  source: string | null | undefined,
+): { url: string; owner: string; repo: string; subpath?: string } | null {
+  if (!source?.startsWith('github:')) return null;
+  const url = source.slice('github:'.length).trim();
+  const m = url.match(/github\.com\/([^/]+)\/([^/?#]+)(?:\/tree\/[^/]+\/(.+))?/);
+  if (!m) return null;
+  return { url, owner: m[1], repo: m[2].replace(/\.git$/, ''), subpath: m[3] };
+}
+
+/**
+ * 为 GitHub 来源的 skill 生成「链接型分享」短链：不上传 skill 包，只把 GitHub 仓库 URL
+ * 发给服务端（sourceUrl 字段），服务端存 sourceUrl，短链打开后跳转到该 GitHub 仓库。
+ * 不写本地 share_links 缓存（链接型无文件指纹，每次生成新短链，7 天后服务端自动清理）。
+ */
+export async function shareGithubLink(tool: Tool, name: string): Promise<ShareCreateResult> {
+  const skill = listInstalled({ tool }).find((s) => s.name === name);
+  if (!skill) throw new Error(`未找到 ${name}（${tool}）`);
+  const gh = parseGithubSource(skill.source);
+  if (!gh) throw new Error('该 skill 不是 GitHub 来源，无法生成链接型分享');
+
+  const form = new FormData();
+  form.append('name', skill.name);
+  form.append('description', skill.description ?? '');
+  form.append('sourceTool', skill.tool);
+  form.append('sourceUrl', gh.url);
+
+  const headers: Record<string, string> = {};
+  const token = loadToken();
+  if (token) headers.authorization = `Bearer ${token}`;
+
+  let res: Response;
+  try {
+    res = await fetch(`${SHARE_BASE_URL}/share`, {
+      method: 'POST',
+      body: form,
+      headers,
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch (e: any) {
+    throw new Error(
+      `无法连接到分享服务（${SHARE_BASE_URL}）：${e?.message ?? e}`,
+    );
+  }
+  if (!res.ok) {
+    let detail = '';
+    try {
+      detail = await res.text();
+    } catch {
+      detail = '<响应体不可读>';
+    }
+    throw new Error(`生成短链失败（HTTP ${res.status}）：${detail}`);
+  }
+  const data = (await res.json()) as ShareCreateResult;
+  const url = `${SHARE_BASE_URL}/share/${data.id}`;
+  return { ...data, url };
+}
 export function parseShareId(input: string): string {
   const s = input.trim();
   const m = s.match(/share\/([A-Za-z0-9]{4,12})/);

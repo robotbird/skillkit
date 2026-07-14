@@ -97,7 +97,7 @@ export default function RepoSkillPicker({
             {result.skills.length === 0 ? (
               <div className="repo-skill-empty">{t('reposkill.empty')}</div>
             ) : (
-              <div className="opts opts-skills">
+              <div className={`opts opts-skills${result.skills.length === 1 ? ' is-single' : ' is-multi'}`}>
                 {result.skills.length > 1 && (
                   <>
                     <label className={`opts-skills-all${allChecked ? ' checked' : ''}`}>

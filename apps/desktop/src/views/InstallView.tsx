@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { TOOL_LABELS, type Tool, type InstallResult, type InstallOpts, type GithubSkillsResult, type RepoBatchResult } from '@shared/types';
+import { TOOL_LABELS, type Tool, type InstallResult, type InstallOpts, type GithubSkillsResult, type RepoBatchResult, type ShareSourceInfo } from '@shared/types';
 import type { ToastState } from '../components/Toast';
 import ToolPicker from '../components/ToolPicker';
 import RepoSkillPicker from '../components/RepoSkillPicker';
@@ -197,7 +197,19 @@ export default function InstallView({
       if (mode === 'share') {
         const url = (pendingShareRef.current ?? shareUrl).trim();
         pendingShareRef.current = null;
-        results = await window.skillkit.installFromShare(url, targets, opts);
+        // 链接型分享（GitHub 来源）：其 /zip 会 404，改走 GitHub 安装；否则按 zip 安装。
+        // 先查 meta：若带 sourceUrl 即链接型。查询失败（无效/过期）则交给 installFromShare 报错。
+        try {
+          const info: ShareSourceInfo = await window.skillkit.inspectShare(url);
+          if (info.exists && info.meta.sourceUrl) {
+            results = await window.skillkit.installFromGithub(info.meta.sourceUrl, targets, opts);
+          }
+        } catch {
+          /* 忽略：回退到 zip 安装路径 */
+        }
+        if (!results) {
+          results = await window.skillkit.installFromShare(url, targets, opts);
+        }
         const okAny = results.some((r) => r.ok);
         toast.show(summarize(results, t), okAny ? 'info' : 'error', 4000);
         if (okAny) {

@@ -4,6 +4,7 @@ import { ALL_TOOLS, TOOL_LABELS, type InstalledSkill, type Tool, type GlobalRepo
 import SkillCard from '../components/SkillCard';
 import GlobalRepoCard from '../components/GlobalRepoCard';
 import ShareDialog from '../components/ShareDialog';
+import SkillDetailModal from '../components/SkillDetailModal';
 import ToolPicker from '../components/ToolPicker';
 import { useToolbarSlot } from '../components/ToolbarSlot';
 import type { ToastState } from '../components/Toast';
@@ -33,6 +34,7 @@ export default function MySkillsView({
   const [uninstallGroup, setUninstallGroup] = useState<SkillGroup | null>(null);
   const [uninstalling, setUninstalling] = useState(false);
   const [revealGroup, setRevealGroup] = useState<SkillGroup | null>(null);
+  const [detailGroup, setDetailGroup] = useState<SkillGroup | null>(null);
   // 全局仓库（~/.agents/skills）
   const [globalSkills, setGlobalSkills] = useState<GlobalRepoSkill[] | null>(null);
   const [globalTarget, setGlobalTarget] = useState<GlobalRepoSkill | null>(null);
@@ -408,6 +410,7 @@ export default function MySkillsView({
               onReveal={startReveal}
               onShare={(grp) => setShareSkill(grp.primary)}
               onCopyTo={g.tools.length < ALL_TOOLS.length ? setCopyGroup : undefined}
+              onOpenDetail={setDetailGroup}
             />
           ))
         )}
@@ -417,6 +420,12 @@ export default function MySkillsView({
         open={!!shareSkill}
         skill={shareSkill}
         onClose={() => setShareSkill(null)}
+      />
+
+      <SkillDetailModal
+        open={!!detailGroup}
+        group={detailGroup}
+        onClose={() => setDetailGroup(null)}
       />
 
       <ToolPicker

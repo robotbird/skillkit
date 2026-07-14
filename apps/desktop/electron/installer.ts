@@ -8,7 +8,7 @@ import * as tar from 'tar';
 import AdmZip from 'adm-zip';
 import { TOOLS } from './tools.js';
 import { readSkillMd, type SkillMd } from './skill-md.js';
-import { upsertInstalled } from './db.js';
+import { upsertInstalled, listInstalled } from './db.js';
 import { copyDir, rmDir, safeExists } from './fs-util.js';
 import { writeToCanonical, linkOrCopyFromCanonical } from './global-repo.js';
 import type {
@@ -178,6 +178,17 @@ export function parseGithubRef(input: string): RepoRef | null {
   }
 }
 
+/** 把 RepoRef 规范化为可分享的 GitHub web URL，用作 source 标签与链接型分享地址。
+ *  无 subpath -> 仓库根；有 subpath -> /tree/<branch|HEAD>/<subpath>。 */
+function githubCanonicalUrl(ref: RepoRef): string {
+  const base = `https://github.com/${ref.owner}/${ref.repo}`;
+  if (ref.subpath) {
+    const branch = ref.branch ?? 'HEAD';
+    return `${base}/tree/${branch}/${ref.subpath}`;
+  }
+  return base;
+}
+
 /** 把 tarball 中 owner/repo[#sub] 这一段解包到 tmpDir，返回它的根目录 */
 async function fetchAndExtractTar(ref: RepoRef): Promise<string> {
   const branch = ref.branch ?? 'HEAD';
@@ -265,7 +276,28 @@ function dispatchInstall(
     if (!canon.ok || !canon.path || !canon.name) {
       return targets.map((t) => ({ tool: t, ok: false, error: canon.error }));
     }
-    return targets.map((t) => linkOrCopyFromCanonical(canon.path!, t, method, canon.name!));
+    // 全局安装也要写 installed_skills.source，否则扫描只写 null、GitHub 来源丢失。
+    // name 取规范副本的 frontmatter 名（与 scanTool 同源），保证 (tool,name) 键一致，
+    // 后续 scanAll 靠 upsertInstalled 的 COALESCE 保留 source。
+    const canonMd = readSkillMd(canon.path);
+    const name = canonMd?.name?.trim() || canon.name;
+    return targets.map((t) => {
+      const r = linkOrCopyFromCanonical(canon.path!, t, method, canon.name!);
+      if (r.ok && r.path) {
+        upsertInstalled({
+          tool: t,
+          name,
+          description: canonMd?.description ?? null,
+          path: r.path,
+          isBuiltin: false,
+          sizeBytes: null,
+          mtime: Date.now(),
+          source: sourceTag,
+          installedAt: Date.now(),
+        });
+      }
+      return r;
+    });
   }
   return targets.map((t) => installSourceToTool(srcDir, t, sourceTag));
 }
@@ -321,7 +353,7 @@ export async function installFromGithub(
       // 试着从仓库根扫一层下面是否含单一 SKILL.md 子目录
       const child = findSingleSkillChild(skillDir);
       if (child) {
-        return dispatchInstall(child, targets, `github:${url}`, opts);
+        return dispatchInstall(child, targets, `github:${githubCanonicalUrl(ref)}`, opts);
       }
       return targets.map((t) => ({
         tool: t,
@@ -329,7 +361,7 @@ export async function installFromGithub(
         error: '该路径未发现 SKILL.md（或子目录中也没有单一 SKILL.md）',
       }));
     }
-    return dispatchInstall(skillDir, targets, `github:${url}`, opts);
+    return dispatchInstall(skillDir, targets, `github:${githubCanonicalUrl(ref)}`, opts);
   } catch (err: any) {
     return targets.map((t) => ({ tool: t, ok: false, error: err?.message || String(err) }));
   } finally {
@@ -480,7 +512,6 @@ export async function installGithubSkillsAt(
   }
   ensureSweeper();
   const extractedRoot = await cachedExtract(ref);
-  const sourceTagBase = `github:${ref.owner}/${ref.repo}`;
 
   return subpaths.map((subpath) => {
     const skillDir = subpath ? path.join(extractedRoot, subpath) : extractedRoot;
@@ -497,7 +528,9 @@ export async function installGithubSkillsAt(
         })),
       };
     }
-    const sourceTag = subpath ? `${sourceTagBase}#${subpath}` : sourceTagBase;
+    // 规范化为 GitHub web URL（subpath 相对 extractedRoot，需拼接 ref 自身的 subpath）
+    const fullSubpath = [ref.subpath, subpath].filter(Boolean).join('/') || undefined;
+    const sourceTag = `github:${githubCanonicalUrl({ ...ref, subpath: fullSubpath })}`;
     const results = dispatchInstall(skillDir, targets, sourceTag, opts);
     return { subpath, skillName, results };
   });
@@ -582,9 +615,13 @@ export function copyInstalledToTools(
   // 目标目录沿用源目录名（而非展示名），避免把 "股票价值投资分析 (valuation-analysis)"
   // 这类 name 洗成全短横的乱码目录；跨工具身份仍由 frontmatter name 决定，分组不受影响。
   const destName = path.basename(srcDir);
+  // 来源沿用：若源 skill 是 GitHub 安装的，复制到其它工具后仍保留 github 来源（仍可走链接型分享）；
+  // 否则标记 copy:<源工具>/<name>。
+  const srcSource = listInstalled({ tool: sourceTool }).find((s) => s.name === name)?.source ?? null;
+  const sourceTag = srcSource?.startsWith('github:') ? srcSource : `copy:${sourceTool}/${name}`;
   return targets
     .filter((t) => t !== sourceTool)
-    .map((t) => installSourceToTool(srcDir, t, `copy:${sourceTool}/${name}`, destName));
+    .map((t) => installSourceToTool(srcDir, t, sourceTag, destName));
 }
 
 /** 卸载：删除目录 */

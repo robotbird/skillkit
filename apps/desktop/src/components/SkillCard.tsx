@@ -11,6 +11,7 @@ interface Props {
   onReveal?: (group: SkillGroup) => void;
   onShare?: (group: SkillGroup) => void;
   onCopyTo?: (group: SkillGroup) => void;
+  onOpenDetail?: (group: SkillGroup) => void;
 }
 
 function KebabMenu({
@@ -134,7 +135,7 @@ function KebabMenu({
   );
 }
 
-export default function SkillCard({ group, mode, onUninstall, onReveal, onShare, onCopyTo }: Props) {
+export default function SkillCard({ group, mode, onUninstall, onReveal, onShare, onCopyTo, onOpenDetail }: Props) {
   const { t } = useI18n();
   const { primary, tools } = group;
   const builtinTools = tools.filter((tool) => group.byTool[tool]?.isBuiltin);
@@ -147,9 +148,31 @@ export default function SkillCard({ group, mode, onUninstall, onReveal, onShare,
   const share = onShare ? () => onShare(group) : undefined;
   const copyTo = onCopyTo ? () => onCopyTo(group) : undefined;
 
+  // 点卡片打开详情；忽略点 kebab 菜单 / 按钮 / 链接，避免误触
+  const onCardClick = onOpenDetail
+    ? (e: React.MouseEvent<HTMLElement>) => {
+        if ((e.target as HTMLElement).closest('button, .kebab, a')) return;
+        onOpenDetail(group);
+      }
+    : undefined;
+  const onCardKey = onOpenDetail
+    ? (e: React.KeyboardEvent<HTMLElement>) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpenDetail(group);
+        }
+      }
+    : undefined;
+
   if (mode === 'grid') {
     return (
-      <article className="skill is-grid">
+      <article
+        className={`skill is-grid${onOpenDetail ? ' is-clickable' : ''}`}
+        onClick={onCardClick}
+        onKeyDown={onCardKey}
+        role={onOpenDetail ? 'button' : undefined}
+        tabIndex={onOpenDetail ? 0 : undefined}
+      >
         <header className="skill-grid-head">
           <div className="skill-ico">{emojiFor(group.name)}</div>
           <div className="skill-grid-head-right">
@@ -169,7 +192,13 @@ export default function SkillCard({ group, mode, onUninstall, onReveal, onShare,
 
   // list mode
   return (
-    <article className="skill is-list">
+    <article
+      className={`skill is-list${onOpenDetail ? ' is-clickable' : ''}`}
+      onClick={onCardClick}
+      onKeyDown={onCardKey}
+      role={onOpenDetail ? 'button' : undefined}
+      tabIndex={onOpenDetail ? 0 : undefined}
+    >
       <div className="skill-ico">{emojiFor(group.name)}</div>
       <div className="skill-body">
         <div className="skill-row1">

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { TOOLS, ALL_TOOLS, isGlobalAgentsOnlyTool } from './tools.js';
 import { readSkillMd } from './skill-md.js';
-import { clearInstalled, upsertInstalled, listInstalled as dbListInstalled } from './db.js';
+import { upsertInstalled, listInstalled as dbListInstalled, deleteStaleInstalled } from './db.js';
 import { dirSize } from './fs-util.js';
 import type { InstalledSkill, Tool, InstalledFilter } from '../shared/types.js';
 
@@ -95,10 +95,14 @@ export function scanAll(): InstalledSkill[] {
     if (!isToolInstalled(tool)) continue;
     all.push(...scanTool(tool));
   }
-  // 重写 db：清空 + 重新写入（一次扫描就是真相，简单可靠）
-  clearInstalled();
+  // 重写 db：merge-upsert 保留安装时写入的 source/installed_at（靠 upsertInstalled 的 COALESCE，
+  // 这两个是「安装来源元数据」，不可从文件系统重建，故跨扫描保留），再删除扫描集之外的旧行
+  // （已卸载 / frontmatter name 变更）。其余字段以扫描值为准。文件系统仍是 skill 内容的真相。
   for (const s of all) upsertInstalled(s);
-  return all;
+  deleteStaleInstalled(new Set(all.map((s) => `${s.tool}|${s.name}`)));
+  // 返回 DB 合并后的视图，而非扫描构建的 all：scanTool 把 source 写死成 null/builtin，
+  // 直接返回 all 会让渲染层永远拿不到 GitHub 来源。DB 里的 source/installed_at 已被 COALESCE 保留。
+  return dbListInstalled();
 }
 
 export function listInstalled(filter?: InstalledFilter): InstalledSkill[] {
