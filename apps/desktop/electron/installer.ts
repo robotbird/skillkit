@@ -7,7 +7,7 @@ import { app } from 'electron';
 import * as tar from 'tar';
 import AdmZip from 'adm-zip';
 import { TOOLS } from './tools.js';
-import { readSkillMd, type SkillMd } from './skill-md.js';
+import { readSkillMd, parseFrontmatter, type SkillMd } from './skill-md.js';
 import { upsertInstalled, listInstalled } from './db.js';
 import { copyDir, rmDir, safeExists } from './fs-util.js';
 import { writeToCanonical, linkOrCopyFromCanonical } from './global-repo.js';
@@ -41,6 +41,7 @@ const SCAN_SKIP = new Set([
 ]);
 const MAX_DEPTH = 3;
 const MAX_CANDIDATES = 50;
+const MAX_FILES = 300; // 在线逐文件安装时 skill 目录文件数上限；超过则回退整包 tarball
 
 // ===== tarball 内存缓存（list 与 install 共用一份解包结果）=====
 interface CachedTar {
@@ -189,21 +190,53 @@ function githubCanonicalUrl(ref: RepoRef): string {
   return base;
 }
 
-/** 把 tarball 中 owner/repo[#sub] 这一段解包到 tmpDir，返回它的根目录 */
+/** 瞬时网络错误(socket 被对端中途关闭 / 连接重置 / 超时 等):值得自动重试 */
+function isTransientNetError(e: unknown): boolean {
+  const any = e as any;
+  const code: unknown = any?.cause?.code ?? any?.code;
+  if (typeof code === 'string' && code.startsWith('UND_ERR_')) return true; // UND_ERR_SOCKET 等
+  const msg = String(any?.message ?? '');
+  return /terminated|other side closed|socket hang up|ECONNRESET|ETIMEDOUT|ENOTFOUND|fetch failed/i.test(msg);
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * 把 tarball 中 owner/repo[#sub] 这一段解包到 tmpDir，返回它的根目录。
+ * 经 Clash 等代理下大 tarball 时,socket 常被对端中途关闭(UND_ERR_SOCKET / "other side closed")——
+ * 这类瞬时错误自动重试若干次;每次失败清理半成品 tmpDir,避免遗留垃圾。
+ */
 async function fetchAndExtractTar(ref: RepoRef): Promise<string> {
   const branch = ref.branch ?? 'HEAD';
   const url = `https://codeload.github.com/${ref.owner}/${ref.repo}/tar.gz/${branch}`;
-  const res = await fetch(url, { headers: { 'user-agent': 'Skillkit/0.2' } });
-  if (!res.ok || !res.body) {
-    throw new Error(`无法下载 ${url}（HTTP ${res.status}）`);
+  const MAX_ATTEMPTS = 3;
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skillkit-'));
+    try {
+      const res = await fetch(url, { headers: { 'user-agent': 'Skillkit/0.2' } });
+      if (!res.ok || !res.body) {
+        throw new Error(`无法下载 ${url}（HTTP ${res.status}）`);
+      }
+      // tar.x 接 stream(tar 的 Unpack 与 @types/node 的 WritableStream 签名有细微出入,这里强转)
+      await pipeline(Readable.fromWeb(res.body as any), tar.x({ cwd: tmpDir }) as unknown as NodeJS.WritableStream);
+      // tarball 内只有一个顶层目录 `<repo>-<sha>/`
+      const top = fs.readdirSync(tmpDir).find((n) => fs.statSync(path.join(tmpDir, n)).isDirectory());
+      if (!top) throw new Error('tarball 解包后未找到顶层目录');
+      return path.join(tmpDir, top);
+    } catch (e) {
+      // 清理本次半成品 tmpDir,避免遗留垃圾(无论何种失败)
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* 忽略清理失败 */ }
+      lastErr = e;
+      // 仅瞬时网络错误重试;HTTP 状态码/解析错误等确定性失败立即抛出
+      if (!isTransientNetError(e) || attempt === MAX_ATTEMPTS) break;
+      await sleep(400 * attempt); // 退避:400ms、800ms
+    }
   }
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skillkit-'));
-  // tar.x 接 stream(tar 的 Unpack 与 @types/node 的 WritableStream 签名有细微出入,这里强转)
-  await pipeline(Readable.fromWeb(res.body as any), tar.x({ cwd: tmpDir }) as unknown as NodeJS.WritableStream);
-  // tarball 内只有一个顶层目录 `<repo>-<sha>/`
-  const top = fs.readdirSync(tmpDir).find((n) => fs.statSync(path.join(tmpDir, n)).isDirectory());
-  if (!top) throw new Error('tarball 解包后未找到顶层目录');
-  return path.join(tmpDir, top);
+  if (isTransientNetError(lastErr)) {
+    throw new Error(`下载 ${url} 时网络中断，已重试 ${MAX_ATTEMPTS} 次仍失败，请检查代理/网络后重试`);
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 /** 从已经准备好的"skill 源目录"安装到一个 tool 的 installRoot/<name>/ */
@@ -342,6 +375,12 @@ export async function installFromGithub(
   if (!ref) {
     return targets.map((t) => ({ tool: t, ok: false, error: 'GitHub 地址解析失败' }));
   }
+  // 优先在线逐文件安装（只拉选中 skill 子树的文件，不下整包 tarball）；失败回退整包
+  try {
+    return await installGithubViaApi(ref, targets, opts);
+  } catch {
+    /* 回退整包 tarball */
+  }
   let extractedRoot: string | null = null;
   try {
     extractedRoot = await fetchAndExtractTar(ref);
@@ -469,29 +508,339 @@ function collectRepoSkills(
   return { candidates, isPlugin, pluginHints };
 }
 
-/** 列举仓库内的 skill 候选。下载结果缓存在主进程内存，installGithubSkillsAt 复用。 */
-export async function listGithubSkills(url: string): Promise<GithubSkillsResult> {
-  const ref = parseGithubRef(url);
-  if (!ref) throw new Error('GitHub 地址解析失败');
-  ensureSweeper();
-  const extractedRoot = await cachedExtract(ref);
-  const { candidates, isPlugin, pluginHints } = collectRepoSkills(
-    extractedRoot,
-    ref.subpath ?? '',
+// ===== GitHub API 在线扫描（不下整包 tarball）=====
+// 一次 git/trees?recursive=1 拿全文件树，再对候选目录逐个 raw 拉 MD。
+// 任何失败（限流 / 私有 / 超大树 / 网络）→ 抛错，由 listGithubSkills 回退整包 tarball 扫描。
+
+const GH_API = 'https://api.github.com';
+const GH_RAW = 'https://raw.githubusercontent.com';
+const GH_TOKEN = process.env.GITHUB_TOKEN?.trim(); // 可选：把匿名 60/小时限流抬到 5000/小时
+
+/** GitHub GET（API 或 raw）：UA + 超时 + 可选 token + 瞬时错误重试（复用 isTransientNetError）。 */
+async function ghGet(url: string, json: boolean): Promise<Response> {
+  const headers: Record<string, string> = { 'user-agent': 'Skillkit/0.2' };
+  if (json) headers.accept = 'application/vnd.github+json';
+  if (GH_TOKEN) headers.authorization = `bearer ${GH_TOKEN}`;
+  const MAX = 3;
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= MAX; attempt++) {
+    try {
+      return await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+    } catch (e) {
+      lastErr = e;
+      if (!isTransientNetError(e) || attempt === MAX) break;
+      await sleep(400 * attempt);
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
+async function ghApiJson<T>(url: string): Promise<T> {
+  const res = await ghGet(url, true);
+  if (!res.ok) throw new Error(`GitHub API HTTP ${res.status}`);
+  return (await res.json()) as T;
+}
+
+async function ghRawText(url: string): Promise<string> {
+  const res = await ghGet(url, false);
+  if (!res.ok) throw new Error(`raw HTTP ${res.status}`);
+  return await res.text();
+}
+
+async function ghRawBytes(url: string): Promise<Buffer> {
+  const res = await ghGet(url, false);
+  if (!res.ok) throw new Error(`raw HTTP ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+/** 无 branch 时取默认分支（raw URL 需要真实 branch，不接受 HEAD）。 */
+async function defaultBranch(owner: string, repo: string): Promise<string> {
+  const info = await ghApiJson<{ default_branch?: string }>(`${GH_API}/repos/${owner}/${repo}`);
+  return info.default_branch || 'main';
+}
+
+interface TreeEntry {
+  path: string;
+  type: string;
+}
+interface TreesResponse {
+  tree: TreeEntry[];
+  truncated?: boolean;
+}
+
+/** git/trees/{branch}?recursive=1：返回扁平全树。truncated（>100k 条目）时抛错触发兜底。 */
+async function fetchRepoTree(owner: string, repo: string, branch: string): Promise<TreesResponse> {
+  const data = await ghApiJson<TreesResponse>(
+    `${GH_API}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
   );
+  if (data.truncated) throw new Error('仓库文件树过大(>100k 条目)');
+  return data;
+}
+
+interface TreeNode {
+  name: string;
+  isDir: boolean;
+}
+
+/** 把扁平 tree 归一为：blobs 集合 + 父目录→子项（根 key 为 ''）。 */
+function indexTree(entries: TreeEntry[]): {
+  blobs: Set<string>;
+  childrenOf: Map<string, TreeNode[]>;
+} {
+  const blobs = new Set<string>();
+  const childrenOf = new Map<string, TreeNode[]>();
+  for (const e of entries) {
+    const segs = e.path.split('/');
+    const name = segs[segs.length - 1];
+    const parent = segs.length > 1 ? segs.slice(0, -1).join('/') : '';
+    if (e.type === 'blob') blobs.add(e.path);
+    let list = childrenOf.get(parent);
+    if (!list) {
+      list = [];
+      childrenOf.set(parent, list);
+    }
+    list.push({ name, isDir: e.type === 'tree' });
+  }
+  return { blobs, childrenOf };
+}
+
+/** raw URL：逐段编码 path，避免子目录名里的特殊字符。 */
+function rawUrl(owner: string, repo: string, branch: string, relPath: string): string {
+  const encPath = relPath.split('/').map(encodeURIComponent).join('/');
+  return `${GH_RAW}/${owner}/${repo}/${encodeURIComponent(branch)}/${encPath}`;
+}
+
+/** 镜像 readSkillMd：SKILL.md 再 AGENTS.md，首个有效 frontmatter 胜出。
+ *  先用 blobs 判存在（避免 404 空拉），存在才 raw 拉取 + parseFrontmatter。 */
+async function fetchMd(
+  dirRel: string,
+  blobs: Set<string>,
+  owner: string,
+  repo: string,
+  branch: string,
+): Promise<SkillMd | null> {
+  for (const file of ['SKILL.md', 'AGENTS.md']) {
+    const p = dirRel ? `${dirRel}/${file}` : file;
+    if (!blobs.has(p)) continue;
+    try {
+      const md = parseFrontmatter(await ghRawText(rawUrl(owner, repo, branch, p)));
+      if (md) return md;
+    } catch {
+      // 继续尝试下一个候选 / 忽略
+    }
+  }
+  return null;
+}
+
+/** 镜像 collectRepoSkills，但在内存文件树（git/trees）上跑，MD 内容在线 raw 拉。 */
+async function collectRepoSkillsFromTree(
+  ref: RepoRef,
+  branch: string,
+  blobs: Set<string>,
+  childrenOf: Map<string, TreeNode[]>,
+  startSubpath: string,
+): Promise<{
+  candidates: Array<{ subpath: string; skill: SkillMd }>;
+  isPlugin: boolean;
+  pluginHints: string[];
+}> {
+  // 单 skill 短路：startSubpath 自身有有效 MD
+  const direct = await fetchMd(startSubpath, blobs, ref.owner, ref.repo, branch);
+  if (direct) {
+    return { candidates: [{ subpath: startSubpath, skill: direct }], isPlugin: false, pluginHints: [] };
+  }
+
+  const candidates: Array<{ subpath: string; skill: SkillMd }> = [];
+  const seen = new Set<string>();
+  const queue: Array<[string, number]> = [[startSubpath, 0]]; // [dirRel, depth]
+
+  while (queue.length > 0 && candidates.length < MAX_CANDIDATES) {
+    const [dir, depth] = queue.shift()!;
+    const children = childrenOf.get(dir);
+    if (!children) continue;
+    for (const c of children) {
+      if (!c.isDir) continue;
+      if (PLUGIN_MARKERS[c.name] || SCAN_SKIP.has(c.name)) continue;
+      if (c.name.startsWith('.')) continue; // 其它隐藏目录
+      const childSub = dir ? `${dir}/${c.name}` : c.name;
+      if (seen.has(childSub)) continue;
+      const md = await fetchMd(childSub, blobs, ref.owner, ref.repo, branch);
+      if (md) {
+        seen.add(childSub);
+        candidates.push({ subpath: childSub, skill: md });
+        if (candidates.length >= MAX_CANDIDATES) break;
+        continue; // skill 目录不再下钻
+      }
+      seen.add(childSub);
+      if (depth + 1 < MAX_DEPTH) queue.push([childSub, depth + 1]);
+    }
+  }
+
+  // plugin 框架识别：仅根层目录命中 marker（与 collectRepoSkills 一致）
+  const pluginHints: string[] = [];
+  for (const c of childrenOf.get('') ?? []) {
+    if (c.isDir && PLUGIN_MARKERS[c.name]) pluginHints.push(PLUGIN_MARKERS[c.name]);
+  }
+  const isPlugin = pluginHints.length > 0 && candidates.length > 0;
+  return { candidates, isPlugin, pluginHints };
+}
+
+/** 候选 -> RepoSkillCandidate[] + kind（API 路径与 tarball 兜底共用）。 */
+function buildResult(
+  candidates: Array<{ subpath: string; skill: SkillMd }>,
+  isPlugin: boolean,
+  pluginHints: string[],
+  ref: RepoRef,
+): GithubSkillsResult {
   const skills: RepoSkillCandidate[] = candidates.map((c) => ({
-    name: c.skill.name?.trim() || path.basename(c.dir),
+    name: c.skill.name?.trim() || (c.subpath ? path.basename(c.subpath) : ref.repo),
     description: c.skill.description ?? null,
     subpath: c.subpath,
   }));
   const kind = skills.length === 1 && skills[0].subpath === '' ? 'single' : 'multi';
-  return {
-    kind,
-    skills,
-    isPlugin,
-    pluginHints,
-    repo: `${ref.owner}/${ref.repo}`,
-  };
+  return { kind, skills, isPlugin, pluginHints, repo: `${ref.owner}/${ref.repo}` };
+}
+
+/** 在线 API 扫描：git/trees + 逐个 raw MD。失败则抛错，由调用方回退整包 tarball。 */
+async function listGithubSkillsViaApi(ref: RepoRef): Promise<GithubSkillsResult> {
+  const branch = ref.branch ?? (await defaultBranch(ref.owner, ref.repo));
+  const tree = await fetchRepoTree(ref.owner, ref.repo, branch);
+  const { blobs, childrenOf } = indexTree(tree.tree);
+  const { candidates, isPlugin, pluginHints } = await collectRepoSkillsFromTree(
+    ref,
+    branch,
+    blobs,
+    childrenOf,
+    ref.subpath ?? '',
+  );
+  return buildResult(candidates, isPlugin, pluginHints, ref);
+}
+
+/** 列举仓库内的 skill 候选。
+ *  优先走在线 API（git/trees + 逐个 raw MD，不下载整包）；API 失败（限流/私有/超大树/网络）
+ *  回退整包 tarball 扫描，保证不退化。安装同理：installFromGithub / installGithubSkillsAt
+ *  也优先在线逐文件，失败回退整包（见下方）。 */
+export async function listGithubSkills(url: string): Promise<GithubSkillsResult> {
+  const ref = parseGithubRef(url);
+  if (!ref) throw new Error('GitHub 地址解析失败');
+  ensureSweeper();
+  try {
+    return await listGithubSkillsViaApi(ref);
+  } catch {
+    const extractedRoot = await cachedExtract(ref);
+    const { candidates, isPlugin, pluginHints } = collectRepoSkills(extractedRoot, ref.subpath ?? '');
+    return buildResult(candidates, isPlugin, pluginHints, ref);
+  }
+}
+
+// ===== GitHub API 在线安装（只拉选中 skill 子树的文件，不下整包 tarball）=====
+
+/** 一次性拿到仓库文件树的所有 blob 路径（按 subpath 过滤后逐文件 raw 拉）。 */
+async function resolveTreeBlobs(ref: RepoRef): Promise<{ branch: string; blobs: string[] }> {
+  const branch = ref.branch ?? (await defaultBranch(ref.owner, ref.repo));
+  const tree = await fetchRepoTree(ref.owner, ref.repo, branch);
+  const blobs = tree.tree.filter((e) => e.type === 'blob').map((e) => e.path);
+  return { branch, blobs };
+}
+
+/** subpath 子树下的 blob 路径（subpath='' 即整个仓库根）。 */
+function blobsUnderSubpath(blobs: string[], subpath: string): string[] {
+  if (!subpath) return blobs;
+  const prefix = `${subpath}/`;
+  return blobs.filter((p) => p.startsWith(prefix));
+}
+
+/**
+ * 在线拉取 subpath 下的所有文件，按原结构写到本地 tmpDir，作为 skill 源目录（供 dispatchInstall）。
+ * 不下整包 tarball；文件数 > MAX_FILES 时抛错，由调用方回退整包。失败时自行清理 tmpDir。
+ */
+async function buildLocalSkillDir(
+  ref: RepoRef,
+  branch: string,
+  subpath: string,
+  blobs: string[],
+): Promise<{ dir: string; tmpRoot: string }> {
+  const files = blobsUnderSubpath(blobs, subpath);
+  if (files.length === 0) throw new Error('该路径下无文件');
+  if (files.length > MAX_FILES) throw new Error(`skill 目录文件过多(>${MAX_FILES})`);
+  const prefix = subpath ? `${subpath}/` : '';
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'skillkit-gh-'));
+  try {
+    for (const p of files) {
+      const rel = prefix ? p.slice(prefix.length) : p;
+      const dest = path.join(tmpRoot, rel);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, await ghRawBytes(rawUrl(ref.owner, ref.repo, branch, p)));
+    }
+    return { dir: tmpRoot, tmpRoot };
+  } catch (e) {
+    try { rmDir(tmpRoot); } catch { /* ignore */ }
+    throw e;
+  }
+}
+
+/** 在线逐文件安装单个 skill（subpath 来自 ref）。失败抛错 -> installFromGithub 回退整包。 */
+async function installGithubViaApi(
+  ref: RepoRef,
+  targets: Tool[],
+  opts?: InstallOpts,
+): Promise<InstallResult[]> {
+  const { branch, blobs } = await resolveTreeBlobs(ref);
+  const { dir, tmpRoot } = await buildLocalSkillDir(ref, branch, ref.subpath ?? '', blobs);
+  try {
+    const sourceTag = `github:${githubCanonicalUrl(ref)}`;
+    if (!readSkillMd(dir)) {
+      const child = findSingleSkillChild(dir);
+      if (child) return dispatchInstall(child, targets, sourceTag, opts);
+      return targets.map((t) => ({
+        tool: t,
+        ok: false,
+        error: '该路径未发现 SKILL.md（或子目录中也没有单一 SKILL.md）',
+      }));
+    }
+    return dispatchInstall(dir, targets, sourceTag, opts);
+  } finally {
+    try { rmDir(tmpRoot); } catch { /* ignore */ }
+  }
+}
+
+/** 在线逐文件批量安装多个 subpath。任一 subpath 文件过多/为空则整体回退整包（避免装一半）。 */
+async function installGithubSkillsAtViaApi(
+  ref: RepoRef,
+  subpaths: string[],
+  targets: Tool[],
+  opts?: InstallOpts,
+): Promise<RepoBatchResult[]> {
+  const { branch, blobs } = await resolveTreeBlobs(ref);
+  // 预检：任一 subpath 超量/为空 -> 整体回退整包（不在循环内部分失败）
+  for (const subpath of subpaths) {
+    const n = blobsUnderSubpath(blobs, subpath).length;
+    if (n === 0 || n > MAX_FILES) throw new Error('skill 目录文件过多或为空，回退整包');
+  }
+  const results: RepoBatchResult[] = [];
+  for (const subpath of subpaths) {
+    let tmpRoot: string | null = null;
+    try {
+      const built = await buildLocalSkillDir(ref, branch, subpath, blobs);
+      tmpRoot = built.tmpRoot;
+      const md = readSkillMd(built.dir);
+      const skillName = md?.name?.trim() || (subpath ? subpath.split('/').pop()! : ref.repo);
+      if (!md) {
+        results.push({
+          subpath,
+          skillName,
+          results: targets.map((t) => ({ tool: t, ok: false, error: '指定 skill 路径不存在或缺少有效 SKILL.md' })),
+        });
+        continue;
+      }
+      const fullSubpath = [ref.subpath, subpath].filter(Boolean).join('/') || undefined;
+      const sourceTag = `github:${githubCanonicalUrl({ ...ref, subpath: fullSubpath })}`;
+      results.push({ subpath, skillName, results: dispatchInstall(built.dir, targets, sourceTag, opts) });
+    } finally {
+      if (tmpRoot) { try { rmDir(tmpRoot); } catch { /* ignore */ } }
+    }
+  }
+  return results;
 }
 
 /** 批量安装仓库内多个 subpath（=多个 skill）到所选工具。复用缓存的 extractedRoot。 */
@@ -511,6 +860,12 @@ export async function installGithubSkillsAt(
     }));
   }
   ensureSweeper();
+  // 优先在线逐文件安装（只拉选中 skill 子树的文件，不下整包 tarball）；失败回退整包缓存
+  try {
+    return await installGithubSkillsAtViaApi(ref, subpaths, targets, opts);
+  } catch {
+    /* 回退整包 tarball（走缓存） */
+  }
   const extractedRoot = await cachedExtract(ref);
 
   return subpaths.map((subpath) => {
