@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { TOOL_LABELS, type Tool, type InstallResult, type InstallOpts, type GithubSkillsResult, type RepoBatchResult, type ShareSourceInfo } from '@shared/types';
 import type { ToastState } from '../components/Toast';
 import ToolPicker from '../components/ToolPicker';
@@ -6,6 +6,7 @@ import RepoSkillPicker from '../components/RepoSkillPicker';
 import InstallToolGrid from '../components/InstallToolGrid';
 import { useI18n } from '../i18n';
 import type { MessageKey } from '../i18n/messages';
+import { classifyInstallSource } from '../lib/install-source';
 
 interface RecentItem {
   name: string;
@@ -39,11 +40,10 @@ function summarizeBatch(batch: RepoBatchResult[], t: T): string {
   return parts.join('; ') || t('inst.sumBatch.noSkill');
 }
 
-type InstallMode = 'share' | 'github' | 'zip';
+type InstallMode = 'link' | 'zip';
 
 const MODE_LABELS: Record<InstallMode, MessageKey> = {
-  share: 'inst.mode.share',
-  github: 'inst.mode.github',
+  link: 'inst.mode.link',
   zip: 'inst.mode.zip',
 };
 
@@ -59,9 +59,10 @@ export default function InstallView({
   onPendingConsumed?: () => void;
 }) {
   const { t } = useI18n();
-  const [mode, setMode] = useState<InstallMode>('share');
-  const [ghUrl, setGhUrl] = useState('');
-  const [shareUrl, setShareUrl] = useState('');
+  const [mode, setMode] = useState<InstallMode>('link');
+  const [linkUrl, setLinkUrl] = useState('');
+  // 链接 tab：提交瞬间记住识别出的子类型（share / github），供确认弹窗 handleConfirm 分派
+  const [activeKind, setActiveKind] = useState<'share' | 'github'>('share');
   const [selectedTools, setSelectedTools] = useState<Tool[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -74,7 +75,16 @@ export default function InstallView({
   // zip：先选文件（存绝对路径），上传完成后再点「安装」选目标工具
   const [zipPath, setZipPath] = useState('');
   const [recent, setRecent] = useState<RecentItem[]>([]);
-  const [hint, setHint] = useState<{ msg: string; error?: boolean }>({ msg: t('inst.hint.default') });
+
+  // 链接 tab：实时识别输入是 skillkit.net 分享链接还是 GitHub，据此派生提示文案/颜色
+  const detected = useMemo(() => classifyInstallSource(linkUrl), [linkUrl]);
+  const linkHint = !linkUrl.trim()
+    ? { msg: t('inst.hint.default'), cls: '' }
+    : detected === 'share'
+      ? { msg: t('inst.hint.detected.share'), cls: ' ok' }
+      : detected === 'github'
+        ? { msg: t('inst.hint.detected.github'), cls: ' ok' }
+        : { msg: t('inst.hint.unknown'), cls: ' error' };
 
   // 深链预填用的 ref：规避 setState 异步竞态，确认安装时优先取它
   const pendingShareRef = useRef<string | null>(null);
@@ -83,9 +93,10 @@ export default function InstallView({
   // 已选工具则打开接入方式确认，否则 toast 提示先选工具。
   useEffect(() => {
     if (!pendingShare) return;
-    setMode('share');
-    setShareUrl(pendingShare);
+    setMode('link');
+    setLinkUrl(pendingShare);
     pendingShareRef.current = pendingShare;
+    setActiveKind('share');
     onPendingConsumed?.();
     if (selectedTools.length === 0) {
       toast.show(t('inst.toast.needTools'), 'error');
@@ -108,12 +119,8 @@ export default function InstallView({
 
   // 点击「安装」：先做当前 tab 的输入校验 + 工具选择校验，通过后弹框选接入方式
   function startInstall() {
-    if (mode === 'github' && !ghUrl.trim()) {
-      setHint({ msg: t('inst.hint.needGithub'), error: true });
-      return;
-    }
-    if (mode === 'share' && !shareUrl.trim()) {
-      toast.show(t('inst.toast.needShare'), 'error');
+    if (mode === 'link' && !linkUrl.trim()) {
+      toast.show(t('inst.toast.needLink'), 'error');
       return;
     }
     if (mode === 'zip' && !zipPath) {
@@ -124,25 +131,30 @@ export default function InstallView({
       toast.show(t('inst.toast.needTools'), 'error');
       return;
     }
-    if (mode === 'github') {
-      // GitHub：先列举仓库内 skill 候选，再决定走单 skill 直装还是多 skill 批量
-      void startList();
-      return;
+    if (mode === 'link') {
+      // 智能识别：GitHub 先列举候选再决定单装/批量；分享直接弹接入方式确认；未识别则提示
+      const kind = classifyInstallSource(linkUrl.trim());
+      if (kind === 'unknown') {
+        toast.show(t('inst.hint.unknown'), 'error');
+        return;
+      }
+      setActiveKind(kind === 'github' ? 'github' : 'share');
+      if (kind === 'github') {
+        void startList(linkUrl.trim());
+        return;
+      }
     }
-    setHint({ msg: t('inst.hint.default') });
     setPickerOpen(true);
   }
 
   // GitHub 两步流程第一步：列举仓库内 skill 候选
-  async function startList() {
-    if (!ghUrl.trim()) {
-      setHint({ msg: t('inst.hint.needGithub'), error: true });
+  async function startList(url: string) {
+    if (!url) {
       return;
     }
-    setHint({ msg: t('inst.hint.default') });
     setBusy(true);
     try {
-      const res = await window.skillkit.listGithubSkills(ghUrl.trim());
+      const res = await window.skillkit.listGithubSkills(url);
       if (res.kind === 'single') {
         // 单 skill 仓库：走原 ToolPicker 直装路径（handleConfirm 的 github 分支）
         setPickerOpen(true);
@@ -169,7 +181,7 @@ export default function InstallView({
   async function handleRepoConfirm(pickedSubpaths: string[], targets: Tool[], opts: InstallOpts) {
     const result = repoPicker.result;
     if (!result) return;
-    const url = ghUrl.trim();
+    const url = linkUrl.trim();
     setBusy(true);
     try {
       const batch = await window.skillkit.installGithubSkillsAt(url, pickedSubpaths, targets, opts);
@@ -194,39 +206,42 @@ export default function InstallView({
     try {
       let results: InstallResult[] | null = null;
 
-      if (mode === 'share') {
-        const url = (pendingShareRef.current ?? shareUrl).trim();
-        pendingShareRef.current = null;
-        // 链接型分享（GitHub 来源）：其 /zip 会 404，改走 GitHub 安装；否则按 zip 安装。
-        // 先查 meta：若带 sourceUrl 即链接型。查询失败（无效/过期）则交给 installFromShare 报错。
-        try {
-          const info: ShareSourceInfo = await window.skillkit.inspectShare(url);
-          if (info.exists && info.meta.sourceUrl) {
-            results = await window.skillkit.installFromGithub(info.meta.sourceUrl, targets, opts);
+      if (mode === 'link') {
+        if (activeKind === 'github') {
+          // GitHub 单 skill 直装（多 skill 经 RepoSkillPicker 走 handleRepoConfirm）
+          const url = linkUrl.trim();
+          results = await window.skillkit.installFromGithub(url, targets, opts);
+          const okAny = results.some((r) => r.ok);
+          toast.show(summarize(results, t), okAny ? 'info' : 'error', 4000);
+          if (okAny) {
+            const repoName = url.match(/([^/]+?)(?:\.git)?\/?$/)?.[1] ?? url;
+            pushRecent(repoName, url);
+            setLinkUrl('');
+            onInstalled();
           }
-        } catch {
-          /* 忽略：回退到 zip 安装路径 */
-        }
-        if (!results) {
-          results = await window.skillkit.installFromShare(url, targets, opts);
-        }
-        const okAny = results.some((r) => r.ok);
-        toast.show(summarize(results, t), okAny ? 'info' : 'error', 4000);
-        if (okAny) {
-          pushRecent(results.find((r) => r.ok)?.path?.split('/').pop() ?? t('inst.source.share'), url);
-          setShareUrl('');
-          onInstalled();
-        }
-      } else if (mode === 'github') {
-        const url = ghUrl.trim();
-        results = await window.skillkit.installFromGithub(url, targets, opts);
-        const okAny = results.some((r) => r.ok);
-        toast.show(summarize(results, t), okAny ? 'info' : 'error', 4000);
-        if (okAny) {
-          const repoName = url.match(/([^/]+?)(?:\.git)?\/?$/)?.[1] ?? url;
-          pushRecent(repoName, url);
-          setGhUrl('');
-          onInstalled();
+        } else {
+          // 分享链接：链接型（GitHub 来源）其 /zip 会 404，改走 GitHub 安装；否则按 zip 安装。
+          // 先查 meta：若带 sourceUrl 即链接型。查询失败（无效/过期）则交给 installFromShare 报错。
+          const url = (pendingShareRef.current ?? linkUrl).trim();
+          pendingShareRef.current = null;
+          try {
+            const info: ShareSourceInfo = await window.skillkit.inspectShare(url);
+            if (info.exists && info.meta.sourceUrl) {
+              results = await window.skillkit.installFromGithub(info.meta.sourceUrl, targets, opts);
+            }
+          } catch {
+            /* 忽略：回退到 zip 安装路径 */
+          }
+          if (!results) {
+            results = await window.skillkit.installFromShare(url, targets, opts);
+          }
+          const okAny = results.some((r) => r.ok);
+          toast.show(summarize(results, t), okAny ? 'info' : 'error', 4000);
+          if (okAny) {
+            pushRecent(results.find((r) => r.ok)?.path?.split('/').pop() ?? t('inst.source.share'), url);
+            setLinkUrl('');
+            onInstalled();
+          }
         }
       } else {
         // zip：用第一步选好的路径安装到所选工具
@@ -253,16 +268,16 @@ export default function InstallView({
   const zipName = zipPath ? zipPath.split(/[\\/]/).pop() ?? '' : '';
 
   const pickerSubtitle =
-    mode === 'share'
-      ? t('inst.pickerSubtitle.share')
-      : mode === 'github'
+    mode === 'link'
+      ? activeKind === 'github'
         ? t('inst.pickerSubtitle.github')
-        : t('inst.pickerSubtitle.zip');
+        : t('inst.pickerSubtitle.share')
+      : t('inst.pickerSubtitle.zip');
 
   return (
     <section>
       <div className="tabs install-tabs">
-        {(['share', 'github', 'zip'] as InstallMode[]).map((m) => (
+        {(['link', 'zip'] as InstallMode[]).map((m) => (
           <button
             key={m}
             role="tab"
@@ -284,51 +299,34 @@ export default function InstallView({
       </div>
 
       <div className="install-grid is-single">
-        {mode === 'share' && (
+        {mode === 'link' && (
           <article className="install-card">
             <div className="install-icon">
               <svg viewBox="0 0 24 24" width="22" height="22">
-                <path fill="currentColor" d="M14 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1.9-5.5 4.2-10.9 11-11z"/>
+                <path fill="currentColor" d="M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7A3.1 3.1 0 0 1 3.9 12zM8 13h8v-2H8v2zm9-6h-4v1.9h4a3.1 3.1 0 0 1 0 6.2h-4V17h4a5 5 0 0 0 0-10z"/>
               </svg>
             </div>
-            <h2 className="install-title">{t('inst.share.title')}</h2>
-            <p className="install-desc">{t('inst.share.desc')}</p>
+            <h2 className="install-title">{t('inst.link.title')}</h2>
+            <p className="install-desc">{t('inst.link.desc')}</p>
             <div className="install-input">
               <input
-                placeholder={t('inst.share.placeholder')}
-                value={shareUrl}
-                onChange={(e) => setShareUrl(e.target.value)}
+                placeholder={t('inst.link.placeholder')}
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') startInstall(); }}
               />
               <button className="btn-primary" onClick={startInstall} disabled={busy}>
-                {busy ? <><span className="spinner" /> {t('inst.btn.installing')}</> : t('inst.btn.install')}
+                {busy ? (
+                  <>
+                    <span className="spinner" />{' '}
+                    {activeKind === 'github' ? t('inst.btn.scanning') : t('inst.btn.installing')}
+                  </>
+                ) : (
+                  t('inst.btn.install')
+                )}
               </button>
             </div>
-            <div className="install-hint">{t('inst.share.hint')}</div>
-          </article>
-        )}
-
-        {mode === 'github' && (
-          <article className="install-card">
-            <div className="install-icon">
-              <svg viewBox="0 0 24 24" width="22" height="22">
-                <path fill="currentColor" d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.17-.02-2.13-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.74 2.68 1.24 3.34.95.1-.74.4-1.24.72-1.52-2.55-.29-5.24-1.27-5.24-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.15 1.18a10.95 10.95 0 015.74 0c2.19-1.49 3.15-1.18 3.15-1.18.62 1.57.23 2.73.11 3.02.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.36-5.26 5.65.41.35.78 1.05.78 2.12 0 1.53-.01 2.77-.01 3.14 0 .31.21.68.8.56 4.56-1.52 7.85-5.83 7.85-10.91C23.5 5.65 18.35.5 12 .5z"/>
-              </svg>
-            </div>
-            <h2 className="install-title">{t('inst.github.title')}</h2>
-            <p className="install-desc">{t('inst.github.desc')}</p>
-            <div className="install-input">
-              <input
-                placeholder={t('inst.github.placeholder')}
-                value={ghUrl}
-                onChange={(e) => setGhUrl(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') startInstall(); }}
-              />
-              <button className="btn-primary" onClick={startInstall} disabled={busy}>
-                {busy ? <><span className="spinner" /> {t('inst.btn.scanning')}</> : t('inst.btn.install')}
-              </button>
-            </div>
-            <div className={`install-hint${hint.error ? ' error' : ''}`}>{hint.msg}</div>
+            <div className={`install-hint${linkHint.cls}`}>{linkHint.msg}</div>
           </article>
         )}
 

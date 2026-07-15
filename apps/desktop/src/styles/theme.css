@@ -893,6 +893,7 @@ html, body, #root {
 
 .install-hint { margin-top: 10px; font-size: 11.5px; color: var(--ink-mute); }
 .install-hint.error { color: var(--danger); }
+.install-hint.ok { color: var(--success); }
 
 .dropzone {
   margin-top: 4px;
