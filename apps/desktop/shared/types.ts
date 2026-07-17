@@ -126,12 +126,28 @@ export interface AccountLoginResult {
   error?: string;
 }
 
+// ===== 真身探测结果(desktop 专用) =====
+/** 真身探测命中方式：app=应用包 / cli=命令行。未命中为 null。 */
+export type ToolDetectVia = 'app' | 'cli';
+export interface ToolDetection {
+  tool: Tool;
+  installed: boolean;
+  via: ToolDetectVia | null;
+  /** 命中的路径（app 包 / cli 可执行 / 配置目录），未命中为空串。 */
+  detail: string;
+}
+
 // ===== preload 暴露在 window.skillkit 上的 IPC 契约(desktop 专用) =====
 export interface SkillkitApi {
   scanAll(): Promise<InstalledSkill[]>;
   listInstalled(filter?: InstalledFilter): Promise<InstalledSkill[]>;
   /** 已安装工具(其 ~/.<tool> 根目录存在);UI 仅展示/可选这些工具。 */
   installedTools(): Promise<Tool[]>;
+  /**
+   * 本机已安装的 AI 工具(配置目录存在即可,不要求已有 skill)。
+   * 安装页工具网格用:目标工具可能尚无 skill(正要装第一个),故比 installedTools() 更宽。
+   */
+  installedLocalTools(): Promise<Tool[]>;
 
   // ===== 自动更新 =====
   /** 监听主进程推送的「发现新版本」事件(检查在后台完成时触发)。 */

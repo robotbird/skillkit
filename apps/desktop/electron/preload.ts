@@ -18,6 +18,7 @@ const api: SkillkitApi = {
   scanAll: () => ipcRenderer.invoke('scan:all'),
   listInstalled: (filter?: InstalledFilter) => ipcRenderer.invoke('installed:list', filter),
   installedTools: () => ipcRenderer.invoke('installed:tools'),
+  installedLocalTools: () => ipcRenderer.invoke('installed:localTools'),
   uninstallSkill: (tool: Tool, name: string) =>
     ipcRenderer.invoke('installed:uninstall', tool, name),
   revealInFinder: (p: string) => ipcRenderer.invoke('installed:reveal', p),

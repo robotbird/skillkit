@@ -1,5 +1,6 @@
 import { ipcMain, dialog, shell, app } from 'electron';
 import { scanAll, listInstalled, installedTools } from './scan.js';
+import { localTools } from './detect.js';
 import { TOOLS } from './tools.js';
 import { refreshMarket, listMarketSkills, fetchMarketDetail } from './market.js';
 import {
@@ -38,6 +39,7 @@ export function registerIpc() {
     listInstalled(filter),
   );
   ipcMain.handle('installed:tools', async () => installedTools());
+  ipcMain.handle('installed:localTools', async () => localTools());
   ipcMain.handle('installed:uninstall', async (_e, tool: Tool, name: string) => {
     const list = listInstalled({ tool });
     const target = list.find((s) => s.name === name);

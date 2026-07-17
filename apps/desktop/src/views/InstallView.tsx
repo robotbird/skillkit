@@ -4,9 +4,11 @@ import type { ToastState } from '../components/Toast';
 import ToolPicker from '../components/ToolPicker';
 import RepoSkillPicker from '../components/RepoSkillPicker';
 import InstallToolGrid from '../components/InstallToolGrid';
+import ModalPortal from '../components/ModalPortal';
 import { useI18n } from '../i18n';
 import type { MessageKey } from '../i18n/messages';
 import { classifyInstallSource } from '../lib/install-source';
+import { useLocalTools } from '../lib/useLocalTools';
 
 interface RecentItem {
   name: string;
@@ -64,6 +66,9 @@ export default function InstallView({
   // 链接 tab：提交瞬间记住识别出的子类型（share / github），供确认弹窗 handleConfirm 分派
   const [activeKind, setActiveKind] = useState<'share' | 'github'>('share');
   const [selectedTools, setSelectedTools] = useState<Tool[]>([]);
+  // 本机已检测工具：空选安装时弹确认，确认后按「全部已检测工具」安装
+  const { tools: localTools } = useLocalTools();
+  const [confirmAllOpen, setConfirmAllOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
@@ -128,9 +133,19 @@ export default function InstallView({
       return;
     }
     if (selectedTools.length === 0) {
-      toast.show(t('inst.toast.needTools'), 'error');
+      // 空选：若本机一个已检测工具都没有才报错；否则弹确认「安装到全部已检测工具」
+      if (localTools.length === 0) {
+        toast.show(t('inst.toast.needTools'), 'error');
+        return;
+      }
+      setConfirmAllOpen(true);
       return;
     }
+    proceedInstall();
+  }
+
+  // 校验通过后的实际派发：按 mode/kind 打开接入方式弹窗，或列举 GitHub 候选
+  function proceedInstall() {
     if (mode === 'link') {
       // 智能识别：GitHub 先列举候选再决定单装/批量；分享直接弹接入方式确认；未识别则提示
       const kind = classifyInstallSource(linkUrl.trim());
@@ -145,6 +160,13 @@ export default function InstallView({
       }
     }
     setPickerOpen(true);
+  }
+
+  // 空选确认：勾选全部已检测工具后照常派发（selectedTools 与各弹窗 fixedTargets 同步更新）
+  function confirmInstallAll() {
+    setConfirmAllOpen(false);
+    setSelectedTools(localTools);
+    proceedInstall();
   }
 
   // GitHub 两步流程第一步：列举仓库内 skill 候选
@@ -430,6 +452,30 @@ export default function InstallView({
         onCancel={() => !busy && setRepoPicker({ open: false, result: null })}
         onConfirm={handleRepoConfirm}
       />
+
+      {confirmAllOpen && (
+        <ModalPortal>
+          <div
+            className="modal-mask"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setConfirmAllOpen(false);
+            }}
+          >
+            <div className="modal">
+              <h3>{t('inst.confirmAllTitle')}</h3>
+              <p className="modal-sub">{t('inst.confirmAllDesc', { count: localTools.length })}</p>
+              <div className="modal-actions">
+                <button className="btn-ghost" onClick={() => setConfirmAllOpen(false)}>
+                  {t('common.cancel')}
+                </button>
+                <button className="btn-primary" onClick={confirmInstallAll}>
+                  {t('inst.confirmAllOk')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
     </section>
   );
 }
