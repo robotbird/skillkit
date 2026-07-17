@@ -30,13 +30,11 @@ export default function RepoSkillPicker({
 }: Props) {
   const { t } = useI18n();
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [method, setMethod] = useState<'symlink' | 'copy'>('symlink');
 
-  // 结果变化时默认全选所有候选；接入方式默认软链
+  // 结果变化时默认全选所有候选
   useEffect(() => {
     if (!open || !result) return;
     setPicked(new Set(result.skills.map((s) => s.subpath)));
-    setMethod('symlink');
   }, [open, result]);
 
   // Esc 关闭（busy 进行中不响应）
@@ -51,7 +49,6 @@ export default function RepoSkillPicker({
 
   if (!open || !result) return null;
 
-  const showMethod = lockedScope === 'global';
   const scope: 'tools' | 'global' = lockedScope === 'global' ? 'global' : 'tools';
   const allChecked = result.skills.length > 0 && picked.size === result.skills.length;
 
@@ -128,37 +125,13 @@ export default function RepoSkillPicker({
           </div>
 
           <div className="repo-skill-foot">
-            {result.skills.length > 0 && showMethod && (
-              <div className="opts opts-method">
-                <div className="opts-section-title">{t('install.method')}</div>
-                <label className={method === 'symlink' ? 'checked' : ''} title={t('install.symlinkDesc')}>
-                  <input
-                    type="radio"
-                    name="rp-method"
-                    checked={method === 'symlink'}
-                    onChange={() => setMethod('symlink')}
-                  />
-                  <strong>{t('install.symlink')}</strong>
-                </label>
-                <label className={method === 'copy' ? 'checked' : ''} title={t('install.copyDesc')}>
-                  <input
-                    type="radio"
-                    name="rp-method"
-                    checked={method === 'copy'}
-                    onChange={() => setMethod('copy')}
-                  />
-                  <strong>{t('install.copy')}</strong>
-                </label>
-              </div>
-            )}
-
             <div className="modal-actions">
               <button className="btn-ghost" onClick={onCancel} disabled={busy}>
                 {t('common.cancel')}
               </button>
               <button
                 className="btn-primary"
-                onClick={() => onConfirm([...picked], fixedTargets, { scope, method })}
+                onClick={() => onConfirm([...picked], fixedTargets, { scope, method: 'symlink' })}
                 disabled={confirmDisabled}
               >
                 {busy && <span className="spinner" />}

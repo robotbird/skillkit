@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { TOOL_LABELS, type Tool, type InstallResult, type InstallOpts, type GithubSkillsResult, type RepoBatchResult, type ShareSourceInfo } from '@shared/types';
 import type { ToastState } from '../components/Toast';
-import ToolPicker from '../components/ToolPicker';
 import RepoSkillPicker from '../components/RepoSkillPicker';
 import InstallToolGrid from '../components/InstallToolGrid';
 import ModalPortal from '../components/ModalPortal';
@@ -63,13 +62,10 @@ export default function InstallView({
   const { t } = useI18n();
   const [mode, setMode] = useState<InstallMode>('link');
   const [linkUrl, setLinkUrl] = useState('');
-  // 链接 tab：提交瞬间记住识别出的子类型（share / github），供确认弹窗 handleConfirm 分派
-  const [activeKind, setActiveKind] = useState<'share' | 'github'>('share');
   const [selectedTools, setSelectedTools] = useState<Tool[]>([]);
   // 本机已检测工具：空选安装时弹确认，确认后按「全部已检测工具」安装
   const { tools: localTools } = useLocalTools();
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
   // 多 skill 仓库：listGithubSkills 的结果 + 弹窗开关
@@ -94,21 +90,21 @@ export default function InstallView({
   // 深链预填用的 ref：规避 setState 异步竞态，确认安装时优先取它
   const pendingShareRef = useRef<string | null>(null);
 
-  // 分享页「从 Skillkit 打开」-> App 传入 share id：切到 share tab、预填输入框；
-  // 已选工具则打开接入方式确认，否则 toast 提示先选工具。
+  // 分享页「从 Skillkit 打开」-> App 传入 share id：切到 share tab、预填输入框，直接软链安装。
   useEffect(() => {
     if (!pendingShare) return;
     setMode('link');
     setLinkUrl(pendingShare);
     pendingShareRef.current = pendingShare;
-    setActiveKind('share');
     onPendingConsumed?.();
-    if (selectedTools.length === 0) {
+    // 直接以软链安装到已选工具；空选则按全部已检测工具
+    const targets = selectedTools.length ? selectedTools : localTools;
+    if (targets.length === 0) {
       toast.show(t('inst.toast.needTools'), 'error');
       return;
     }
-    setPickerOpen(true);
-    // selectedTools / toast / t 有意不进 deps：仅在 pendingShare 到达时触发一次
+    void runInstall(targets, 'share');
+    // selectedTools / localTools / t 有意不进 deps：仅在 pendingShare 到达时触发一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingShare, onPendingConsumed]);
 
@@ -141,46 +137,48 @@ export default function InstallView({
       setConfirmAllOpen(true);
       return;
     }
-    proceedInstall();
+    proceedInstall(selectedTools);
   }
 
-  // 校验通过后的实际派发：按 mode/kind 打开接入方式弹窗，或列举 GitHub 候选
-  function proceedInstall() {
+  // 校验通过后的实际派发：分享/zip 直接软链安装；GitHub 先列举候选
+  function proceedInstall(targets: Tool[]) {
     if (mode === 'link') {
-      // 智能识别：GitHub 先列举候选再决定单装/批量；分享直接弹接入方式确认；未识别则提示
       const kind = classifyInstallSource(linkUrl.trim());
       if (kind === 'unknown') {
         toast.show(t('inst.hint.unknown'), 'error');
         return;
       }
-      setActiveKind(kind === 'github' ? 'github' : 'share');
       if (kind === 'github') {
-        void startList(linkUrl.trim());
+        void startListGithub(targets);
         return;
       }
+      void runInstall(targets, 'share');
+      return;
     }
-    setPickerOpen(true);
+    void runInstall(targets, 'zip');
   }
 
   // 空选确认：勾选全部已检测工具后照常派发（selectedTools 与各弹窗 fixedTargets 同步更新）
   function confirmInstallAll() {
     setConfirmAllOpen(false);
     setSelectedTools(localTools);
-    proceedInstall();
+    proceedInstall(localTools);
   }
 
-  // GitHub 两步流程第一步：列举仓库内 skill 候选
-  async function startList(url: string) {
-    if (!url) {
-      return;
-    }
+  // GitHub 列举仓库内 skill 候选：单 skill 直接软链安装；多 skill 弹 RepoSkillPicker 选哪些
+  async function startListGithub(targets: Tool[]) {
+    const url = linkUrl.trim();
+    if (!url) return;
     setBusy(true);
+    let handedOff = false;
     try {
       const res = await window.skillkit.listGithubSkills(url);
       if (res.kind === 'single') {
-        // 单 skill 仓库：走原 ToolPicker 直装路径（handleConfirm 的 github 分支）
-        setPickerOpen(true);
-      } else if (res.skills.length === 0) {
+        handedOff = true;
+        void runInstall(targets, 'github-single'); // runInstall 自管 busy
+        return;
+      }
+      if (res.skills.length === 0) {
         toast.show(
           res.isPlugin
             ? t('inst.toast.noSkillPlugin', { hints: res.pluginHints.join(', ') })
@@ -189,13 +187,13 @@ export default function InstallView({
           5000,
         );
       } else {
-        // 多 skill：弹 RepoSkillPicker
+        // 多 skill：弹 RepoSkillPicker（选哪些 skill，接入方式已固定软链）
         setRepoPicker({ open: true, result: res });
       }
     } catch (e: any) {
       toast.show(t('inst.toast.scanFail', { error: e?.message ?? e }), 'error');
     } finally {
-      setBusy(false);
+      if (!handedOff) setBusy(false);
     }
   }
 
@@ -222,48 +220,49 @@ export default function InstallView({
     }
   }
 
-  // 在弹框里确认接入方式后真正执行安装（targets 来自页级选择）
-  async function handleConfirm(targets: Tool[], opts: InstallOpts) {
+  // 真正执行安装：统一走软链（scope=global, method=symlink），不再弹接入方式选择框
+  async function runInstall(
+    targets: Tool[],
+    kind: 'github-single' | 'share' | 'zip',
+    opts: InstallOpts = { scope: 'global', method: 'symlink' },
+  ) {
     setBusy(true);
     try {
       let results: InstallResult[] | null = null;
 
-      if (mode === 'link') {
-        if (activeKind === 'github') {
-          // GitHub 单 skill 直装（多 skill 经 RepoSkillPicker 走 handleRepoConfirm）
-          const url = linkUrl.trim();
-          results = await window.skillkit.installFromGithub(url, targets, opts);
-          const okAny = results.some((r) => r.ok);
-          toast.show(summarize(results, t), okAny ? 'info' : 'error', 4000);
-          if (okAny) {
-            const repoName = url.match(/([^/]+?)(?:\.git)?\/?$/)?.[1] ?? url;
-            pushRecent(repoName, url);
-            setLinkUrl('');
-            onInstalled();
+      if (kind === 'github-single') {
+        // GitHub 单 skill 直装（多 skill 经 RepoSkillPicker 走 handleRepoConfirm）
+        const url = linkUrl.trim();
+        results = await window.skillkit.installFromGithub(url, targets, opts);
+        const okAny = results.some((r) => r.ok);
+        toast.show(summarize(results, t), okAny ? 'info' : 'error', 4000);
+        if (okAny) {
+          const repoName = url.match(/([^/]+?)(?:\.git)?\/?$/)?.[1] ?? url;
+          pushRecent(repoName, url);
+          setLinkUrl('');
+          onInstalled();
+        }
+      } else if (kind === 'share') {
+        // 分享链接：链接型（GitHub 来源）其 /zip 会 404，改走 GitHub 安装；否则按 zip 安装。
+        const url = (pendingShareRef.current ?? linkUrl).trim();
+        pendingShareRef.current = null;
+        try {
+          const info: ShareSourceInfo = await window.skillkit.inspectShare(url);
+          if (info.exists && info.meta.sourceUrl) {
+            results = await window.skillkit.installFromGithub(info.meta.sourceUrl, targets, opts);
           }
-        } else {
-          // 分享链接：链接型（GitHub 来源）其 /zip 会 404，改走 GitHub 安装；否则按 zip 安装。
-          // 先查 meta：若带 sourceUrl 即链接型。查询失败（无效/过期）则交给 installFromShare 报错。
-          const url = (pendingShareRef.current ?? linkUrl).trim();
-          pendingShareRef.current = null;
-          try {
-            const info: ShareSourceInfo = await window.skillkit.inspectShare(url);
-            if (info.exists && info.meta.sourceUrl) {
-              results = await window.skillkit.installFromGithub(info.meta.sourceUrl, targets, opts);
-            }
-          } catch {
-            /* 忽略：回退到 zip 安装路径 */
-          }
-          if (!results) {
-            results = await window.skillkit.installFromShare(url, targets, opts);
-          }
-          const okAny = results.some((r) => r.ok);
-          toast.show(summarize(results, t), okAny ? 'info' : 'error', 4000);
-          if (okAny) {
-            pushRecent(results.find((r) => r.ok)?.path?.split('/').pop() ?? t('inst.source.share'), url);
-            setLinkUrl('');
-            onInstalled();
-          }
+        } catch {
+          /* 忽略：回退到 zip 安装路径 */
+        }
+        if (!results) {
+          results = await window.skillkit.installFromShare(url, targets, opts);
+        }
+        const okAny = results.some((r) => r.ok);
+        toast.show(summarize(results, t), okAny ? 'info' : 'error', 4000);
+        if (okAny) {
+          pushRecent(results.find((r) => r.ok)?.path?.split('/').pop() ?? t('inst.source.share'), url);
+          setLinkUrl('');
+          onInstalled();
         }
       } else {
         // zip：用第一步选好的路径安装到所选工具
@@ -283,18 +282,10 @@ export default function InstallView({
       toast.show(t('inst.toast.installFail', { error: e?.message ?? e }), 'error');
     } finally {
       setBusy(false);
-      setPickerOpen(false);
     }
   }
 
   const zipName = zipPath ? zipPath.split(/[\\/]/).pop() ?? '' : '';
-
-  const pickerSubtitle =
-    mode === 'link'
-      ? activeKind === 'github'
-        ? t('inst.pickerSubtitle.github')
-        : t('inst.pickerSubtitle.share')
-      : t('inst.pickerSubtitle.zip');
 
   return (
     <section>
@@ -341,7 +332,7 @@ export default function InstallView({
                 {busy ? (
                   <>
                     <span className="spinner" />{' '}
-                    {activeKind === 'github' ? t('inst.btn.scanning') : t('inst.btn.installing')}
+                    {detected === 'github' ? t('inst.btn.scanning') : t('inst.btn.installing')}
                   </>
                 ) : (
                   t('inst.btn.install')
@@ -431,17 +422,6 @@ export default function InstallView({
           </ul>
         )}
       </section>
-
-      <ToolPicker
-        open={pickerOpen}
-        busy={busy}
-        title={t('inst.methodTitle')}
-        subtitle={pickerSubtitle}
-        fixedTargets={selectedTools}
-        lockedScope="global"
-        onCancel={() => !busy && setPickerOpen(false)}
-        onConfirm={handleConfirm}
-      />
 
       <RepoSkillPicker
         open={repoPicker.open}
