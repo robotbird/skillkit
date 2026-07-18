@@ -21,12 +21,16 @@ export interface ToolConfig {
   // 哪个 root 下的 skill 标记为 builtin（不可卸载）
   builtinRoot?: string;
   /**
-   * 判断「本机是否安装了该 AI 工具」的标记路径（任一存在即为已安装）。
-   * 注意：不能用 skills 目录父路径 alone——例如 cline/warp/kimi 共享 ~/.agents/skills，
-   * 若只查 ~/.agents 会在仅有全局仓时误报三者均已安装。
-   * 标记对齐 vercel-labs/skills 的 detectInstalled + 本机常见路径。
+   * 该工具的配置/数据目录，用于 scanAll 决定「扫描哪些目录找已装 skill」
+   * （目录下有 skill 就扫，与产品是否真装无关）。
+   * 注意：目录存在 ≠ 产品真装（可能是卸载残留 / 嵌套工具父目录 / 装技能时顺带建出的目录），
+   * 「是否安装」一律走 appBundles/cliBinaries 真身探测（见 detect.ts），不读本字段。
    */
   detectRoots: string[];
+  /** macOS .app 包名（如 'Cursor.app'），在 /Applications、~/Applications、/System/Applications 及一级子目录下查找。 */
+  appBundles?: string[];
+  /** CLI 可执行命令名（如 'codex'），在常见安装目录(homebrew/npm/nvm 等)与 PATH 下查找。 */
+  cliBinaries?: string[];
 }
 
 /**
@@ -41,6 +45,8 @@ export const TOOLS: Record<Tool, ToolConfig> = {
     roots: [skillRoot('.claude', 'skills')],
     installRoot: skillRoot('.claude', 'skills'),
     detectRoots: [skillRoot('.claude')],
+    appBundles: ['Claude.app'],
+    cliBinaries: ['claude'],
   },
   codex: {
     label: 'Codex',
@@ -51,12 +57,18 @@ export const TOOLS: Record<Tool, ToolConfig> = {
       process.platform === 'win32'
         ? [skillRoot('.codex')]
         : [skillRoot('.codex'), '/etc/codex'],
+    // Codex 桌面端已改名并入 ChatGPT.app（bundle id 仍为 com.openai.codex）；
+    // 仍保留 codex CLI 名，覆盖只装了命令行的用户。
+    appBundles: ['ChatGPT.app'],
+    cliBinaries: ['codex'],
   },
   cursor: {
     label: 'Cursor',
     roots: [skillRoot('.cursor', 'skills'), skillRoot('.cursor', 'skills-cursor')],
     installRoot: skillRoot('.cursor', 'skills'),
     detectRoots: [skillRoot('.cursor')],
+    appBundles: ['Cursor.app'],
+    cliBinaries: ['cursor'],
   },
   trae: {
     label: 'Trae',
@@ -64,18 +76,21 @@ export const TOOLS: Record<Tool, ToolConfig> = {
     installRoot: skillRoot('.trae', 'skills'),
     builtinRoot: skillRoot('.trae', 'builtin_skills'),
     detectRoots: [skillRoot('.trae')],
+    appBundles: ['Trae.app'],
   },
   workbuddy: {
     label: 'Workbuddy',
     roots: [skillRoot('.workbuddy', 'skills')],
     installRoot: skillRoot('.workbuddy', 'skills'),
     detectRoots: [skillRoot('.workbuddy')],
+    appBundles: ['WorkBuddy.app'],
   },
   qoder: {
     label: 'Qoder',
     roots: [skillRoot('.qoder', 'skills')],
     installRoot: skillRoot('.qoder', 'skills'),
     detectRoots: [skillRoot('.qoder')],
+    appBundles: ['Qoder.app'],
   },
   grok: {
     label: 'Grok',
@@ -83,60 +98,73 @@ export const TOOLS: Record<Tool, ToolConfig> = {
     installRoot: skillRoot('.grok', 'skills'),
     // Grok Build / grok CLI：配置与 skill 均在 ~/.grok
     detectRoots: [skillRoot('.grok')],
+    cliBinaries: ['grok'],
   },
   opencode: {
     label: 'OpenCode',
     roots: [skillRoot('.config', 'opencode', 'skills')],
     installRoot: skillRoot('.config', 'opencode', 'skills'),
     detectRoots: [skillRoot('.config', 'opencode'), skillRoot('.opencode')],
+    cliBinaries: ['opencode'],
   },
   gemini: {
     label: 'Gemini CLI',
     roots: [skillRoot('.gemini', 'skills')],
     installRoot: skillRoot('.gemini', 'skills'),
     detectRoots: [skillRoot('.gemini')],
+    cliBinaries: ['gemini'],
   },
   antigravity: {
     label: 'Antigravity',
     roots: [skillRoot('.gemini', 'antigravity', 'skills')],
     installRoot: skillRoot('.gemini', 'antigravity', 'skills'),
     detectRoots: [skillRoot('.gemini', 'antigravity')],
+    appBundles: ['Antigravity.app'],
   },
   windsurf: {
     label: 'Windsurf',
     roots: [skillRoot('.codeium', 'windsurf', 'skills')],
     installRoot: skillRoot('.codeium', 'windsurf', 'skills'),
     detectRoots: [skillRoot('.codeium', 'windsurf')],
+    appBundles: ['Windsurf.app'],
+    cliBinaries: ['windsurf'],
   },
   augment: {
     label: 'Augment',
     roots: [skillRoot('.augment', 'skills')],
     installRoot: skillRoot('.augment', 'skills'),
     detectRoots: [skillRoot('.augment')],
+    appBundles: ['Augment.app'],
+    cliBinaries: ['augment'],
   },
   codebuddy: {
     label: 'CodeBuddy',
     roots: [skillRoot('.codebuddy', 'skills')],
     installRoot: skillRoot('.codebuddy', 'skills'),
     detectRoots: [skillRoot('.codebuddy')],
+    cliBinaries: ['codebuddy'],
   },
   pi: {
     label: 'Pi',
     roots: [skillRoot('.pi', 'agent', 'skills')],
     installRoot: skillRoot('.pi', 'agent', 'skills'),
     detectRoots: [skillRoot('.pi', 'agent'), skillRoot('.pi')],
+    cliBinaries: ['pi'],
   },
   kiro: {
     label: 'Kiro CLI',
     roots: [skillRoot('.kiro', 'skills')],
     installRoot: skillRoot('.kiro', 'skills'),
     detectRoots: [skillRoot('.kiro')],
+    appBundles: ['Kiro.app'],
+    cliBinaries: ['kiro'],
   },
   hermes: {
     label: 'Hermes',
     roots: [skillRoot('.hermes', 'skills')],
     installRoot: skillRoot('.hermes', 'skills'),
     detectRoots: [skillRoot('.hermes')],
+    cliBinaries: ['hermes'],
   },
   openclaw: {
     label: 'OpenClaw',
@@ -147,6 +175,7 @@ export const TOOLS: Record<Tool, ToolConfig> = {
     ],
     installRoot: skillRoot('.openclaw', 'skills'),
     detectRoots: [skillRoot('.openclaw'), skillRoot('.clawdbot'), skillRoot('.moltbot')],
+    cliBinaries: ['openclaw'],
   },
   // 与全局仓 ~/.agents/skills 完全相同：UI/扫描不单独展示（见 isGlobalAgentsOnlyTool），
   // 由「全局仓库」统一管理；保留配置以便路径查询与未来扩展。

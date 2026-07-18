@@ -157,6 +157,10 @@ const zh = {
   'market.pickerSubtitle': '将从 GitHub 拉取 {slug} 并复制到所选工具的 skills 目录。',
 
   'inst.intro': '先选择要安装到的工具，再从来源安装。',
+  'inst.noTools': '未检测到本机已安装的 AI 工具。先安装任意一个支持的工具后，这里会自动出现。',
+  'inst.confirmAllTitle': '安装到全部已检测的工具？',
+  'inst.confirmAllDesc': '未选择目标工具。确认后将安装到本机已检测到的 {count} 个工具。',
+  'inst.confirmAllOk': '全部安装',
   'inst.mode.link': '链接',
   'inst.mode.zip': '上传压缩包',
   'inst.tools.title': '安装到哪些工具',
@@ -404,6 +408,10 @@ const en: Record<keyof typeof zh, string> = {
   'market.pickerSubtitle': "Will pull {slug} from GitHub and copy to the selected tools' skills directory.",
 
   'inst.intro': 'Select target tools first, then install from a source.',
+  'inst.noTools': 'No supported AI tools detected on this machine. Install one and it will appear here.',
+  'inst.confirmAllTitle': 'Install to all detected tools?',
+  'inst.confirmAllDesc': 'No target tools selected. Confirm to install to all {count} detected tools.',
+  'inst.confirmAllOk': 'Install to all',
   'inst.mode.link': 'Link',
   'inst.mode.zip': 'Upload zip',
   'inst.tools.title': 'Install to which tools',

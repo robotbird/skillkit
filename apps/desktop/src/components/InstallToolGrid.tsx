@@ -1,5 +1,6 @@
-import { ALL_TOOLS, TOOL_LABELS, type Tool } from '@shared/types';
+import { ALL_TOOLS, TOOL_LABELS, type Tool } from '@skillkit/types';
 import { TOOL_ICON } from '../lib/toolIcons';
+import { useLocalTools } from '../lib/useLocalTools';
 
 interface Props {
   selected: Tool[];
@@ -8,11 +9,14 @@ interface Props {
 }
 
 /**
- * 安装页页级工具多选网格：全部 ALL_TOOLS，logo 在上、名称在下。
- * 不按本机是否已安装过滤。
+ * 安装页页级工具多选网格：默认只展示本机真身探测命中的工具；
+ * 一个都没探测到时回退展示全部（避免空白网格）。
  */
 export default function InstallToolGrid({ selected, onChange, disabled = false }: Props) {
+  const { tools: local, ready } = useLocalTools();
   const selectedSet = new Set(selected);
+  // 默认只列本机已检测工具；探测为空时回退全部
+  const visible = ready ? (local.length ? local : ALL_TOOLS) : [];
 
   function toggle(tool: Tool) {
     if (disabled) return;
@@ -25,7 +29,7 @@ export default function InstallToolGrid({ selected, onChange, disabled = false }
 
   return (
     <div className="install-tool-grid" role="group" aria-label="tools">
-      {ALL_TOOLS.map((tool) => {
+      {visible.map((tool) => {
         const isSelected = selectedSet.has(tool);
         return (
           <button

@@ -799,8 +799,9 @@ html, body, #root {
   margin-bottom: 10px;
 }
 .install-tool-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  /* flex + 固定宽度 item：间距只由 gap 决定，与工具数量无关（避免工具少时被撑开） */
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px 8px;
 }
 .install-tool-item {
@@ -816,6 +817,8 @@ html, body, #root {
   color: inherit;
   font: inherit;
   min-width: 0;
+  width: 80px;
+  flex: 0 0 auto;
   transition: background 0.15s, border-color 0.15s;
 }
 .install-tool-item:hover:not(:disabled) {
