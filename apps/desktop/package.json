@@ -19,6 +19,7 @@
   "dependencies": {
     "@skillkit/types": "workspace:*",
     "@tailwindcss/vite": "^4.3.2",
+    "@vercel/blob": "^2.6.1",
     "adm-zip": "^0.5.16",
     "better-sqlite3": "^11.3.0",
     "class-variance-authority": "^0.7.1",

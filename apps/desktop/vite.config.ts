@@ -29,7 +29,7 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['better-sqlite3', 'electron', 'tar', 'adm-zip'],
+              external: ['better-sqlite3', 'electron', 'tar', 'adm-zip', '@vercel/blob'],
             },
           },
           resolve: {
