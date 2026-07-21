@@ -139,6 +139,9 @@ export interface ShareMeta {
   createdAt: number;
   expiresAt: number;
   sourceUrl?: string | null;
+  // 客户端直传到 Vercel Blob 的 zip pathname(如 share-zip/<name>-<rand>.zip)。
+  // 老分享固定名 <id>.zip、无此字段 → 读取时回退 `${id}.zip`。
+  zipPathname?: string | null;
 }
 
 export interface ShareCreateResult {
@@ -172,8 +175,9 @@ export const SHARE_BASE_URL =
   'https://skillkit.net';
 
 export const SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-// 4MB:适配 Vercel 函数 4.5MB 请求体硬限制
-export const SHARE_MAX_BYTES = 4 * 1024 * 1024;
+// 100MB:zip 由桌面端客户端直传 Vercel Blob(绕开函数 4.5MB 请求体限制);服务端 /share/upload-url 用
+// handleUpload 的 maximumSizeInBytes 同步约束。文档单文件上限 500MB,这里留可靠性余量。
+export const SHARE_MAX_BYTES = 100 * 1024 * 1024;
 
 // ===== 用户 / 认证 =====
 // 对外暴露的用户视图(绝不包含 passwordHash)。server 的 lib/auth 负责 User → PublicUser 映射。

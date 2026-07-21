@@ -29,7 +29,14 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['better-sqlite3', 'electron', 'tar', 'adm-zip'],
+              // @vercel/blob 是纯运行时依赖(ESM 包),不能打包进 main bundle——否则它的 CJS 依赖
+              // (undici / env-paths / xdg-app-paths)里的 require() 会在 ESM 主进程抛
+              // "require is not defined in ES module scope"。
+              // 字符串 '@vercel/blob' 既不覆盖子路径 '@vercel/blob/client',也不覆盖 pnpm
+              // resolve 后的 '.pnpm/@vercel+blob@...' 绝对路径,故改用函数 + 正则一并匹配。
+              external: (id: string) =>
+                ['better-sqlite3', 'electron', 'tar', 'adm-zip'].includes(id) ||
+                /@vercel[/+]blob/.test(id),
             },
           },
           resolve: {

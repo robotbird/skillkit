@@ -4,6 +4,7 @@ import os from 'node:os';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import AdmZip from 'adm-zip';
+import { upload } from '@vercel/blob/client';
 import { listInstalled, getShareLink, upsertShareLink, type ShareLinkRow } from './db.js';
 import { installFromZip } from './installer.js';
 import { loadToken } from './account.js';
@@ -58,35 +59,52 @@ export async function shareSkill(tool: Tool, name: string): Promise<ShareCreateR
     );
   }
 
-  const form = new FormData();
-  form.append('name', skill.name);
-  form.append('description', skill.description ?? '');
-  form.append('sourceTool', skill.tool);
-  form.append('file', new Blob([buf], { type: 'application/zip' }), `${skill.name}.zip`);
-
-  // 归因:若已登录(本地存了 token),带 Authorization: Bearer,服务端 /share 据此把分享记到该用户名下。
-  // 无 token(未登录)不带,回退匿名分享(向后兼容,只是不入个人中心列表)。
-  // 注意:不要手动设 content-type,FormData 需由运行时自动加 multipart boundary。
-  const headers: Record<string, string> = {};
   const token = loadToken();
-  if (token) headers.authorization = `Bearer ${token}`;
+  const authHeaders: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
+  // pathname 只允许 [A-Za-z0-9._-]，其余替换为 '-'，避免 blob 路径里的非法字符。
+  const safeName = skill.name.replace(/[^A-Za-z0-9._-]/g, '-');
 
+  // 优先走客户端直传 Vercel Blob（绕开 Vercel 函数 4.5MB 请求体限制）：先直传 zip 到 share-zip/，
+  // 再用一个小体积 JSON 到 /share 登记 meta。直传失败则回退到既有 multipart 上传。
+  let zipPathname: string | null = null;
+  try {
+    // PutBody 直接收 Buffer(SDK 内部走 fetch,Node 下无需包成 Blob;也避开 TS 5.9 下 Buffer→BlobPart 的类型摩擦)。
+    const blob = await upload(`share-zip/${safeName}.zip`, buf, {
+      access: 'public',
+      handleUploadUrl: `${SHARE_BASE_URL}/share/upload-url`,
+      multipart: true, // 弱网大包可续传；单 part 最小 5MB 规则只影响多 part，小包只有 1 个 part 亦可
+      headers: authHeaders, // 透传 Bearer（/share/upload-url 当前匿名放行，留作以后收紧）
+    });
+    zipPathname = blob.pathname;
+  } catch (e: any) {
+    // 直传不可用：服务端非 blob 模式（/share/upload-url 返 404）、或网络/SDK 异常 → 回退 multipart。
+    // 这样 local 自托管、<4.5MB 小文件、新旧版本错配都能正常完成。
+    // 注意：Vercel 上 >4.5MB 的 multipart 仍会被函数请求体限制挡掉，故大文件依赖直传成功。
+    return shareSkillMultipart(skill, buf, token);
+  }
+
+  // 登记：告诉服务端「这个 zipPathname 的包要落成一个短链」。归因由 Bearer 触发。
+  // 登记失败（如网络抖动）不回退——直传已成功，回退会重复上传且产生第二条分享；孤儿 zip 由 sweep 清理。
   let res: Response;
   try {
     res = await fetch(`${SHARE_BASE_URL}/share`, {
       method: 'POST',
-      body: form,
-      headers,
-      signal: AbortSignal.timeout(60000),
+      headers: { 'content-type': 'application/json', ...authHeaders },
+      body: JSON.stringify({
+        name: skill.name,
+        description: skill.description ?? '',
+        sourceTool: skill.tool,
+        sizeBytes: buf.length,
+        zipPathname,
+      }),
+      signal: AbortSignal.timeout(30000),
     });
   } catch (e: any) {
-    throw new Error(
-      `无法连接到分享服务（${SHARE_BASE_URL}）：${e?.message ?? e}。请确认 server 已启动（npm run server）`,
-    );
+    throw new Error(`无法连接到分享服务（${SHARE_BASE_URL}）：${e?.message ?? e}`);
   }
   if (!res.ok) {
-    // 只读一次 body:res.json() 失败后再 res.text() 会因 body 已被消耗而抛
-    // "Body has already been read",把真实的服务端错误盖掉。
+    // 只读一次 body：res.json() 失败后再 res.text() 会因 body 已被消耗而抛
+    // "Body has already been read"，把真实的服务端错误盖掉。
     let detail = '';
     try {
       detail = await res.text();
@@ -106,6 +124,63 @@ export async function shareSkill(tool: Tool, name: string): Promise<ShareCreateR
     url,
     expiresAt: data.expiresAt,
     createdAt: now,
+    mtime: skill.mtime,
+    sizeBytes: skill.sizeBytes,
+  });
+  return { ...data, url };
+}
+
+/**
+ * 直传不可用时的回退：把 zip 以 multipart 直接 POST 到 /share（服务端侧 put）—— 即改造前的既有上传路径。
+ * 保留它覆盖：local 自托管服务、<4.5MB 小文件、以及服务端尚不支持客户端直传时的兼容。
+ * （Vercel 上 >4.5MB 的包会被函数请求体限制挡掉，大文件依赖直传成功。）
+ */
+async function shareSkillMultipart(
+  skill: InstalledSkill,
+  buf: Buffer,
+  token: string | null,
+): Promise<ShareCreateResult> {
+  const form = new FormData();
+  form.append('name', skill.name);
+  form.append('description', skill.description ?? '');
+  form.append('sourceTool', skill.tool);
+  // new Uint8Array(buf) 拷出一份 ArrayBuffer(避开 TS 5.9 下 Buffer<ArrayBufferLike> 不兼容 BlobPart 的类型摩擦)。
+  form.append('file', new Blob([new Uint8Array(buf)], { type: 'application/zip' }), `${skill.name}.zip`);
+
+  // 归因:若已登录(本地存了 token),带 Authorization: Bearer,服务端 /share 据此把分享记到该用户名下。
+  // 注意:不要手动设 content-type,FormData 需由运行时自动加 multipart boundary。
+  const headers: Record<string, string> = {};
+  if (token) headers.authorization = `Bearer ${token}`;
+
+  let res: Response;
+  try {
+    res = await fetch(`${SHARE_BASE_URL}/share`, {
+      method: 'POST',
+      body: form,
+      headers,
+      signal: AbortSignal.timeout(60000),
+    });
+  } catch (e: any) {
+    throw new Error(`无法连接到分享服务（${SHARE_BASE_URL}）：${e?.message ?? e}。请确认 server 已启动`);
+  }
+  if (!res.ok) {
+    let detail = '';
+    try {
+      detail = await res.text();
+    } catch {
+      detail = '<响应体不可读>';
+    }
+    throw new Error(`分享失败（HTTP ${res.status}）：${detail}`);
+  }
+  const data = (await res.json()) as ShareCreateResult;
+  const url = `${SHARE_BASE_URL}/share/${data.id}`;
+  upsertShareLink({
+    tool: skill.tool,
+    name: skill.name,
+    shareId: data.id,
+    url,
+    expiresAt: data.expiresAt,
+    createdAt: Date.now(),
     mtime: skill.mtime,
     sizeBytes: skill.sizeBytes,
   });
