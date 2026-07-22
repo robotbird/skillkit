@@ -90,17 +90,22 @@ export default function InstallView({
   // 深链预填用的 ref：规避 setState 异步竞态，确认安装时优先取它
   const pendingShareRef = useRef<string | null>(null);
 
-  // 分享页「从 Skillkit 打开」-> App 传入 share id：切到 share tab、预填输入框，直接软链安装。
+  // 深链 -> App 传入输入：切到 link tab、预填输入框并直接安装。
+  // 分享 id/share 链接走软链安装;GitHub 仓库地址(skill 详情页「从 Skillkit 安装」)走 GitHub 列举流程。
   useEffect(() => {
     if (!pendingShare) return;
     setMode('link');
     setLinkUrl(pendingShare);
     pendingShareRef.current = pendingShare;
     onPendingConsumed?.();
-    // 直接以软链安装到已选工具；空选则按全部已检测工具
+    // 直接安装到已选工具;空选则按全部已检测工具
     const targets = selectedTools.length ? selectedTools : localTools;
     if (targets.length === 0) {
       toast.show(t('inst.toast.needTools'), 'error');
+      return;
+    }
+    if (classifyInstallSource(pendingShare.trim()) === 'github') {
+      void startListGithub(targets);
       return;
     }
     void runInstall(targets, 'share');
@@ -167,7 +172,7 @@ export default function InstallView({
 
   // GitHub 列举仓库内 skill 候选：单 skill 直接软链安装；多 skill 弹 RepoSkillPicker 选哪些
   async function startListGithub(targets: Tool[]) {
-    const url = linkUrl.trim();
+    const url = (pendingShareRef.current ?? linkUrl).trim();
     if (!url) return;
     setBusy(true);
     let handedOff = false;
@@ -232,7 +237,8 @@ export default function InstallView({
 
       if (kind === 'github-single') {
         // GitHub 单 skill 直装（多 skill 经 RepoSkillPicker 走 handleRepoConfirm）
-        const url = linkUrl.trim();
+        const url = (pendingShareRef.current ?? linkUrl).trim();
+        pendingShareRef.current = null;
         results = await window.skillkit.installFromGithub(url, targets, opts);
         const okAny = results.some((r) => r.ok);
         toast.show(summarize(results, t), okAny ? 'info' : 'error', 4000);

@@ -80,11 +80,19 @@ async function handleOAuthDeepLink(url: URL) {
   }
 }
 
+/** 处理 skillkit://install?src=<url>：网站 skill 详情页「从 Skillkit 安装」按钮。
+ *  把 src（GitHub 仓库地址）转发给渲染进程，由 InstallView 走「从 GitHub 安装」流程。 */
+function handleInstallDeepLink(url: URL) {
+  const src = url.searchParams.get('src');
+  if (src) deliverDeepLink(src);
+}
+
 /**
  * 处理 skillkit:// 深链，按 host 分发：
  * - skillkit://auth?code=<code>  -> 桌面 OAuth 回调（换 token）
+ * - skillkit://install?src=<url> -> skill 详情页「从 Skillkit 安装」（转发 GitHub 仓库地址）
  * - skillkit://share/<id>（或裸 id）-> 分享安装（parseShareId 解析）
- * 其余形式忽略。auth 分支早于 share，避免 auth 的 code 被当作 id 误解析。
+ * 其余形式忽略。auth/install 分支早于 share，避免其 query 被当作 id 误解析。
  */
 function handleDeepLink(rawUrl: string) {
   let parsed: URL;
@@ -95,6 +103,10 @@ function handleDeepLink(rawUrl: string) {
   }
   if (parsed.protocol === 'skillkit:' && parsed.host === 'auth') {
     void handleOAuthDeepLink(parsed);
+    return;
+  }
+  if (parsed.protocol === 'skillkit:' && parsed.host === 'install') {
+    handleInstallDeepLink(parsed);
     return;
   }
   try {
