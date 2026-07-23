@@ -2,7 +2,16 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
-import type { InstalledSkill, MarketSkill, Tool } from '../shared/types.js';
+import type {
+  InstalledSkill,
+  MarketSkill,
+  Tool,
+  InstallRecord,
+  InstallRecordTarget,
+  InstallRecordStatus,
+  InstallRecordChannel,
+} from '../shared/types.js';
+import { deriveRecordErrorType } from './install-log.js';
 
 let db: Database.Database;
 
@@ -96,9 +105,34 @@ function migrate(d: Database.Database) {
       PRIMARY KEY (tool, name)
     );
 
+    -- 安装记录：成功/部分失败/全失败均落库，targets 存每个工具的成败与报错明细。
+    -- 同样是独立表，**不会被 scanAll 清空**；写时裁剪到最近 200 条。
+    CREATE TABLE IF NOT EXISTS install_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at INTEGER NOT NULL,
+      channel TEXT NOT NULL,
+      label TEXT NOT NULL,
+      skill_name TEXT,
+      status TEXT NOT NULL,
+      error TEXT,
+      targets TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_install_records_at ON install_records(at DESC);
+
     CREATE INDEX IF NOT EXISTS idx_market_owner ON market_skills(owner);
     CREATE INDEX IF NOT EXISTS idx_market_name ON market_skills(name);
   `);
+  // install_records 是增量引入的表：早期构建可能缺 error 列，按需补上（已存在则跳过）。
+  ensureColumn(d, 'install_records', 'error', 'TEXT');
+}
+
+/** 幂等加列：表已存在但缺某列时 ALTER 补上；列已存在则跳过。 */
+function ensureColumn(d: Database.Database, table: string, column: string, type: string): void {
+  const cols = d.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === column)) {
+    d.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
 }
 
 // ===== meta kv =====
@@ -325,6 +359,73 @@ export function upsertShareLink(row: ShareLinkRow): void {
       row.mtime,
       row.sizeBytes,
     );
+}
+
+// ===== install_records（安装记录）=====
+/** 保留最近多少条安装记录（写时裁剪）。 */
+const INSTALL_RECORD_KEEP = 200;
+
+/** 待落库的一条安装记录输入（不含 id/at —— 由 insert 补）。 */
+export interface InstallRecordRow {
+  channel: InstallRecordChannel;
+  label: string;
+  skillName: string | null;
+  status: InstallRecordStatus;
+  error: string | null;
+  targets: InstallRecordTarget[];
+}
+
+function safeParseTargets(raw: string): InstallRecordTarget[] {
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? (v as InstallRecordTarget[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function rowToInstallRecord(r: any): InstallRecord {
+  const targets = safeParseTargets(r.targets);
+  const error = r.error ?? null;
+  return {
+    id: r.id,
+    at: r.at,
+    channel: r.channel as InstallRecordChannel,
+    label: r.label,
+    skillName: r.skill_name ?? null,
+    status: r.status as InstallRecordStatus,
+    error,
+    errorType: deriveRecordErrorType(targets, error),
+    targets,
+  };
+}
+
+/** 写入一条安装记录，并裁剪到最近 {@link INSTALL_RECORD_KEEP} 条。 */
+export function insertInstallRecord(rec: InstallRecordRow): void {
+  const d = getDb();
+  d.prepare(
+    `INSERT INTO install_records (at, channel, label, skill_name, status, error, targets)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(Date.now(), rec.channel, rec.label, rec.skillName, rec.status, rec.error, JSON.stringify(rec.targets));
+  d.exec(
+    `DELETE FROM install_records WHERE id NOT IN (
+       SELECT id FROM install_records ORDER BY at DESC, id DESC LIMIT ${INSTALL_RECORD_KEEP}
+     )`,
+  );
+}
+
+/** 按时间倒序读取安装记录（默认最近 {@link INSTALL_RECORD_KEEP} 条）。 */
+export function listInstallRecords(limit: number = INSTALL_RECORD_KEEP): InstallRecord[] {
+  return (
+    getDb()
+      .prepare('SELECT * FROM install_records ORDER BY at DESC, id DESC LIMIT ?')
+      .all(limit) as any[]
+  ).map(rowToInstallRecord);
+}
+
+/** 清空全部安装记录。 */
+export function clearInstallRecords(): void {
+  getDb().exec('DELETE FROM install_records');
 }
 
 export function listMarket(args: { q?: string; owner?: string; page: number; pageSize: number }): MarketSkill[] {

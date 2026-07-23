@@ -45,6 +45,8 @@ const api: SkillkitApi = {
   pickZip: () => ipcRenderer.invoke('install:pickZip'),
   installFromZip: (zipPath: string, targets: Tool[], opts?: InstallOpts) =>
     ipcRenderer.invoke('install:fromZip', zipPath, targets, opts),
+  getInstallRecords: () => ipcRenderer.invoke('install:records:list'),
+  clearInstallRecords: () => ipcRenderer.invoke('install:records:clear'),
 
   // 拖拽上传：从 drop 事件的 File 取系统绝对路径（Electron webUtils.getPathForFile）
   getDroppedFilePath: (file: File) => webUtils.getPathForFile(file),

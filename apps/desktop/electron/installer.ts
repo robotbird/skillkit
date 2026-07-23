@@ -724,13 +724,21 @@ export async function listGithubSkills(url: string): Promise<GithubSkillsResult>
   const ref = parseGithubRef(url);
   if (!ref) throw new Error('GitHub 地址解析失败');
   ensureSweeper();
+  // 优先在线 API 扫描（git/trees + 逐个 raw MD）。API 抛错（限流/私有/超大树/网络）
+  // 或扫到 0 候选（某文件 raw 拉取被限流导致漏判）时，都回退整包 tarball 再扫一遍——
+  // 整包来自 codeload，不受 raw/API 限流影响，对「skill 在二级目录、单文件 raw 失败」更稳。
+  let result: GithubSkillsResult | null = null;
   try {
-    return await listGithubSkillsViaApi(ref);
+    result = await listGithubSkillsViaApi(ref);
   } catch {
+    /* 落到下方整包兜底 */
+  }
+  if (!result || result.skills.length === 0) {
     const extractedRoot = await cachedExtract(ref);
     const { candidates, isPlugin, pluginHints } = collectRepoSkills(extractedRoot, ref.subpath ?? '');
-    return buildResult(candidates, isPlugin, pluginHints, ref);
+    result = buildResult(candidates, isPlugin, pluginHints, ref);
   }
+  return result;
 }
 
 // ===== GitHub API 在线安装（只拉选中 skill 子树的文件，不下整包 tarball）=====

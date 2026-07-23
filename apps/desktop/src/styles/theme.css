@@ -1134,6 +1134,62 @@ html, body, #root {
 }
 .recent-empty { color: var(--ink-mute) !important; font-style: italic; }
 
+/* 安装记录：标题行 + 可点击行 + 状态色 */
+.recent-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.recent-head h3 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.record-clear { font-size: 12px; padding: 4px 10px; }
+.recent-list li.record-row { cursor: pointer; transition: background 0.12s ease; }
+.recent-list li.record-row:hover { background: rgba(255, 255, 255, 0.06); }
+.recent-list li.record-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.record-name {
+  color: var(--ink); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.record-channel {
+  flex-shrink: 0; font-size: 11px; color: var(--ink-mute);
+  padding: 1px 7px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--card-line);
+}
+.record-time { margin-left: auto; flex-shrink: 0; color: var(--ink-mute); font-size: 11.5px; }
+.record-status { flex-shrink: 0; font-size: 10px; line-height: 1; }
+.record-status.is-success { color: #3ecf8e; }
+.record-status.is-partial { color: #f0a93b; }
+.record-status.is-failed { color: #e5604d; }
+
+/* 安装详情弹窗：头尾固定，中间按工具逐行滚动 */
+.log-modal {
+  width: 560px; max-width: 92vw; max-height: 82vh;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.log-modal h3 { flex-shrink: 0; }
+.log-modal-sub {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  flex-shrink: 0; margin-bottom: 6px; font-size: 12.5px; color: var(--ink-soft);
+}
+.log-modal-title-name { color: var(--ink); font-weight: 600; }
+.log-modal-label { flex-shrink: 0; word-break: break-all; }
+.record-badge {
+  flex-shrink: 0; font-size: 11px; padding: 1px 7px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--card-line); color: var(--ink-mute);
+}
+.record-badge-err { color: #e5604d; border-color: rgba(229, 96, 77, 0.35); background: rgba(229, 96, 77, 0.08); }
+.log-modal-body { flex: 1; min-height: 0; overflow-y: auto; margin: 6px 0 0; padding-right: 4px; }
+.log-modal-targets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.log-target {
+  display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px;
+  padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.03);
+}
+.log-target-mark { flex-shrink: 0; font-weight: 700; }
+.log-target.is-ok .log-target-mark { color: #3ecf8e; }
+.log-target.is-fail .log-target-mark { color: #e5604d; }
+.log-target-tool { flex-shrink: 0; color: var(--ink); font-weight: 600; min-width: 72px; }
+.log-target-detail { color: var(--ink-mute); word-break: break-all; }
+.log-target-error { color: #e5604d; }
+.log-scan-error {
+  margin: 0; padding: 10px 12px; border-radius: 10px;
+  background: rgba(229, 96, 77, 0.08); word-break: break-all;
+}
+
 /* toast */
 .toast {
   position: fixed; z-index: 200;
@@ -1687,6 +1743,10 @@ html, body, #root {
 [data-theme="light"] .recent-list li {
   background: rgba(0, 0, 0, 0.025);
 }
+[data-theme="light"] .recent-list li.record-row:hover { background: rgba(0, 0, 0, 0.05); }
+[data-theme="light"] .record-channel,
+[data-theme="light"] .record-badge { background: rgba(0, 0, 0, 0.04); }
+[data-theme="light"] .log-target { background: rgba(0, 0, 0, 0.025); }
 /* 市场 Tab 当前隐藏；修掉硬编码深棕底，避免日后启用时浅色下穿帮 */
 [data-theme="light"] .search {
   background: var(--pill-bg);

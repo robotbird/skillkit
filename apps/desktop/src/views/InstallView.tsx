@@ -1,5 +1,17 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { TOOL_LABELS, type Tool, type InstallResult, type InstallOpts, type GithubSkillsResult, type RepoBatchResult, type ShareSourceInfo } from '@shared/types';
+import {
+  TOOL_LABELS,
+  type Tool,
+  type InstallResult,
+  type InstallOpts,
+  type GithubSkillsResult,
+  type RepoBatchResult,
+  type ShareSourceInfo,
+  type InstallRecord,
+  type InstallRecordChannel,
+  type InstallRecordStatus,
+  type InstallErrorType,
+} from '@shared/types';
 import type { ToastState } from '../components/Toast';
 import RepoSkillPicker from '../components/RepoSkillPicker';
 import InstallToolGrid from '../components/InstallToolGrid';
@@ -9,11 +21,26 @@ import type { MessageKey } from '../i18n/messages';
 import { classifyInstallSource } from '../lib/install-source';
 import { useLocalTools } from '../lib/useLocalTools';
 
-interface RecentItem {
-  name: string;
-  source: string;
-  at: string;
-}
+// 安装记录字段 → i18n 键（状态/报错分类/渠道的小标签）
+const RECORD_STATUS_KEY: Record<InstallRecordStatus, MessageKey> = {
+  success: 'inst.records.status.success',
+  partial: 'inst.records.status.partial',
+  failed: 'inst.records.status.failed',
+};
+const RECORD_ERR_KEY: Record<InstallErrorType, MessageKey> = {
+  network: 'inst.records.err.network',
+  not_found: 'inst.records.err.not_found',
+  filesystem: 'inst.records.err.filesystem',
+  unknown: 'inst.records.err.unknown',
+};
+const RECORD_CHANNEL_KEY: Record<InstallRecordChannel, MessageKey> = {
+  market: 'inst.records.channel.market',
+  github: 'inst.records.channel.github',
+  zip: 'inst.records.channel.zip',
+  share: 'inst.records.channel.share',
+  copy: 'inst.records.channel.copy',
+  global: 'inst.records.channel.global',
+};
 
 type T = (key: MessageKey, vars?: Record<string, string | number>) => string;
 
@@ -75,7 +102,10 @@ export default function InstallView({
   });
   // zip：先选文件（存绝对路径），上传完成后再点「安装」选目标工具
   const [zipPath, setZipPath] = useState('');
-  const [recent, setRecent] = useState<RecentItem[]>([]);
+  // 安装记录（持久化在主进程 DB）：挂载时读一次，每次安装完成（finally）后刷新
+  const [records, setRecords] = useState<InstallRecord[]>([]);
+  const [detailRecord, setDetailRecord] = useState<InstallRecord | null>(null);
+  const [clearOpen, setClearOpen] = useState(false);
 
   // 链接 tab：实时识别输入是 skillkit.net 分享链接还是 GitHub，据此派生提示文案/颜色
   const detected = useMemo(() => classifyInstallSource(linkUrl), [linkUrl]);
@@ -113,8 +143,27 @@ export default function InstallView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingShare, onPendingConsumed]);
 
-  function pushRecent(name: string, source: string) {
-    setRecent((arr) => [{ name, source, at: new Date().toLocaleString('zh-CN') }, ...arr].slice(0, 12));
+  // 拉取安装记录（按时间倒序）。主进程在每次安装（含失败）后落库，故安装完成后刷新即可看到新行。
+  async function loadRecords() {
+    try {
+      setRecords(await window.skillkit.getInstallRecords());
+    } catch {
+      /* ignore：记录列表失败不影响安装主流程 */
+    }
+  }
+
+  useEffect(() => {
+    void loadRecords();
+  }, []);
+
+  async function doClearRecords() {
+    setClearOpen(false);
+    try {
+      await window.skillkit.clearInstallRecords();
+      await loadRecords();
+    } catch {
+      /* ignore */
+    }
   }
 
   // zip 第一步：弹系统文件框选 zip（仅选文件，不安装）；取消则保持原选择不变
@@ -213,8 +262,6 @@ export default function InstallView({
       const anyOk = batch.some((b) => b.results.some((r) => r.ok));
       toast.show(summarizeBatch(batch, t), anyOk ? 'info' : 'error', 5000);
       if (anyOk) {
-        const okNames = batch.filter((b) => b.results.some((r) => r.ok)).map((b) => b.skillName);
-        pushRecent(okNames.join(', '), url);
         onInstalled();
       }
     } catch (e: any) {
@@ -222,6 +269,7 @@ export default function InstallView({
     } finally {
       setBusy(false);
       setRepoPicker({ open: false, result: null });
+      void loadRecords();
     }
   }
 
@@ -243,8 +291,6 @@ export default function InstallView({
         const okAny = results.some((r) => r.ok);
         toast.show(summarize(results, t), okAny ? 'info' : 'error', 4000);
         if (okAny) {
-          const repoName = url.match(/([^/]+?)(?:\.git)?\/?$/)?.[1] ?? url;
-          pushRecent(repoName, url);
           setLinkUrl('');
           onInstalled();
         }
@@ -266,7 +312,6 @@ export default function InstallView({
         const okAny = results.some((r) => r.ok);
         toast.show(summarize(results, t), okAny ? 'info' : 'error', 4000);
         if (okAny) {
-          pushRecent(results.find((r) => r.ok)?.path?.split('/').pop() ?? t('inst.source.share'), url);
           setLinkUrl('');
           onInstalled();
         }
@@ -276,10 +321,6 @@ export default function InstallView({
         const okAny = results.some((x) => x.ok);
         toast.show(summarize(results, t), okAny ? 'info' : 'error', 4000);
         if (okAny) {
-          pushRecent(
-            results.find((x) => x.ok)?.path?.split('/').pop() ?? zipName,
-            t('inst.source.zip'),
-          );
           setZipPath('');
           onInstalled();
         }
@@ -288,6 +329,7 @@ export default function InstallView({
       toast.show(t('inst.toast.installFail', { error: e?.message ?? e }), 'error');
     } finally {
       setBusy(false);
+      void loadRecords();
     }
   }
 
@@ -412,22 +454,113 @@ export default function InstallView({
       </div>
 
       <section className="recent">
-        <h3>{t('inst.recent.title')}</h3>
-        {recent.length === 0 ? (
-          <p className="recent-empty" style={{ margin: 0 }}>{t('inst.recent.empty')}</p>
+        <div className="recent-head">
+          <h3>{t('inst.records.title')}</h3>
+          {records.length > 0 && (
+            <button className="btn-ghost record-clear" onClick={() => setClearOpen(true)} disabled={busy}>
+              {t('inst.records.clear')}
+            </button>
+          )}
+        </div>
+        {records.length === 0 ? (
+          <p className="recent-empty" style={{ margin: 0 }}>{t('inst.records.empty')}</p>
         ) : (
           <ul className="recent-list">
-            {recent.map((r, i) => (
-              <li key={i}>
-                <span style={{ color: 'var(--accent)' }}>●</span>
-                <strong style={{ color: 'var(--ink)', fontWeight: 600 }}>{r.name}</strong>
-                <span style={{ color: 'var(--ink-mute)' }}>· {r.source}</span>
-                <span style={{ marginLeft: 'auto', color: 'var(--ink-mute)', fontSize: 11.5 }}>{r.at}</span>
+            {records.map((r) => (
+              <li
+                key={r.id}
+                className="record-row"
+                role="button"
+                tabIndex={0}
+                onClick={() => setDetailRecord(r)}
+                onKeyDown={(e) => { if (e.key === 'Enter') setDetailRecord(r); }}
+              >
+                <span className={`record-status is-${r.status}`} title={t(RECORD_STATUS_KEY[r.status])} aria-hidden>●</span>
+                <strong className="record-name">{r.skillName ?? r.label}</strong>
+                <span className="record-channel">{t(RECORD_CHANNEL_KEY[r.channel])}</span>
+                <span className="record-time">{new Date(r.at).toLocaleString()}</span>
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      {detailRecord && (
+        <ModalPortal>
+          <div
+            className="modal-mask"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setDetailRecord(null); }}
+          >
+            <div className="modal log-modal" role="dialog" aria-modal="true">
+              <h3>{t('inst.records.detailTitle')}</h3>
+              <div className="log-modal-sub">
+                <span className={`record-status is-${detailRecord.status}`} aria-hidden>●</span>
+                <strong className="log-modal-title-name">{detailRecord.skillName ?? detailRecord.label}</strong>
+                <span className="record-badge">{t(RECORD_STATUS_KEY[detailRecord.status])}</span>
+                {detailRecord.errorType && (
+                  <span className="record-badge record-badge-err">
+                    {t(RECORD_ERR_KEY[detailRecord.errorType])}
+                  </span>
+                )}
+                <span className="record-channel">{t(RECORD_CHANNEL_KEY[detailRecord.channel])}</span>
+                <span className="record-time">{new Date(detailRecord.at).toLocaleString()}</span>
+              </div>
+              {detailRecord.label && <p className="modal-sub log-modal-label">{detailRecord.label}</p>}
+              <div className="log-modal-body">
+                {detailRecord.targets.length === 0 ? (
+                  // 扫描阶段失败：没有 per-tool 明细，直接展示整体报错
+                  detailRecord.error ? (
+                    <p className="log-target-error log-scan-error">{detailRecord.error}</p>
+                  ) : (
+                    <p className="muted-hint">{t('inst.records.empty')}</p>
+                  )
+                ) : (
+                  <ul className="log-modal-targets">
+                    {detailRecord.targets.map((tg, i) => (
+                      <li key={i} className={`log-target ${tg.ok ? 'is-ok' : 'is-fail'}`}>
+                        <span className="log-target-mark">{tg.ok ? '✓' : '✗'}</span>
+                        <span className="log-target-tool">{TOOL_LABELS[tg.tool]}</span>
+                        {tg.ok ? (
+                          <span className="log-target-detail" title={tg.path}>{tg.path}</span>
+                        ) : (
+                          <span className="log-target-detail log-target-error">{tg.error}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="modal-actions">
+                <button className="btn-primary" onClick={() => setDetailRecord(null)}>
+                  {t('inst.records.close')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {clearOpen && (
+        <ModalPortal>
+          <div
+            className="modal-mask"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setClearOpen(false); }}
+          >
+            <div className="modal">
+              <h3>{t('inst.records.clear')}</h3>
+              <p className="modal-sub">{t('inst.records.clearConfirm')}</p>
+              <div className="modal-actions">
+                <button className="btn-ghost" onClick={() => setClearOpen(false)}>
+                  {t('common.cancel')}
+                </button>
+                <button className="btn-primary" onClick={doClearRecords}>
+                  {t('inst.records.clear')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
 
       <RepoSkillPicker
         open={repoPicker.open}

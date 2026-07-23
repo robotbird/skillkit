@@ -66,6 +66,35 @@ export interface RepoBatchResult {
   results: InstallResult[]; // 每个 tool 一项
 }
 
+// ===== 安装记录（持久化于 desktop 主进程 install_records 表；desktop 专用）=====
+/** 安装动作的整体状态。partial = 部分目标工具成功、部分失败。 */
+export type InstallRecordStatus = 'success' | 'partial' | 'failed';
+/** 安装入口渠道。区分一条记录来自哪种安装方式。 */
+export type InstallRecordChannel = 'market' | 'github' | 'zip' | 'share' | 'copy' | 'global';
+/** 报错分类（读时由 classifyInstallError 对失败项派生）。 */
+export type InstallErrorType = 'network' | 'not_found' | 'filesystem' | 'unknown';
+
+/** 安装记录里每个目标工具的明细（详情弹窗逐行展示）。 */
+export interface InstallRecordTarget {
+  tool: Tool;
+  ok: boolean;
+  path?: string;
+  error?: string;
+}
+
+/** 一次安装动作的记录：含渠道、来源、整体状态与每个工具的成败/报错明细。 */
+export interface InstallRecord {
+  id: number;
+  at: number; // Date.now() 毫秒
+  channel: InstallRecordChannel;
+  label: string; // 展示用来源：url / slug / zip 文件名 / 分享 id / copy:tool/name
+  skillName: string | null; // 成功时解析出的 skill 名；失败可空
+  status: InstallRecordStatus;
+  error: string | null; // 整体报错摘要（扫描阶段失败无 targets 时即此字段；普通失败为各工具报错汇总）
+  errorType: InstallErrorType | null; // 读时派生；success 时为 null
+  targets: InstallRecordTarget[]; // 详情弹窗逐行展示的明细（扫描阶段失败时为空）
+}
+
 // ===== 全局仓库（~/.agents/skills，与 npx skills 互通）=====
 /** 安装范围 + 方式。从 ToolPicker 经 IPC 传到 installer。 */
 export interface InstallOpts {
@@ -185,6 +214,11 @@ export interface SkillkitApi {
   pickZip(): Promise<string | null>;
   /** 用已选 zip 路径安装到目标工具。 */
   installFromZip(zipPath: string, targets: Tool[], opts?: InstallOpts): Promise<InstallResult[]>;
+
+  /** 读取安装记录（按时间倒序，默认最近 200 条；含成功与失败）。 */
+  getInstallRecords(): Promise<InstallRecord[]>;
+  /** 清空全部安装记录。 */
+  clearInstallRecords(): Promise<void>;
 
   /** 从拖拽事件的 File 取系统绝对路径（Electron webUtils.getPathForFile）。 */
   getDroppedFilePath(file: File): string;
