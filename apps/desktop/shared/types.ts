@@ -132,6 +132,36 @@ export interface UpdateAvailableInfo {
   downloadName: string; // 安装包文件名
 }
 
+// ===== skill 更新检测(desktop 专用) =====
+/** 自动检测间隔。off=关闭；默认 8h。 */
+export type SkillUpdateInterval = 'off' | '4h' | '8h' | '12h' | '24h';
+/** 单个已装 skill 的更新状态。 */
+export type SkillUpdateStatus =
+  | 'up_to_date' // 本地基准 SHA == 远端最新 SHA
+  | 'update_available' // 远端有新提交
+  | 'unknown' // 无基准/未检测过/未知来源
+  | 'error' // 探测失败（网络/限流/404）
+  | 'checking'; // 检测进行中（瞬态）
+/** 一条 skill 的更新检测状态行（持久化于 skill_update_state 表）。 */
+export interface SkillUpdateState {
+  tool: Tool;
+  name: string;
+  sourceKey: string | null; // 归一化源标识 owner/repo@branch[#subpath]，去重+调试用
+  sourceRevision: string | null; // 已装版本基准 SHA（懒：首次检测时写入）
+  remoteRevision: string | null; // 最近探测到的远端 SHA
+  updateStatus: SkillUpdateStatus;
+  lastCheckedAt: number | null; // Date.now() 毫秒
+  lastCheckError: string | null;
+}
+/** 一轮检测的汇总（推送给渲染层刷徽章/Toast）。 */
+export interface SkillUpdateSummary {
+  checked: number; // 本轮实际探测的 skill 数（去重后）
+  available: number; // 标记为 update_available 的数量
+  failed: number; // 探测失败的数量
+  updatedAt: number; // 本轮完成时间戳
+  triggeredBy: 'auto' | 'manual'; // 调度触发 / 用户手动触发
+}
+
 // ===== 设置（持久化于 desktop 主进程 meta KV；desktop 专用）=====
 /** 外观主题。system 跟随 OS。 */
 export type Theme = 'dark' | 'light' | 'system';
@@ -143,6 +173,8 @@ export const SETTING_KEYS = {
   theme: 'theme',
   locale: 'locale',
   authToken: 'auth_token',
+  skillUpdateInterval: 'skill_update_interval', // SkillUpdateInterval，默认 '8h'
+  skillUpdateLastRun: 'skill_update_last_run', // 上次自动检测完成时间戳（ms）
 } as const;
 
 /** 主进程解析后的有效主题（system 已解析为 dark/light）。 */
@@ -187,6 +219,16 @@ export interface SkillkitApi {
   checkUpdate(): Promise<{ available: boolean; info: UpdateAvailableInfo | null }>;
   /** 触发更新:下载安装包到 ~/Downloads 并打开。 */
   applyUpdate(): Promise<string>;
+
+  // ===== skill 更新检测 =====
+  /** 检查所有已装 skill 的更新（force=true 绕过 TTL 防抖）。返回本轮汇总。 */
+  checkSkillUpdates(force?: boolean): Promise<SkillUpdateSummary>;
+  /** 取全部 skill 的更新状态（按 `${tool}|${name}` 索引），渲染层与 installed 列表 join 出徽章。 */
+  getSkillUpdateMap(): Promise<Record<string, SkillUpdateState>>;
+  /** 应用单个 skill 的更新：用原 source 重装（复用安装的备份+回滚）。 */
+  applySkillUpdate(tool: Tool, name: string): Promise<InstallResult[]>;
+  /** 监听主进程推送的「一轮检测完成」事件（手动/调度触发都会推）。返回取消订阅。 */
+  onSkillUpdatesChecked(cb: (summary: SkillUpdateSummary) => void): () => void;
   uninstallSkill(tool: Tool, name: string): Promise<void>;
   revealInFinder(absPath: string): Promise<void>;
   /** 读取 skill 目录下 SKILL.md/AGENTS.md 的 Markdown 正文（详情弹窗用）。 */

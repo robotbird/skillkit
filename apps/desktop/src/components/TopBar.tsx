@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import UpdateButton from './UpdateButton';
+import SkillUpdateButton from './SkillUpdateButton';
 import SettingsDialog from './SettingsDialog';
 import { useI18n } from '../i18n';
 import { isWindows } from '../lib/os';
@@ -43,6 +44,7 @@ export default function TopBar({
         <div className="toolbar-trail">
           {/* 当前激活视图通过 portal 把搜索/视图切换/重新扫描 等控件注入此处 */}
           <div className="toolbar-slot" ref={slotRef} />
+          <SkillUpdateButton />
           <UpdateButton />
           <button
             className="settings-btn"

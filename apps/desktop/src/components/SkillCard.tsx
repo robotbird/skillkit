@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SkillGroup } from '../lib/groupSkills';
+import type { SkillUpdateStatus } from '@shared/types';
 import { emojiFor, formatSize, formatTime, truncate } from '../lib/format';
 import ToolStack from './ToolStack';
 import { useI18n } from '../i18n';
@@ -7,10 +8,14 @@ import { useI18n } from '../i18n';
 interface Props {
   group: SkillGroup;
   mode: 'grid' | 'list';
+  /** 该 skill 的更新状态（来自 skill_update_state）。update_available 时显示「可更新」徽章。 */
+  updateStatus?: SkillUpdateStatus;
   onUninstall?: (group: SkillGroup) => void;
   onReveal?: (group: SkillGroup) => void;
   onShare?: (group: SkillGroup) => void;
   onCopyTo?: (group: SkillGroup) => void;
+  /** 应用更新（重装到本组所有工具）。仅 update_available 时传入。 */
+  onUpdate?: (group: SkillGroup) => void;
   onOpenDetail?: (group: SkillGroup) => void;
 }
 
@@ -20,12 +25,14 @@ function KebabMenu({
   onUninstall,
   onShare,
   onCopyTo,
+  onUpdate,
 }: {
   canUninstall: boolean;
   onReveal: () => void;
   onUninstall: () => void;
   onShare?: () => void;
   onCopyTo?: () => void;
+  onUpdate?: () => void;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -67,6 +74,23 @@ function KebabMenu({
       </button>
       {open && (
         <div className="kebab-menu" role="menu">
+          {onUpdate && (
+            <button
+              className="kebab-item"
+              onClick={() => {
+                setOpen(false);
+                onUpdate();
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0020 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 004 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"
+                />
+              </svg>
+              {t('skill.update')}
+            </button>
+          )}
           <button
             className="kebab-item"
             onClick={() => {
@@ -135,18 +159,20 @@ function KebabMenu({
   );
 }
 
-export default function SkillCard({ group, mode, onUninstall, onReveal, onShare, onCopyTo, onOpenDetail }: Props) {
+export default function SkillCard({ group, mode, updateStatus, onUninstall, onReveal, onShare, onCopyTo, onUpdate, onOpenDetail }: Props) {
   const { t } = useI18n();
   const { primary, tools } = group;
   const builtinTools = tools.filter((tool) => group.byTool[tool]?.isBuiltin);
   const multi = tools.length > 1;
   // 只要有一个非内置工具就允许卸载（弹窗里再按工具勾选，内置会置灰）
   const canUninstall = tools.some((tool) => !group.byTool[tool]?.isBuiltin);
+  const updatable = updateStatus === 'update_available';
 
   const reveal = () => onReveal?.(group);
   const uninstall = () => onUninstall?.(group);
   const share = onShare ? () => onShare(group) : undefined;
   const copyTo = onCopyTo ? () => onCopyTo(group) : undefined;
+  const update = updatable && onUpdate ? () => onUpdate(group) : undefined;
 
   // 点卡片打开详情；忽略点 kebab 菜单 / 按钮 / 链接，避免误触
   const onCardClick = onOpenDetail
@@ -176,8 +202,9 @@ export default function SkillCard({ group, mode, onUninstall, onReveal, onShare,
         <header className="skill-grid-head">
           <div className="skill-ico">{emojiFor(group.name)}</div>
           <div className="skill-grid-head-right">
+            {updatable && <span className="skill-tag tag-update">{t('skill.updateAvailable')}</span>}
             <ToolStack tools={tools} builtinTools={builtinTools} />
-            <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} onShare={share} onCopyTo={copyTo} />
+            <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} onShare={share} onCopyTo={copyTo} onUpdate={update} />
           </div>
         </header>
         <div className="skill-name" title={group.name}>
@@ -206,6 +233,7 @@ export default function SkillCard({ group, mode, onUninstall, onReveal, onShare,
             {group.name}
           </div>
           <ToolStack tools={tools} builtinTools={builtinTools} size="md" />
+          {updatable && <span className="skill-tag tag-update">{t('skill.updateAvailable')}</span>}
           {multi && <span className="skill-tag tag-multi">{t('skill.toolCount', { count: tools.length })}</span>}
           {builtinTools.length > 0 && <span className="skill-tag tag-builtin">{t('skill.hasBuiltin')}</span>}
         </div>
@@ -237,7 +265,7 @@ export default function SkillCard({ group, mode, onUninstall, onReveal, onShare,
         </div>
       </div>
       <div className="skill-actions">
-        <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} onShare={share} onCopyTo={copyTo} />
+        <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} onShare={share} onCopyTo={copyTo} onUpdate={update} />
       </div>
     </article>
   );

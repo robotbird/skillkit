@@ -12,6 +12,8 @@ import type {
   AccountLoginResult,
   PublicUser,
   OAuthProvider,
+  SkillUpdateState,
+  SkillUpdateSummary,
 } from '../shared/types.js';
 
 const api: SkillkitApi = {
@@ -81,6 +83,18 @@ const api: SkillkitApi = {
   getUpdateStatus: () => ipcRenderer.invoke('update:status'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   applyUpdate: () => ipcRenderer.invoke('update:apply'),
+
+  // skill 更新检测
+  checkSkillUpdates: (force?: boolean) => ipcRenderer.invoke('skillUpdate:checkAll', force),
+  getSkillUpdateMap: () =>
+    ipcRenderer.invoke('skillUpdate:statusMap') as Promise<Record<string, SkillUpdateState>>,
+  applySkillUpdate: (tool: Tool, name: string) =>
+    ipcRenderer.invoke('skillUpdate:apply', tool, name),
+  onSkillUpdatesChecked: (cb: (summary: SkillUpdateSummary) => void) => {
+    const listener = (_e: IpcRendererEvent, summary: SkillUpdateSummary) => cb(summary);
+    ipcRenderer.on('skill-update:checked', listener);
+    return () => ipcRenderer.removeListener('skill-update:checked', listener);
+  },
 
   // 设置（meta KV）
   getSetting: (key: string) => ipcRenderer.invoke('setting:get', key),

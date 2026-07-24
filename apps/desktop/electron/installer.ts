@@ -191,7 +191,7 @@ function githubCanonicalUrl(ref: RepoRef): string {
 }
 
 /** 瞬时网络错误(socket 被对端中途关闭 / 连接重置 / 超时 等):值得自动重试 */
-function isTransientNetError(e: unknown): boolean {
+export function isTransientNetError(e: unknown): boolean {
   const any = e as any;
   const code: unknown = any?.cause?.code ?? any?.code;
   if (typeof code === 'string' && code.startsWith('UND_ERR_')) return true; // UND_ERR_SOCKET 等
@@ -512,7 +512,7 @@ function collectRepoSkills(
 // 一次 git/trees?recursive=1 拿全文件树，再对候选目录逐个 raw 拉 MD。
 // 任何失败（限流 / 私有 / 超大树 / 网络）→ 抛错，由 listGithubSkills 回退整包 tarball 扫描。
 
-const GH_API = 'https://api.github.com';
+export const GH_API = 'https://api.github.com';
 const GH_RAW = 'https://raw.githubusercontent.com';
 const GH_TOKEN = process.env.GITHUB_TOKEN?.trim(); // 可选：把匿名 60/小时限流抬到 5000/小时
 
@@ -535,7 +535,7 @@ async function ghGet(url: string, json: boolean): Promise<Response> {
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
-async function ghApiJson<T>(url: string): Promise<T> {
+export async function ghApiJson<T>(url: string): Promise<T> {
   const res = await ghGet(url, true);
   if (!res.ok) throw new Error(`GitHub API HTTP ${res.status}`);
   return (await res.json()) as T;
@@ -554,7 +554,7 @@ async function ghRawBytes(url: string): Promise<Buffer> {
 }
 
 /** 无 branch 时取默认分支（raw URL 需要真实 branch，不接受 HEAD）。 */
-async function defaultBranch(owner: string, repo: string): Promise<string> {
+export async function defaultBranch(owner: string, repo: string): Promise<string> {
   const info = await ghApiJson<{ default_branch?: string }>(`${GH_API}/repos/${owner}/${repo}`);
   return info.default_branch || 'main';
 }

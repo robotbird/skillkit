@@ -213,6 +213,48 @@ html, body, #root {
   70% { box-shadow: 0 0 0 6px rgba(255, 178, 77, 0); }
   100% { box-shadow: 0 0 0 0 rgba(255, 178, 77, 0); }
 }
+
+/* 顶部「检查 Skill 更新」按钮（UpdateButton 的兄弟；绿色，区别于橙色应用更新） */
+.skill-update-btn {
+  position: relative;
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
+}
+.skill-update-btn:hover {
+  background: rgba(74, 222, 128, 0.1);
+  border-color: rgba(74, 222, 128, 0.4);
+  color: var(--ink);
+}
+.skill-update-btn:disabled { cursor: default; opacity: 0.9; }
+.skill-update-btn .spinner { width: 14px; height: 14px; }
+.skill-update-btn.has-badge { color: var(--green, #4ade80); }
+.skill-update-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--green, #4ade80);
+  color: #0f1a12;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--bg-0);
+}
 .tab:hover { color: var(--ink); background: rgba(255, 255, 255, 0.04); }
 .tab.is-active {
   color: var(--pill-active-ink);
@@ -385,6 +427,7 @@ html, body, #root {
 .skill-tag.tag-multi { color: #cdbfa8; border-color: rgba(255, 200, 140, 0.22); }
 .skill-tag.tag-github { color: #9aa4ae; border-color: rgba(154, 164, 174, 0.3); display: inline-flex; align-items: center; gap: 4px; }
 .skill-tag.tag-github svg { width: 11px; height: 11px; }
+.skill-tag.tag-update { color: var(--green, #4ade80); border-color: rgba(74, 222, 128, 0.4); background: rgba(74, 222, 128, 0.08); }
 .skill-desc {
   font-size: 12.5px; color: var(--ink-soft);
   line-height: 1.5;

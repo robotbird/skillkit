@@ -4,14 +4,15 @@ import { useI18n } from '../i18n';
 import { useTheme } from '../lib/useTheme';
 import { useAccount } from '../lib/useAccount';
 import { useUpdate } from '../lib/useUpdate';
-import type { Theme, Locale } from '@shared/types';
+import { formatTime } from '../lib/format';
+import { SETTING_KEYS, type Theme, type Locale, type SkillUpdateInterval } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { GitHubIcon, GoogleIcon } from './oauth-icons';
 
-type Section = 'account' | 'appearance' | 'language' | 'space' | 'about';
+type Section = 'account' | 'appearance' | 'language' | 'space' | 'updates' | 'about';
 
 /** 把绝对路径的 home 前缀缩写为 ~（跨平台：/Users/x/.agents/… → ~/.agents/… ； C:\Users\x\.agents\… → ~\.agents\…）。 */
 function abbreviateHome(p: string): string {
@@ -40,6 +41,7 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
     { key: 'appearance', label: t('settings.nav.appearance') },
     { key: 'language', label: t('settings.nav.language') },
     { key: 'space', label: t('settings.nav.space') },
+    { key: 'updates', label: t('settings.nav.updates') },
     { key: 'about', label: t('settings.nav.about') },
   ];
 
@@ -69,6 +71,7 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
             {section === 'appearance' && <AppearanceSection />}
             {section === 'language' && <LanguageSection />}
             {section === 'space' && <SpaceSection />}
+            {section === 'updates' && <UpdatesSection />}
             {section === 'about' && <AboutSection />}
           </div>
           <button className="settings-close" onClick={onClose} title={t('settings.close')} aria-label={t('settings.close')}>
@@ -283,6 +286,88 @@ function SpaceSection() {
           {t('space.reveal')}
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ===== Skill 更新 =====
+function UpdatesSection() {
+  const { t } = useI18n();
+  const [interval, setIntervalSetting] = useState<SkillUpdateInterval>('8h');
+  const [lastRun, setLastRun] = useState<number | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    window.skillkit
+      .getSetting(SETTING_KEYS.skillUpdateInterval)
+      .then((v) => {
+        if (v === 'off' || v === '4h' || v === '8h' || v === '12h' || v === '24h') setIntervalSetting(v);
+      })
+      .catch(() => {});
+    window.skillkit
+      .getSetting(SETTING_KEYS.skillUpdateLastRun)
+      .then((v) => {
+        const n = v ? Number(v) : 0;
+        setLastRun(n || null);
+      })
+      .catch(() => {});
+  }, []);
+
+  const options: { key: SkillUpdateInterval; label: string }[] = [
+    { key: 'off', label: t('skillUpdate.interval.off') },
+    { key: '4h', label: t('skillUpdate.interval.4h') },
+    { key: '8h', label: t('skillUpdate.interval.8h') },
+    { key: '12h', label: t('skillUpdate.interval.12h') },
+    { key: '24h', label: t('skillUpdate.interval.24h') },
+  ];
+
+  async function checkNow() {
+    if (checking) return;
+    setChecking(true);
+    try {
+      await window.skillkit.checkSkillUpdates(true);
+      const v = await window.skillkit.getSetting(SETTING_KEYS.skillUpdateLastRun);
+      setLastRun(v ? Number(v) || null : null);
+    } catch {
+      // 忽略：失败时不阻塞 UI
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  return (
+    <div className="settings-section">
+      <h3>{t('skillUpdate.label')}</h3>
+      <Field>
+        <FieldLabel>{t('skillUpdate.intervalLabel')}</FieldLabel>
+        <ToggleGroup
+          type="single"
+          value={interval}
+          onValueChange={(v) => {
+            if (v) {
+              setIntervalSetting(v as SkillUpdateInterval);
+              window.skillkit.setSetting(SETTING_KEYS.skillUpdateInterval, v).catch(() => {});
+            }
+          }}
+          variant="outline"
+        >
+          {options.map((o) => (
+            <ToggleGroupItem key={o.key} value={o.key}>
+              {o.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </Field>
+      <div className="kv-card">
+        <div className="kv-label">{t('skillUpdate.lastCheck')}</div>
+        <div className="kv-value">{lastRun ? formatTime(lastRun) : t('skillUpdate.never')}</div>
+      </div>
+      <div className="settings-actions">
+        <Button variant="outline" onClick={checkNow} disabled={checking}>
+          {checking ? t('skillUpdate.checking') : t('skillUpdate.checkNow')}
+        </Button>
+      </div>
+      <p className="settings-hint">{t('skillUpdate.hint')}</p>
     </div>
   );
 }

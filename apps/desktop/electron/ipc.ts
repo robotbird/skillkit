@@ -21,7 +21,15 @@ import {
   globalRepoRoot,
 } from './global-repo.js';
 import { applyUpdate, getUpdateStatus, checkForUpdate } from './updater.js';
-import { metaGet, metaSet, insertInstallRecord, listInstallRecords, clearInstallRecords } from './db.js';
+import { checkSkillUpdatesInternal, applySkillUpdate } from './skill-update.js';
+import {
+  metaGet,
+  metaSet,
+  insertInstallRecord,
+  listInstallRecords,
+  clearInstallRecords,
+  getSkillUpdateStateMap,
+} from './db.js';
 import { buildInstallRecord, buildScanFailureRecord } from './install-log.js';
 import { readSkillMdFull } from './skill-md.js';
 import { applyTheme, getThemeState } from './theme.js';
@@ -244,6 +252,22 @@ export function registerIpc() {
   ipcMain.handle('update:status', async () => getUpdateStatus());
   ipcMain.handle('update:check', async () => checkForUpdate());
   ipcMain.handle('update:apply', async () => applyUpdate());
+
+  // skill 更新检测
+  ipcMain.handle('skillUpdate:checkAll', (_e, force?: boolean) =>
+    checkSkillUpdatesInternal(!!force, 'manual'),
+  );
+  ipcMain.handle('skillUpdate:statusMap', () => Object.fromEntries(getSkillUpdateStateMap()));
+  ipcMain.handle('skillUpdate:apply', async (_e, tool: Tool, name: string) => {
+    let r: InstallResult[];
+    try {
+      r = await applySkillUpdate(tool, name);
+    } catch (err: any) {
+      r = [{ tool, ok: false, error: err?.message || String(err) }];
+    }
+    scanAll();
+    return r;
+  });
 
   // ===== 设置（meta KV 通用读写）=====
   ipcMain.handle('setting:get', (_e, key: string) => metaGet(key));

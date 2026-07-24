@@ -10,6 +10,7 @@ import type {
   InstallRecordTarget,
   InstallRecordStatus,
   InstallRecordChannel,
+  SkillUpdateState,
 } from '../shared/types.js';
 import { deriveRecordErrorType } from './install-log.js';
 
@@ -122,6 +123,21 @@ function migrate(d: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_market_owner ON market_skills(owner);
     CREATE INDEX IF NOT EXISTS idx_market_name ON market_skills(name);
+
+    -- skill 更新检测状态：独立表，**不会被 scanAll 清空**（与 share_links / install_records 同级）。
+    -- 键 (tool, name) 与 installed_skills 的 UNIQUE 对齐，渲染层按 "tool|name" join。
+    -- source_revision 是「已装版本基准 SHA」（懒：首次检测时写入）；remote_revision 是最近探测到的远端 SHA。
+    CREATE TABLE IF NOT EXISTS skill_update_state (
+      tool TEXT NOT NULL,
+      name TEXT NOT NULL,
+      source_key TEXT,
+      source_revision TEXT,
+      remote_revision TEXT,
+      update_status TEXT,
+      last_checked_at INTEGER,
+      last_check_error TEXT,
+      PRIMARY KEY (tool, name)
+    );
   `);
   // install_records 是增量引入的表：早期构建可能缺 error 列，按需补上（已存在则跳过）。
   ensureColumn(d, 'install_records', 'error', 'TEXT');
@@ -447,4 +463,65 @@ export function listMarket(args: { q?: string; owner?: string; page: number; pag
     ' ORDER BY is_official DESC, owner ASC, name ASC' +
     ' LIMIT ? OFFSET ?';
   return (getDb().prepare(sql).all(...params, args.pageSize, offset) as any[]).map(rowToMarket);
+}
+
+// ===== skill_update_state（更新检测状态）=====
+function rowToSkillUpdate(r: any): SkillUpdateState {
+  return {
+    tool: r.tool as Tool,
+    name: r.name,
+    sourceKey: r.source_key ?? null,
+    sourceRevision: r.source_revision ?? null,
+    remoteRevision: r.remote_revision ?? null,
+    updateStatus: r.update_status ?? 'unknown',
+    lastCheckedAt: r.last_checked_at ?? null,
+    lastCheckError: r.last_check_error ?? null,
+  };
+}
+
+export function upsertSkillUpdateState(s: SkillUpdateState): void {
+  getDb()
+    .prepare(
+      `INSERT INTO skill_update_state
+         (tool, name, source_key, source_revision, remote_revision, update_status, last_checked_at, last_check_error)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(tool, name) DO UPDATE SET
+         source_key=excluded.source_key,
+         source_revision=excluded.source_revision,
+         remote_revision=excluded.remote_revision,
+         update_status=excluded.update_status,
+         last_checked_at=excluded.last_checked_at,
+         last_check_error=excluded.last_check_error`,
+    )
+    .run(
+      s.tool,
+      s.name,
+      s.sourceKey,
+      s.sourceRevision,
+      s.remoteRevision,
+      s.updateStatus,
+      s.lastCheckedAt,
+      s.lastCheckError,
+    );
+}
+
+/** 取单个 skill 的更新状态（applySkillUpdate 读当前基准/远端 SHA 用）。 */
+export function getSkillUpdateState(tool: Tool, name: string): SkillUpdateState | null {
+  const r = getDb()
+    .prepare('SELECT * FROM skill_update_state WHERE tool = ? AND name = ?')
+    .get(tool, name) as any;
+  return r ? rowToSkillUpdate(r) : null;
+}
+
+/** 全量状态，按 `${tool}|${name}` 索引，供渲染层与 installed 列表 join 出每行徽章。 */
+export function getSkillUpdateStateMap(): Map<string, SkillUpdateState> {
+  const rows = getDb().prepare('SELECT * FROM skill_update_state').all() as any[];
+  const m = new Map<string, SkillUpdateState>();
+  for (const r of rows) m.set(`${r.tool}|${r.name}`, rowToSkillUpdate(r));
+  return m;
+}
+
+/** 删掉某 skill 的状态行（卸载时清理，避免孤儿）。 */
+export function deleteSkillUpdateState(tool: Tool, name: string): void {
+  getDb().prepare('DELETE FROM skill_update_state WHERE tool = ? AND name = ?').run(tool, name);
 }

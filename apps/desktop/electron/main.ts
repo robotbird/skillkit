@@ -8,6 +8,7 @@ import { scanAll } from './scan.js';
 import { parseShareId } from './share.js';
 import { completeOAuth } from './account.js';
 import { checkForUpdate } from './updater.js';
+import { startSkillUpdateScheduler } from './skill-update.js';
 import { disposeGithubCache, cleanStaleTmpDirs } from './installer.js';
 import { initTheme, effectiveTheme } from './theme.js';
 import type { UpdateAvailableInfo, AccountLoginResult } from '../shared/types.js';
@@ -233,6 +234,10 @@ function bootstrap() {
         })
         .catch((e) => console.error('update check failed', e));
     }, 1500);
+
+    // skill 更新检测调度：启动后约 1 分钟首检，之后每 15min 唤醒重判是否到期（默认 8h）。
+    // 窗口已建、DB 已起、IPC 已注册；后台失败静默，不影响应用。
+    startSkillUpdateScheduler();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

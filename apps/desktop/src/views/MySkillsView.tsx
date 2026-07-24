@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ALL_TOOLS, TOOL_LABELS, type InstalledSkill, type Tool, type GlobalRepoSkill } from '@shared/types';
+import { ALL_TOOLS, TOOL_LABELS, type InstalledSkill, type Tool, type GlobalRepoSkill, type SkillUpdateState, type SkillUpdateSummary } from '@shared/types';
 import SkillCard from '../components/SkillCard';
 import GlobalRepoCard from '../components/GlobalRepoCard';
 import ShareDialog from '../components/ShareDialog';
@@ -24,6 +24,8 @@ export default function MySkillsView({
 }) {
   const { t } = useI18n();
   const [items, setItems] = useState<InstalledSkill[] | null>(null);
+  // skill 更新状态（按 `${tool}|${name}` 索引）；与 items join 出每张卡片的「可更新」徽章
+  const [updateMap, setUpdateMap] = useState<Record<string, SkillUpdateState> | null>(null);
   const [q, setQ] = useState('');
   const [tool, setTool] = useState<Tool | 'all' | 'global'>('all');
   const [mode, setMode] = useState<ViewMode>('grid');
@@ -75,13 +77,15 @@ export default function MySkillsView({
   async function refresh() {
     setScanning(true);
     try {
-      const [r, g] = await Promise.all([
+      const [r, g, , um] = await Promise.all([
         window.skillkit.scanAll(),
         window.skillkit.scanGlobalRepo(),
         refreshInstalledTools(),
+        window.skillkit.getSkillUpdateMap(),
       ]);
       setItems(r);
       setGlobalSkills(g);
+      setUpdateMap(um);
     } catch (e: any) {
       toast.show(t('my.toast.scanFail', { error: e?.message ?? e }), 'error');
     } finally {
@@ -93,6 +97,48 @@ export default function MySkillsView({
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 监听「一轮检测完成」（顶部按钮手动 / 后台调度都会推）：刷新徽章 + Toast 反馈。
+  // MySkillsView 每次 onChanged 会因 key 变化而 remount，故必须返回取消订阅避免监听器累积泄漏。
+  useEffect(() => {
+    const off = window.skillkit.onSkillUpdatesChecked((s: SkillUpdateSummary) => {
+      window.skillkit.getSkillUpdateMap().then(setUpdateMap).catch(() => {});
+      if (s.available > 0) {
+        toast.show(t('my.toast.updatesAvailable', { count: s.available }), 'info', 4000);
+      } else if (s.triggeredBy === 'manual') {
+        toast.show(t('my.toast.allUpToDate'));
+      }
+    });
+    return off;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** 应用更新：用原 source 重装到本组所有工具（复用安装的备份+回滚）。 */
+  async function startUpdate(group: SkillGroup) {
+    try {
+      const results = await window.skillkit.applySkillUpdate(group.primary.tool, group.name);
+      const ok = results.filter((r) => r.ok).map((r) => TOOL_LABELS[r.tool]);
+      const fail = results.filter((r) => !r.ok);
+      if (ok.length && !fail.length) {
+        toast.show(t('my.toast.updated', { name: group.name, tools: ok.join(', ') }));
+      } else if (fail.length) {
+        const okPart = ok.length ? t('my.toast.updated', { name: group.name, tools: ok.join(', ') }) : '';
+        const failPart = fail
+          .map((r) => t('my.toast.failedDetail', { tool: TOOL_LABELS[r.tool], error: r.error ?? t('my.toast.failFallback') }))
+          .join('; ');
+        toast.show([okPart, failPart].filter(Boolean).join('; '), 'error', 4000);
+      }
+      await refresh();
+      onChanged();
+    } catch (e: any) {
+      toast.show(t('my.toast.updateFail', { error: e?.message ?? e }), 'error');
+    }
+  }
+
+  /** 取某组的更新状态（同 skill 跨工具同源，取 primary.tool 的行即可）。 */
+  function updateStatusOf(g: SkillGroup) {
+    return updateMap?.[`${g.primary.tool}|${g.name}`]?.updateStatus;
+  }
 
   // 扁平记录 -> 按 name 合并的组（跨工具同一 skill 一组）
   const groups = useMemo(() => (items ? groupBySkill(items) : []), [items]);
@@ -406,10 +452,12 @@ export default function MySkillsView({
               key={g.name}
               group={g}
               mode={mode}
+              updateStatus={updateStatusOf(g)}
               onUninstall={startUninstall}
               onReveal={startReveal}
               onShare={(grp) => setShareSkill(grp.primary)}
               onCopyTo={g.tools.length < ALL_TOOLS.length ? setCopyGroup : undefined}
+              onUpdate={updateStatusOf(g) === 'update_available' ? startUpdate : undefined}
               onOpenDetail={setDetailGroup}
             />
           ))
