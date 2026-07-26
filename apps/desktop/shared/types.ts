@@ -299,6 +299,8 @@ export interface SkillkitApi {
   setTheme(theme: Theme): Promise<void>;
   /** 监听主进程推送的有效主题变化（system 模式下 OS 切换 / setTheme 后触发）。 */
   onThemeChange(cb: (effective: EffectiveTheme) => void): void;
+  /** Windows：弹框 mount/unmount 时切换原生标题栏 overlay 伪装（遮挡关闭/最大化区域）；macOS 无效。 */
+  setModalChromeHidden(hidden: boolean): Promise<void>;
   /** 用系统浏览器打开外链（handler 内校验 https）。 */
   openExternal(url: string): Promise<void>;
   /** 当前应用版本（app.getVersion()）。 */

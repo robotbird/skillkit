@@ -31,10 +31,35 @@ export function windowColors(eff: EffectiveTheme): WindowColors {
   return { bg: '#fafafa', caption: '#fafafa', symbol: '#1a1a1a', height: TITLEBAR_HEIGHT };
 }
 
-/** 读取持久化的主题设置（默认 dark，与历史一致）。 */
+/**
+ * 弹框打开时把 Windows 原生标题栏 overlay（最小化/最大化/关闭）伪装成 modal 蒙层同色，
+ * 使按钮符号隐入暗蒙层——视觉上「遮挡」关闭/最大化区域。
+ * 根因：原生 caption 是 OS 层绘制、压在 web 内容之上，.modal-mask 再高的 z-index 也盖不住；
+ *       Electron 又无「隐藏 overlay」API（setTitleBarOverlay 只能改 color/symbolColor/height），故只能伪装。
+ * 取色：.modal-mask = rgba(0,0,0,0.55) 叠在顶栏 caption 色上 ≈ caption × 0.45。
+ *   dark  #382717 × 0.45 ≈ #1a110a；light #fafafa × 0.45 ≈ #707070。
+ * ⚠ 按钮只是「看不见」并非禁用：OS caption 点击不被 web 拦截，仍可关闭/最大化窗口。
+ *   设置弹框自带 ✕/Esc 关闭、用户极少点右上角，权衡可接受。
+ */
+function modalCamouflage(eff: EffectiveTheme): string {
+  return eff === 'dark' ? '#1a110a' : '#707070';
+}
+
+// 弹框开关：true=伪装标题栏按钮（遮挡关闭/最大化），false=恢复 normal caption。仅 Windows 生效。
+let modalChromeHidden = false;
+
+/** 渲染层弹框 mount/unmount 时调用，切换原生标题栏 overlay 的伪装态（幂等）。 */
+export function setModalChromeHidden(hidden: boolean): void {
+  if (modalChromeHidden === hidden) return;
+  modalChromeHidden = hidden;
+  updateWindowColors(effectiveTheme());
+}
+
+/** 读取持久化的主题设置。未设置过时：Windows 默认「跟随系统」，macOS 默认深色（品牌）。 */
 export function getThemeSetting(): Theme {
   const v = metaGet(SETTING_KEYS.theme);
-  return v === 'light' || v === 'system' ? v : 'dark';
+  if (v === 'light' || v === 'system') return v;
+  return process.platform === 'win32' ? 'system' : 'dark';
 }
 
 /** 解析当前有效主题：system → 看 nativeTheme.shouldUseDarkColors。 */
@@ -47,12 +72,14 @@ export function effectiveTheme(): EffectiveTheme {
 /** 更新所有窗口的底色 / Windows 标题栏控件色（运行时切主题调用）。 */
 function updateWindowColors(eff: EffectiveTheme): void {
   const c = windowColors(eff);
+  // 弹框打开→伪装色（color & symbolColor 同色，按钮符号隐形）；否则用 normal caption/symbol。
+  const camo = modalChromeHidden ? modalCamouflage(eff) : null;
   for (const w of BrowserWindow.getAllWindows()) {
     if (w.isDestroyed()) continue;
     w.setBackgroundColor(c.bg);
     if (process.platform === 'win32') {
       // setTitleBarOverlay 仅 Windows 有意义（macOS 红绿灯由系统绘制）
-      w.setTitleBarOverlay?.({ color: c.caption, symbolColor: c.symbol, height: c.height });
+      w.setTitleBarOverlay?.({ color: camo ?? c.caption, symbolColor: camo ?? c.symbol, height: c.height });
     }
   }
 }

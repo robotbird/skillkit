@@ -32,7 +32,7 @@ import {
 } from './db.js';
 import { buildInstallRecord, buildScanFailureRecord } from './install-log.js';
 import { readSkillMdFull } from './skill-md.js';
-import { applyTheme, getThemeState } from './theme.js';
+import { applyTheme, getThemeState, setModalChromeHidden } from './theme.js';
 import { loginAccount, getAccountInfo, logoutAccount, openAccountPage, startOAuth } from './account.js';
 import type {
   Tool,
@@ -282,6 +282,9 @@ export function registerIpc() {
   ipcMain.handle('theme:set', async (_e, theme: Theme) => {
     applyTheme(theme);
   });
+  // Windows：弹框打开时伪装原生标题栏 overlay（遮挡关闭/最大化），关闭恢复。
+  // macOS 仍注册但 theme.ts 内 setTitleBarOverlay 被 process.platform==='win32' 守卫跳过，no-op。
+  ipcMain.handle('window:setModalChromeHidden', (_e, hidden: boolean) => setModalChromeHidden(hidden));
   ipcMain.handle('external:open', async (_e, url: string) => {
     // 仅放行 http(s)，避免 file:// / 任意协议被当作跳板
     let parsed: URL;

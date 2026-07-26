@@ -106,6 +106,8 @@ const api: SkillkitApi = {
   onThemeChange: (cb: (effective: EffectiveTheme) => void) => {
     ipcRenderer.on('theme:effective', (_e, eff: EffectiveTheme) => cb(eff));
   },
+  // Windows：弹框打开时伪装原生标题栏按钮（遮挡关闭/最大化区域），关闭恢复。
+  setModalChromeHidden: (hidden: boolean) => ipcRenderer.invoke('window:setModalChromeHidden', hidden),
 
   // 外链 / 版本 / 全局仓库路径
   openExternal: (url: string) => ipcRenderer.invoke('external:open', url),
