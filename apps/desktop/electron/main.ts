@@ -10,7 +10,7 @@ import { completeOAuth } from './account.js';
 import { checkForUpdate } from './updater.js';
 import { startSkillUpdateScheduler } from './skill-update.js';
 import { disposeGithubCache, cleanStaleTmpDirs } from './installer.js';
-import { initTheme, effectiveTheme } from './theme.js';
+import { initTheme, effectiveTheme, windowColors } from './theme.js';
 import type { UpdateAvailableInfo, AccountLoginResult } from '../shared/types.js';
 
 // macOS 菜单栏 / Dock 等处显示的应用名（dev 模式下默认会显示 "Electron"）
@@ -141,25 +141,27 @@ const RENDERER_DIST = path.join(__dirname, '../dist');
 
 function createWindow() {
   const isMac = process.platform === 'darwin';
-  // 窗口底色按当前有效主题定（dark 暖暗 / light 暖白），防首帧闪烁；
+  // 窗口色按有效主题定（windowColors 单一来源）：backgroundColor 防 first-frame 闪烁；
+  // Windows titleBarOverlay 用 caption 色（dark 取顶栏透出的 .bg 顶色，light 中性白）。
   // 运行时切主题由 theme.ts 的 updateWindowColors 处理。
   const eff = effectiveTheme();
-  const bgColor = eff === 'dark' ? '#1a1410' : '#f5f0e8';
+  const wc = windowColors(eff);
   const w = new BrowserWindow({
     width: 1240,
     height: 820,
     minWidth: 980,
     minHeight: 640,
-    backgroundColor: bgColor,
+    backgroundColor: wc.bg,
     // macOS:hiddenInset + 毛玻璃(左上角红绿灯)。
     // Windows:'hidden' + titleBarOverlay(右上角原生最小化/最大化/关闭),
     //         无框但整条 .topbar 仍可拖拽,居中 tabs 不与右上角按钮重叠。
+    //         caption height=60(= .topbar)使原生按钮符号与顶栏按钮垂直对齐。
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     vibrancy: isMac ? 'under-window' : undefined,
     visualEffectState: isMac ? 'active' : undefined,
     titleBarOverlay: isMac
       ? undefined
-      : { color: bgColor, symbolColor: eff === 'dark' ? '#e8dcc8' : '#3a2a1a', height: 40 },
+      : { color: wc.caption, symbolColor: wc.symbol, height: wc.height },
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,

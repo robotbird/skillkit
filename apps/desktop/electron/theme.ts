@@ -2,12 +2,30 @@ import { BrowserWindow, nativeTheme } from 'electron';
 import { metaGet, metaSet } from './db.js';
 import { SETTING_KEYS, type EffectiveTheme, type Theme } from '../shared/types.js';
 
-// 暖色暗调（默认）与暖色亮调两套窗口底色 / Windows 标题栏控件色。
-// 窗口 backgroundColor 在创建时定（防首帧闪烁）；运行时切主题用 setBackgroundColor + setTitleBarOverlay。
-const DARK_BG = '#1a1410';
-const DARK_SYMBOL = '#e8dcc8';
-const LIGHT_BG = '#f5f0e8';
-const LIGHT_SYMBOL = '#3a2a1a';
+// 窗口配色（单一来源：main.ts 建窗 + theme.ts 切主题都走 windowColors）。
+// - bg（backgroundColor，防 first-frame 闪烁）：对齐 --bg-0（dark #1a1410 / light #fafafa）。
+// - caption（Windows titleBarOverlay 条色）：取顶栏透出的 .bg 背景色——
+//   dark = .bg 渐变顶部 #2a1d12（顶栏实际显示色，与原生窗口按钮无缝融合）；
+//   light = #fafafa（中性白，对齐 v2 浅色 --bg-0；旧值 #f5f0e8 是 v1 暖米白，已废弃）。
+//   caption 是 Electron API 入参，必须 hex 字面量（无法用 CSS 变量）；.bg 渐变改色需同步此处。
+// - symbol：标题栏按钮符号色；light 用近黑 #1a1a1a 对齐浅色态 --ink 中性化。
+// - height：= .topbar 高度（60），让原生窗口控制按钮符号与顶栏工具按钮同中心线（垂直对齐）。
+const TITLEBAR_HEIGHT = 60;
+
+interface WindowColors {
+  bg: string; // 窗口底色（backgroundColor）
+  caption: string; // Windows 标题栏条色（titleBarOverlay.color）
+  symbol: string; // 标题栏按钮符号色（titleBarOverlay.symbolColor）
+  height: number; // 标题栏条高度（= .topbar 高度）
+}
+
+/** 按有效主题计算窗口配色。 */
+export function windowColors(eff: EffectiveTheme): WindowColors {
+  if (eff === 'dark') {
+    return { bg: '#1a1410', caption: '#2a1d12', symbol: '#e8dcc8', height: TITLEBAR_HEIGHT };
+  }
+  return { bg: '#fafafa', caption: '#fafafa', symbol: '#1a1a1a', height: TITLEBAR_HEIGHT };
+}
 
 /** 读取持久化的主题设置（默认 dark，与历史一致）。 */
 export function getThemeSetting(): Theme {
@@ -24,14 +42,13 @@ export function effectiveTheme(): EffectiveTheme {
 
 /** 更新所有窗口的底色 / Windows 标题栏控件色（运行时切主题调用）。 */
 function updateWindowColors(eff: EffectiveTheme): void {
-  const bg = eff === 'dark' ? DARK_BG : LIGHT_BG;
-  const symbol = eff === 'dark' ? DARK_SYMBOL : LIGHT_SYMBOL;
+  const c = windowColors(eff);
   for (const w of BrowserWindow.getAllWindows()) {
     if (w.isDestroyed()) continue;
-    w.setBackgroundColor(bg);
+    w.setBackgroundColor(c.bg);
     if (process.platform === 'win32') {
       // setTitleBarOverlay 仅 Windows 有意义（macOS 红绿灯由系统绘制）
-      w.setTitleBarOverlay?.({ color: bg, symbolColor: symbol, height: 40 });
+      w.setTitleBarOverlay?.({ color: c.caption, symbolColor: c.symbol, height: c.height });
     }
   }
 }
