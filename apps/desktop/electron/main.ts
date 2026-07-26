@@ -10,7 +10,7 @@ import { completeOAuth } from './account.js';
 import { checkForUpdate } from './updater.js';
 import { startSkillUpdateScheduler } from './skill-update.js';
 import { disposeGithubCache, cleanStaleTmpDirs } from './installer.js';
-import { initTheme, effectiveTheme, windowColors } from './theme.js';
+import { initTheme, effectiveTheme, windowBg } from './theme.js';
 import type { UpdateAvailableInfo, AccountLoginResult } from '../shared/types.js';
 
 // macOS 菜单栏 / Dock 等处显示的应用名（dev 模式下默认会显示 "Electron"）
@@ -141,27 +141,22 @@ const RENDERER_DIST = path.join(__dirname, '../dist');
 
 function createWindow() {
   const isMac = process.platform === 'darwin';
-  // 窗口色按有效主题定（windowColors 单一来源）：backgroundColor 防 first-frame 闪烁；
-  // Windows titleBarOverlay 用 caption 色（dark 取顶栏透出的 .bg 顶色，light 中性白）。
-  // 运行时切主题由 theme.ts 的 updateWindowColors 处理。
+  // 窗口底色按有效主题定（windowBg）：backgroundColor 防 first-frame 闪烁。
+  // Windows 无原生标题栏（titleBarStyle:'hidden'）——最小化/最大化/关闭由 topbar 内
+  // .window-controls 自绘（web 元素），弹框 mask 可天然盖住。运行时切主题由 theme.ts 处理。
   const eff = effectiveTheme();
-  const wc = windowColors(eff);
   const w = new BrowserWindow({
     width: 1240,
     height: 820,
     minWidth: 980,
     minHeight: 640,
-    backgroundColor: wc.bg,
+    backgroundColor: windowBg(eff),
     // macOS:hiddenInset + 毛玻璃(左上角红绿灯)。
-    // Windows:'hidden' + titleBarOverlay(右上角原生最小化/最大化/关闭),
-    //         无框但整条 .topbar 仍可拖拽,居中 tabs 不与右上角按钮重叠。
-    //         caption height=60(= .topbar)使原生按钮符号与顶栏按钮垂直对齐。
+    // Windows:'hidden'(无原生标题栏)——右上角最小化/最大化/关闭由 topbar 内 .window-controls
+    //         自绘(web 元素,弹框 mask 可天然盖住);整条 .topbar 仍可拖拽,居中 tabs 不与按钮重叠。
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     vibrancy: isMac ? 'under-window' : undefined,
     visualEffectState: isMac ? 'active' : undefined,
-    titleBarOverlay: isMac
-      ? undefined
-      : { color: wc.caption, symbolColor: wc.symbol, height: wc.height },
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
@@ -169,6 +164,11 @@ function createWindow() {
     },
   });
   win = w;
+
+  // 自绘画窗按钮：把最大化/还原状态推给渲染进程，供 maximize 按钮图标切换
+  // （双击标题栏拖拽区 / Win+↑ / 窗口吸附等外部触发也能同步）
+  w.on('maximize', () => w.webContents.send('window:maximizeChanged', true));
+  w.on('unmaximize', () => w.webContents.send('window:maximizeChanged', false));
 
   // 冷启动时 open-url 已把 id 缓存到 pendingDeepLink，等渲染进程就绪后补发
   w.webContents.on('did-finish-load', () => {

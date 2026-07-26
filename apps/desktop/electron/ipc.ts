@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, app } from 'electron';
+import { ipcMain, dialog, shell, app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { scanAll, listInstalled, installedTools } from './scan.js';
 import { localTools } from './detect.js';
@@ -32,7 +32,7 @@ import {
 } from './db.js';
 import { buildInstallRecord, buildScanFailureRecord } from './install-log.js';
 import { readSkillMdFull } from './skill-md.js';
-import { applyTheme, getThemeState, setModalChromeHidden } from './theme.js';
+import { applyTheme, getThemeState } from './theme.js';
 import { loginAccount, getAccountInfo, logoutAccount, openAccountPage, startOAuth } from './account.js';
 import type {
   Tool,
@@ -282,9 +282,22 @@ export function registerIpc() {
   ipcMain.handle('theme:set', async (_e, theme: Theme) => {
     applyTheme(theme);
   });
-  // Windows：弹框打开时伪装原生标题栏 overlay（遮挡关闭/最大化），关闭恢复。
-  // macOS 仍注册但 theme.ts 内 setTitleBarOverlay 被 process.platform==='win32' 守卫跳过，no-op。
-  ipcMain.handle('window:setModalChromeHidden', (_e, hidden: boolean) => setModalChromeHidden(hidden));
+  // 窗口控制（Windows 自绘画窗按钮）：最小化 / 最大化(切换) / 关闭 / 查询最大化态。
+  // 用 fromWebContents 定位发起 IPC 的窗口（单窗应用，等价 focused，但更精确）。
+  ipcMain.handle('window:minimize', (e) => {
+    BrowserWindow.fromWebContents(e.sender)?.minimize();
+  });
+  ipcMain.handle('window:maximize', (e) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    if (!w) return false;
+    if (w.isMaximized()) w.unmaximize();
+    else w.maximize();
+    return w.isMaximized();
+  });
+  ipcMain.handle('window:close', (e) => {
+    BrowserWindow.fromWebContents(e.sender)?.close();
+  });
+  ipcMain.handle('window:isMaximized', (e) => !!BrowserWindow.fromWebContents(e.sender)?.isMaximized());
   ipcMain.handle('external:open', async (_e, url: string) => {
     // 仅放行 http(s)，避免 file:// / 任意协议被当作跳板
     let parsed: URL;

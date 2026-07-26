@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import UpdateButton from './UpdateButton';
 import SkillUpdateButton from './SkillUpdateButton';
 import SettingsDialog from './SettingsDialog';
@@ -18,6 +18,14 @@ export default function TopBar({
   const { t } = useI18n();
   const slotRef = useToolbarSlotHost();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [maximized, setMaximized] = useState(false);
+
+  // Windows 自绘画窗按钮：跟踪最大化态以切换 maximize/restore 图标
+  useEffect(() => {
+    if (!isWindows) return;
+    window.skillkit.isWindowMaximized().then(setMaximized).catch(() => {});
+    return window.skillkit.onWindowMaximizeChange(setMaximized);
+  }, []);
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'my', label: t('tab.my') },
@@ -60,6 +68,42 @@ export default function TopBar({
             </svg>
           </button>
         </div>
+        {isWindows && (
+          <div className="window-controls">
+            <button
+              className="win-btn"
+              title="最小化"
+              aria-label="最小化"
+              onClick={() => window.skillkit.minimizeWindow()}
+            >
+              <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
+                <rect x="1" y="8" width="8" height="1" fill="currentColor" />
+              </svg>
+            </button>
+            <button
+              className="win-btn"
+              title={maximized ? '还原' : '最大化'}
+              aria-label={maximized ? '还原' : '最大化'}
+              onClick={() => window.skillkit.maximizeWindow().then(setMaximized).catch(() => {})}
+            >
+              {maximized ? (
+                <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1">
+                  <rect x="1" y="3.5" width="5.5" height="5.5" />
+                  <path d="M3.5 3.5V1.5h5.5v5.5h-2" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
+                  <rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1" />
+                </svg>
+              )}
+            </button>
+            <button className="win-btn close" title="关闭" aria-label="关闭" onClick={() => window.skillkit.closeWindow()}>
+              <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
+                <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" strokeWidth="1" strokeLinecap="square" fill="none" />
+              </svg>
+            </button>
+          </div>
+        )}
       </header>
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>

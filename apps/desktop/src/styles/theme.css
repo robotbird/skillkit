@@ -96,7 +96,7 @@ html, body, #root {
   padding-right: var(--tb-right, 16px);
   flex: 0 0 auto;
 }
-/* macOS 左上角红绿灯需避让；Windows 右上角原生标题栏覆盖（titleBarOverlay，约 138–150px）需避让 */
+/* macOS 左上角红绿灯需避让；Windows 右上角自绘画窗按钮（.window-controls，约 138px）需避让 */
 .topbar[data-os="win"] { --tb-left: 16px; --tb-right: 152px; justify-content: flex-start; }
 /* Windows 工具栏移到左侧并镜像逆序（与 Mac 顺序相反）：左=工具栏 / 中=标签(仍居中) / 右=原生窗口控件。
    trail 是 .topbar 唯一 in-flow 子元素，故 justify-content 直接控其左右；tabs 为 absolute 居中不受影响。
@@ -148,6 +148,36 @@ html, body, #root {
   min-height: 36px;
   -webkit-app-region: no-drag;
 }
+
+/* Windows 自绘画窗按钮（右上角最小化/最大化/关闭）。
+   原生 titleBarOverlay 已移除——改用 web 元素，弹框 .modal-mask（z-index:100）可天然盖住。
+   仅 Windows 渲染（TopBar 内 isWindows 守卫）；macOS 用系统红绿灯。 */
+.window-controls {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: stretch;
+  z-index: 3; /* 盖过 .topbar-drag(drag 区)，按钮可点 */
+  -webkit-app-region: no-drag;
+}
+.win-btn {
+  width: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.win-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--ink); }
+.win-btn:active { background: rgba(255, 255, 255, 0.14); }
+.win-btn.close:hover { background: #e81123; color: #fff; }
+.win-btn.close:active { background: #c50f27; color: #fff; }
+[data-theme="light"] .win-btn { color: #1a1a1a; }
+[data-theme="light"] .win-btn:hover { background: rgba(0, 0, 0, 0.06); }
+[data-theme="light"] .win-btn:active { background: rgba(0, 0, 0, 0.1); }
 
 .tabs {
   position: relative;

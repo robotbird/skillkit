@@ -299,8 +299,14 @@ export interface SkillkitApi {
   setTheme(theme: Theme): Promise<void>;
   /** 监听主进程推送的有效主题变化（system 模式下 OS 切换 / setTheme 后触发）。 */
   onThemeChange(cb: (effective: EffectiveTheme) => void): void;
-  /** Windows：弹框 mount/unmount 时切换原生标题栏 overlay 伪装（遮挡关闭/最大化区域）；macOS 无效。 */
-  setModalChromeHidden(hidden: boolean): Promise<void>;
+  // ===== 窗口控制（Windows 自绘画窗按钮；macOS 用系统红绿灯不调用）=====
+  minimizeWindow(): Promise<void>;
+  /** 切换最大化/还原，返回切换后是否最大化（供按钮图标切换）。 */
+  maximizeWindow(): Promise<boolean>;
+  closeWindow(): Promise<void>;
+  isWindowMaximized(): Promise<boolean>;
+  /** 监听窗口最大化状态变化（双击标题栏 / Win+↑ / 窗口吸附等外部触发时同步图标）。返回取消订阅。 */
+  onWindowMaximizeChange(cb: (maximized: boolean) => void): () => void;
   /** 用系统浏览器打开外链（handler 内校验 https）。 */
   openExternal(url: string): Promise<void>;
   /** 当前应用版本（app.getVersion()）。 */
