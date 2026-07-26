@@ -97,7 +97,13 @@ html, body, #root {
   flex: 0 0 auto;
 }
 /* macOS 左上角红绿灯需避让；Windows 右上角原生标题栏覆盖（titleBarOverlay，约 138–150px）需避让 */
-.topbar[data-os="win"] { --tb-left: 16px; --tb-right: 152px; }
+.topbar[data-os="win"] { --tb-left: 16px; --tb-right: 152px; justify-content: flex-start; }
+/* Windows 工具栏移到左侧并镜像逆序（与 Mac 顺序相反）：左=工具栏 / 中=标签(仍居中) / 右=原生窗口控件。
+   trail 是 .topbar 唯一 in-flow 子元素，故 justify-content 直接控其左右；tabs 为 absolute 居中不受影响。
+   两层 row-reverse 叠加：trail 翻转 [slot, skill-update, update, settings] → slot 翻转 [搜索, 视图切换, 重新扫描]，
+   最终视觉序 设置→[应用更新?]→检查Skill更新→重新扫描→视图切换→搜索（= Mac 的镜像）。Mac 不命中此规则，零变化。*/
+.topbar[data-os="win"] .toolbar-trail { flex-direction: row-reverse; }
+.topbar[data-os="win"] .toolbar-slot { flex-direction: row-reverse; }
 .topbar-drag { position: absolute; inset: 0; -webkit-app-region: drag; }
 /* 顶部标签：工具栏内绝对居中（不受右侧控件宽度影响；仅作用 .topbar 内，不影响安装页子标签） */
 .topbar .tabs {
@@ -182,8 +188,8 @@ html, body, #root {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -221,8 +227,8 @@ html, body, #root {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -1350,8 +1356,8 @@ html, body, #root {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
   background: var(--pill-bg);
