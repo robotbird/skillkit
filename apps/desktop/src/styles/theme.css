@@ -171,10 +171,9 @@ html, body, #root {
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
+/* 关闭按钮 hover 不沿用 Windows 红色，与最小化/最大化保持一致（.close 仅作语义标记，无额外样式）。 */
 .win-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--ink); }
 .win-btn:active { background: rgba(255, 255, 255, 0.14); }
-.win-btn.close:hover { background: #e81123; color: #fff; }
-.win-btn.close:active { background: #c50f27; color: #fff; }
 [data-theme="light"] .win-btn { color: #1a1a1a; }
 [data-theme="light"] .win-btn:hover { background: rgba(0, 0, 0, 0.06); }
 [data-theme="light"] .win-btn:active { background: rgba(0, 0, 0, 0.1); }
