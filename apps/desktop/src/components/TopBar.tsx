@@ -72,7 +72,6 @@ export default function TopBar({
           <div className="window-controls">
             <button
               className="win-btn"
-              title="最小化"
               aria-label="最小化"
               onClick={() => window.skillkit.minimizeWindow()}
             >
@@ -82,7 +81,6 @@ export default function TopBar({
             </button>
             <button
               className="win-btn"
-              title={maximized ? '还原' : '最大化'}
               aria-label={maximized ? '还原' : '最大化'}
               onClick={() => window.skillkit.maximizeWindow().then(setMaximized).catch(() => {})}
             >
@@ -97,7 +95,7 @@ export default function TopBar({
                 </svg>
               )}
             </button>
-            <button className="win-btn close" title="关闭" aria-label="关闭" onClick={() => window.skillkit.closeWindow()}>
+            <button className="win-btn close" aria-label="关闭" onClick={() => window.skillkit.closeWindow()}>
               <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
                 <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" strokeWidth="1" strokeLinecap="square" fill="none" />
               </svg>
