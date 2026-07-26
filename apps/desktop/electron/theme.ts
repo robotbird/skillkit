@@ -4,10 +4,13 @@ import { SETTING_KEYS, type EffectiveTheme, type Theme } from '../shared/types.j
 
 // 窗口配色（单一来源：main.ts 建窗 + theme.ts 切主题都走 windowColors）。
 // - bg（backgroundColor，防 first-frame 闪烁）：对齐 --bg-0（dark #1a1410 / light #fafafa）。
-// - caption（Windows titleBarOverlay 条色）：取顶栏透出的 .bg 背景色——
-//   dark = .bg 渐变顶部 #2a1d12（顶栏实际显示色，与原生窗口按钮无缝融合）；
-//   light = #fafafa（中性白，对齐 v2 浅色 --bg-0；旧值 #f5f0e8 是 v1 暖米白，已废弃）。
-//   caption 是 Electron API 入参，必须 hex 字面量（无法用 CSS 变量）；.bg 渐变改色需同步此处。
+// - caption（Windows titleBarOverlay 条色）：取右上角原生按钮拼接缝处「顶栏实际透出的显示色」——
+//   注意 .bg 不是纯色：底层线性渐变顶部虽是 #2a1d12，但其上还叠了径向暖光
+//   `radial-gradient(900px 500px at 100% 0%, rgba(180,120,60,0.22)...)`，正好打在右上角，
+//   所以右上角真实显示色比 #2a1d12 暖亮，约 #382717。caption 必须取这个叠加后的色值，
+//   否则原生按钮区会显成一块偏冷偏暗的补丁（v0.4.3 的 bug：误用线性顶色 #2a1d12）。
+//   light = #fafafa（浅色 .bg 是纯色，无渐变叠加，直接对齐）。
+//   caption 是 Electron API 入参，必须 hex 字面量（无法用 CSS 变量）；.bg 渐变/径向改色需同步此处。
 // - symbol：标题栏按钮符号色；light 用近黑 #1a1a1a 对齐浅色态 --ink 中性化。
 // - height：= .topbar 高度（60），让原生窗口控制按钮符号与顶栏工具按钮同中心线（垂直对齐）。
 const TITLEBAR_HEIGHT = 60;
@@ -22,7 +25,8 @@ interface WindowColors {
 /** 按有效主题计算窗口配色。 */
 export function windowColors(eff: EffectiveTheme): WindowColors {
   if (eff === 'dark') {
-    return { bg: '#1a1410', caption: '#2a1d12', symbol: '#e8dcc8', height: TITLEBAR_HEIGHT };
+    // caption #382717 = .bg 右上角真实显示色（#2a1d12 线性顶 + 右上角径向暖光叠加后的结果）。
+    return { bg: '#1a1410', caption: '#382717', symbol: '#e8dcc8', height: TITLEBAR_HEIGHT };
   }
   return { bg: '#fafafa', caption: '#fafafa', symbol: '#1a1a1a', height: TITLEBAR_HEIGHT };
 }
