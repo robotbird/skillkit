@@ -153,8 +153,10 @@ html, body, #root {
    原生 titleBarOverlay 已移除——改用 web 元素，弹框 .modal-mask（z-index:100）可天然盖住。
    仅 Windows 渲染（TopBar 内 isWindows 守卫）；macOS 用系统红绿灯。 */
 .window-controls {
+  /* 顶贴 + 32px 高，对齐默认 Windows/Electron caption 按钮位置（紧凑、靠最顶部，而非顶栏 60px 垂直居中） */
   position: absolute;
-  top: 0; right: 0; bottom: 0;
+  top: 0; right: 0;
+  height: 32px;
   display: flex;
   align-items: stretch;
   z-index: 3; /* 盖过 .topbar-drag(drag 区)，按钮可点 */
