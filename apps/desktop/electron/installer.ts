@@ -965,7 +965,13 @@ function findInstalledSkillDir(tool: Tool, name: string): string | null {
   return null;
 }
 
-/** 把已安装的 skill 复制到其他工具：源是某个 tool 的 roots/<dir>/，目标是其他 tool 的 installRoot/<dir>/ */
+/**
+ * 把已安装的 skill 复制到其他工具：以**快捷方式（软链）**接入，而非真实目录拷贝。
+ * - 源是软链（如从全局仓库接入）→ 目标也建软链，指向源软链的同一目标，多工具共享一份数据。
+ * - 源是真实目录 → 先同步到全局仓库规范副本（~/.agents/skills/<name>），再从规范副本软链到目标工具。
+ *   源目录随之"提升"为全局共享：改一处全更新、省空间，且可在全局仓库统一管理。
+ * Windows 无开发者模式/管理员权限时，linkOrCopyFromCanonical 自动回退为拷贝并附 warn。
+ */
 export function copyInstalledToTools(
   sourceTool: Tool,
   name: string,
@@ -982,9 +988,49 @@ export function copyInstalledToTools(
   // 否则标记 copy:<源工具>/<name>。
   const srcSource = listInstalled({ tool: sourceTool }).find((s) => s.name === name)?.source ?? null;
   const sourceTag = srcSource?.startsWith('github:') ? srcSource : `copy:${sourceTool}/${name}`;
+
+  // 决定快捷方式指向何处（canonPath）：源已是软链则复用其目标；真实目录先同步进全局仓库。
+  let canonPath: string;
+  try {
+    if (fs.lstatSync(srcDir).isSymbolicLink()) {
+      // 源已是快捷方式 → 复用其目标（通常即全局仓库规范副本），目标工具软链到同一处。
+      const tgt = fs.readlinkSync(srcDir);
+      canonPath = path.isAbsolute(tgt) ? tgt : path.resolve(path.dirname(srcDir), tgt);
+    } else {
+      // 源是真实目录 → 同步进全局仓库规范副本，再从那里软链出去（单一数据源，改一处全更新）。
+      const canon = writeToCanonical(srcDir, sourceTag);
+      if (!canon.ok || !canon.path) {
+        return targets.map((t) => ({ tool: t, ok: false, error: canon.error ?? '同步全局仓库失败' }));
+      }
+      canonPath = canon.path;
+    }
+  } catch (err: any) {
+    return targets.map((t) => ({ tool: t, ok: false, error: err?.message || String(err) }));
+  }
+
+  // DB 的 name 用规范副本 frontmatter 名（与 scanAll 的 (tool,name) 键一致）；目录名仍用 destName。
+  const canonMd = readSkillMd(canonPath);
+  const dbName = canonMd?.name?.trim() || name;
+
   return targets
     .filter((t) => t !== sourceTool)
-    .map((t) => installSourceToTool(srcDir, t, sourceTag, destName));
+    .map((t) => {
+      const r = linkOrCopyFromCanonical(canonPath, t, 'symlink', destName);
+      if (r.ok && r.path) {
+        upsertInstalled({
+          tool: t,
+          name: dbName,
+          description: canonMd?.description ?? null,
+          path: r.path,
+          isBuiltin: false,
+          sizeBytes: null,
+          mtime: Date.now(),
+          source: sourceTag,
+          installedAt: Date.now(),
+        });
+      }
+      return r;
+    });
 }
 
 /** 卸载：删除目录 */
