@@ -4,7 +4,11 @@ import { ALL_TOOLS, TOOL_LABELS, type InstalledSkill, type Tool, type GlobalRepo
 import SkillCard from '../components/SkillCard';
 import GlobalRepoCard from '../components/GlobalRepoCard';
 import ShareDialog from '../components/ShareDialog';
-import SkillDetailModal from '../components/SkillDetailModal';
+import SkillDetailModal, {
+  skillDetailFromGroup,
+  skillDetailFromGlobalRepo,
+  type SkillDetail,
+} from '../components/SkillDetailModal';
 import ToolPicker from '../components/ToolPicker';
 import { useToolbarSlot } from '../components/ToolbarSlot';
 import type { ToastState } from '../components/Toast';
@@ -36,7 +40,7 @@ export default function MySkillsView({
   const [uninstallGroup, setUninstallGroup] = useState<SkillGroup | null>(null);
   const [uninstalling, setUninstalling] = useState(false);
   const [revealGroup, setRevealGroup] = useState<SkillGroup | null>(null);
-  const [detailGroup, setDetailGroup] = useState<SkillGroup | null>(null);
+  const [detail, setDetail] = useState<SkillDetail | null>(null);
   // 全局仓库（~/.agents/skills）
   const [globalSkills, setGlobalSkills] = useState<GlobalRepoSkill[] | null>(null);
   const [globalTarget, setGlobalTarget] = useState<GlobalRepoSkill | null>(null);
@@ -166,6 +170,24 @@ export default function MySkillsView({
         (g.description ?? '').toLowerCase().includes(text),
     );
   }, [globalSkills, q]);
+
+  // 全局仓里「未被任何工具组覆盖」的 skill：同名已由工具组（SkillCard）代表，不再重复出一张全局仓卡。
+  // 仅并入「全部」chip，让全局仓独有（未链接进任何工具）的 skill 也能被浏览/搜到。
+  const globalOnly = useMemo(() => {
+    const names = new Set(groups.map((g) => g.name.toLowerCase()));
+    return (globalSkills ?? []).filter((g) => !names.has(g.name.toLowerCase()));
+  }, [globalSkills, groups]);
+
+  // globalOnly 的文本筛选（与 filteredGlobal 同款 name/description 子串逻辑）
+  const globalOnlyFiltered = useMemo(() => {
+    const text = q.trim().toLowerCase();
+    if (!text) return globalOnly;
+    return globalOnly.filter(
+      (g) =>
+        g.name.toLowerCase().includes(text) ||
+        (g.description ?? '').toLowerCase().includes(text),
+    );
+  }, [globalOnly, q]);
 
   // 每个 chip 的计数 = 包含该工具的「组」数（而非行数）
   const counts = useMemo(() => {
@@ -307,6 +329,23 @@ export default function MySkillsView({
     }
   }
 
+  // 渲染一张全局仓 skill 卡片（全局仓 chip + 「全部」并入的 globalOnly 共用）
+  const renderGlobalCard = (g: GlobalRepoSkill) => (
+    <GlobalRepoCard
+      key={g.path}
+      skill={g}
+      mode={mode}
+      onReveal={(s) => void window.skillkit.revealInFinder(s.path)}
+      onRemove={(s) => {
+        if (confirm(t('my.confirm.removeGlobal', { name: s.name }))) {
+          void doRemoveGlobal(s);
+        }
+      }}
+      onInstallTo={setGlobalTarget}
+      onOpenDetail={(s) => setDetail(skillDetailFromGlobalRepo(s))}
+    />
+  );
+
   // 顶部统一工具栏控件（搜索 / 视图切换 / 重新扫描）-> portal 进 TopBar 槽位
   const toolbar = (
     <>
@@ -380,7 +419,7 @@ export default function MySkillsView({
             className={`chip${tool === 'all' ? ' is-active' : ''}`}
             onClick={() => setTool('all')}
           >
-            {t('my.chipAll', { count: groups.length })}
+            {t('my.chipAll', { count: groups.length + globalOnly.length })}
           </button>
           <button
             className={`chip chip-global${tool === 'global' ? ' is-active' : ''}`}
@@ -425,42 +464,31 @@ export default function MySkillsView({
               {q ? t('my.empty.noMatch') : t('my.empty.globalEmpty')}
             </div>
           ) : (
-            filteredGlobal.map((g) => (
-              <GlobalRepoCard
-                key={g.path}
-                skill={g}
-                mode={mode}
-                onReveal={(s) => void window.skillkit.revealInFinder(s.path)}
-                onRemove={(s) => {
-                  if (
-                    confirm(t('my.confirm.removeGlobal', { name: s.name }))
-                  ) {
-                    void doRemoveGlobal(s);
-                  }
-                }}
-                onInstallTo={setGlobalTarget}
-              />
-            ))
+            filteredGlobal.map(renderGlobalCard)
           )
         ) : items == null ? (
           <div className="empty"><span className="spinner" /> {t('my.empty.scanningTools')}</div>
-        ) : filtered.length === 0 ? (
+        ) : filtered.length === 0 && (tool !== 'all' || globalOnlyFiltered.length === 0) ? (
           <div className="empty">{q ? t('my.empty.noMatch') : t('my.empty.filteredEmpty')}</div>
         ) : (
-          filtered.map((g) => (
-            <SkillCard
-              key={g.name}
-              group={g}
-              mode={mode}
-              updateStatus={updateStatusOf(g)}
-              onUninstall={startUninstall}
-              onReveal={startReveal}
-              onShare={(grp) => setShareSkill(grp.primary)}
-              onCopyTo={g.tools.length < ALL_TOOLS.length ? setCopyGroup : undefined}
-              onUpdate={updateStatusOf(g) === 'update_available' ? startUpdate : undefined}
-              onOpenDetail={setDetailGroup}
-            />
-          ))
+          <>
+            {filtered.map((g) => (
+              <SkillCard
+                key={g.name}
+                group={g}
+                mode={mode}
+                updateStatus={updateStatusOf(g)}
+                onUninstall={startUninstall}
+                onReveal={startReveal}
+                onShare={(grp) => setShareSkill(grp.primary)}
+                onCopyTo={g.tools.length < ALL_TOOLS.length ? setCopyGroup : undefined}
+                onUpdate={updateStatusOf(g) === 'update_available' ? startUpdate : undefined}
+                onOpenDetail={(grp) => setDetail(skillDetailFromGroup(grp))}
+              />
+            ))}
+            {/* 「全部」chip 一并展示全局仓独有（未链接进任何工具）的 skill */}
+            {tool === 'all' && globalOnlyFiltered.map(renderGlobalCard)}
+          </>
         )}
       </div>
 
@@ -471,9 +499,9 @@ export default function MySkillsView({
       />
 
       <SkillDetailModal
-        open={!!detailGroup}
-        group={detailGroup}
-        onClose={() => setDetailGroup(null)}
+        open={!!detail}
+        detail={detail}
+        onClose={() => setDetail(null)}
       />
 
       <ToolPicker

@@ -9,18 +9,41 @@ interface Props {
   onReveal?: (skill: GlobalRepoSkill) => void;
   onRemove?: (skill: GlobalRepoSkill) => void;
   onInstallTo?: (skill: GlobalRepoSkill) => void;
+  onOpenDetail?: (skill: GlobalRepoSkill) => void;
 }
 
 /** 全局仓库（~/.agents/skills）下一条 skill 的卡片。复用 SkillCard 视觉语言，但来源是单一全局位置。 */
-export default function GlobalRepoCard({ skill, mode, onReveal, onRemove, onInstallTo }: Props) {
+export default function GlobalRepoCard({ skill, mode, onReveal, onRemove, onInstallTo, onOpenDetail }: Props) {
   const { t } = useI18n();
   const reveal = () => onReveal?.(skill);
   const installTo = () => onInstallTo?.(skill);
   const remove = () => onRemove?.(skill);
 
+  // 点卡片打开详情；忽略点 kebab 菜单 / 按钮 / 链接，避免误触（与 SkillCard 一致）
+  const onCardClick = onOpenDetail
+    ? (e: React.MouseEvent<HTMLElement>) => {
+        if ((e.target as HTMLElement).closest('button, .kebab, a')) return;
+        onOpenDetail(skill);
+      }
+    : undefined;
+  const onCardKey = onOpenDetail
+    ? (e: React.KeyboardEvent<HTMLElement>) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpenDetail(skill);
+        }
+      }
+    : undefined;
+
   if (mode === 'grid') {
     return (
-      <article className="skill is-grid">
+      <article
+        className={`skill is-grid${onOpenDetail ? ' is-clickable' : ''}`}
+        onClick={onCardClick}
+        onKeyDown={onCardKey}
+        role={onOpenDetail ? 'button' : undefined}
+        tabIndex={onOpenDetail ? 0 : undefined}
+      >
         <header className="skill-grid-head">
           <div className="skill-ico">{emojiFor(skill.name)}</div>
           <div className="skill-grid-head-right">
@@ -36,7 +59,13 @@ export default function GlobalRepoCard({ skill, mode, onReveal, onRemove, onInst
   }
 
   return (
-    <article className="skill is-list">
+    <article
+      className={`skill is-list${onOpenDetail ? ' is-clickable' : ''}`}
+      onClick={onCardClick}
+      onKeyDown={onCardKey}
+      role={onOpenDetail ? 'button' : undefined}
+      tabIndex={onOpenDetail ? 0 : undefined}
+    >
       <div className="skill-ico">{emojiFor(skill.name)}</div>
       <div className="skill-body">
         <div className="skill-row1">
