@@ -54,6 +54,15 @@ Grab the latest build for your platform from **[GitHub Releases](https://github.
 | **macOS** (Intel) | `.dmg` / `.zip` |
 | **Windows** | `.exe` (NSIS installer) |
 
+> ⚠️ **macOS only — the app is unsigned.** After dragging **Skillkit** to `/Applications`, if macOS reports it as "damaged" or "can't be opened / can't be verified," open **Terminal** and run these two commands:
+>
+> ```bash
+> sudo xattr -rd com.apple.quarantine "/Applications/Skillkit.app"
+> sudo codesign --force --deep --sign - "/Applications/Skillkit.app"
+> ```
+>
+> (The first clears Apple's quarantine flag; the second ad-hoc signs the app locally. You'll be asked for your login password — characters won't show on screen as you type.)
+
 > The app checks for updates in the background and self-updates via `electron-updater`, so you only need to install manually once.
 
 ## 🗂️ Tabs

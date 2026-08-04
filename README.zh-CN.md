@@ -54,6 +54,15 @@ Skillkit 读写以下工具的 skill 目录:
 | **macOS**(Intel) | `.dmg` / `.zip` |
 | **Windows** | `.exe`(NSIS 安装器) |
 
+> ⚠️ **macOS 务必执行以下操作 —— 安装包未签名。** 把 **Skillkit** 拖进 `/Applications` 后,若系统提示「已损坏 / 无法验证开发者」,请打开**终端**执行:
+>
+> ```bash
+> sudo xattr -rd com.apple.quarantine "/Applications/Skillkit.app"
+> sudo codesign --force --deep --sign - "/Applications/Skillkit.app"
+> ```
+>
+> (第一条清除苹果隔离标记,第二条本地临时签名;需输入登录密码,输入时屏幕不显示字符属正常。)
+
 > 应用会后台检查并通过 `electron-updater` 自动更新,所以你只需手动安装一次。
 
 ## 🗂️ 标签页
