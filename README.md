@@ -51,6 +51,7 @@ Grab the latest build for your platform from **[GitHub Releases](https://github.
 | Platform | Artifact |
 | --- | --- |
 | **macOS** (Apple Silicon) | `.dmg` / `.zip` |
+| **macOS** (Intel) | `.dmg` / `.zip` |
 | **Windows** | `.exe` (NSIS installer) |
 
 > The app checks for updates in the background and self-updates via `electron-updater`, so you only need to install manually once.

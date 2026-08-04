@@ -50,7 +50,8 @@ Skillkit 读写以下工具的 skill 目录:
 
 | 平台 | 产物 |
 | --- | --- |
-| **macOS**(仅 Apple Silicon) | `.dmg` / `.zip` |
+| **macOS**(Apple Silicon) | `.dmg` / `.zip` |
+| **macOS**(Intel) | `.dmg` / `.zip` |
 | **Windows** | `.exe`(NSIS 安装器) |
 
 > 应用会后台检查并通过 `electron-updater` 自动更新,所以你只需手动安装一次。
