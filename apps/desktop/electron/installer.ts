@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import { app } from 'electron';
 import * as tar from 'tar';
 import AdmZip from 'adm-zip';
-import { TOOLS } from './tools.js';
+import { getToolConfig } from './tools.js';
 import { readSkillMd, parseFrontmatter, type SkillMd } from './skill-md.js';
 import { upsertInstalled, listInstalled } from './db.js';
 import { copyDir, rmDir, safeExists } from './fs-util.js';
@@ -254,7 +254,8 @@ function installSourceToTool(
   // 否则取 frontmatter name 再规范化（market/github/zip 来源的 name 通常已是合法标识）
   const rawName = destName ?? (md.name?.trim() || path.basename(srcDir));
   const name = rawName.replace(/[^A-Za-z0-9_.-]/g, '-');
-  const cfg = TOOLS[tool];
+  const cfg = getToolConfig(tool);
+  if (!cfg) return { tool, ok: false, error: '未知工具' };
   fs.mkdirSync(cfg.installRoot, { recursive: true });
   const dst = path.join(cfg.installRoot, name);
 
@@ -941,7 +942,8 @@ export async function installFromZip(
  * frontmatter name 精确匹配，确保展示名 ≠ 目录名的 skill 也能定位。
  */
 function findInstalledSkillDir(tool: Tool, name: string): string | null {
-  const cfg = TOOLS[tool];
+  const cfg = getToolConfig(tool);
+  if (!cfg) return null;
   for (const root of cfg.roots) {
     if (!fs.existsSync(root)) continue;
     // (1) 把 name 当目录名直查（多数 skill 的 name == 目录名）
@@ -1035,7 +1037,8 @@ export function copyInstalledToTools(
 
 /** 卸载：删除目录 */
 export function uninstall(tool: Tool, name: string): void {
-  const cfg = TOOLS[tool];
+  const cfg = getToolConfig(tool);
+  if (!cfg) return;
   // 先用 name 直查（多数 skill name == 目录名），再按 frontmatter name 兜底，
   // 覆盖展示名 ≠ 目录名的情况；不动 builtinRoot。
   const matched = new Set<string>();

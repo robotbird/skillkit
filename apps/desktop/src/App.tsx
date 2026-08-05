@@ -33,7 +33,7 @@ export default function App() {
       </div>
 
       <ToolbarSlotProvider>
-        <TopBar tab={tab} onTab={setTab} />
+        <TopBar tab={tab} onTab={setTab} onChanged={() => onInstalled()} />
 
         <main className="main">
           {tab === 'my' && (

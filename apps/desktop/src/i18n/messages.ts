@@ -295,6 +295,24 @@ const zh = {
   'my.picker.globalSubtitle': '从全局仓库接入所选工具（软链推荐：单一数据源，改一处全更新）。',
   'my.picker.globalConfirm': '接入',
   'my.picker.globalBusy': '接入中',
+
+  'settings.nav.agents': '自定义 Agent',
+  'agents.label': '自定义 Agent',
+  'agents.hint': '为 skill 目录不在默认位置的 Agent（社区版/变体，如 Hermes 中文社区版装在 AppData 下）手动登记，登记后即可像内置 Agent 一样浏览、安装与卸载。',
+  'agents.add': '添加 Agent',
+  'agents.nameLabel': '名称',
+  'agents.namePlaceholder': '如：Hermes 中文社区版',
+  'agents.rootLabel': 'Skill 目录',
+  'agents.rootPlaceholder': '该 Agent 读取 skill 的目录绝对路径',
+  'agents.pickDir': '选择目录…',
+  'agents.addBtn': '添加',
+  'agents.adding': '添加中…',
+  'agents.empty': '尚未添加自定义 Agent',
+  'agents.pathHint': '目录无需预先存在，安装第一个 skill 时会自动创建。',
+  'agents.remove': '移除',
+  'agents.confirmRemove': '移除自定义 Agent「{name}」？\n不会删除目录内的 skill 文件，仅从 Skillkit 解除管理。',
+  'agents.addFail': '添加失败：{error}',
+  'agents.removeFail': '移除失败：{error}',
 };
 
 const en: Record<keyof typeof zh, string> = {
@@ -588,6 +606,24 @@ const en: Record<keyof typeof zh, string> = {
   'my.picker.globalSubtitle': 'Link the selected tools from the global repo (symlink recommended: single source, update everywhere).',
   'my.picker.globalConfirm': 'Link',
   'my.picker.globalBusy': 'Linking',
+
+  'settings.nav.agents': 'Custom Agents',
+  'agents.label': 'Custom Agents',
+  'agents.hint': 'Register agents whose skill directory is not in the default location (community forks/variants, e.g. a Hermes community edition under AppData). Once registered, they behave like built-in agents for browsing, installing and uninstalling.',
+  'agents.add': 'Add Agent',
+  'agents.nameLabel': 'Name',
+  'agents.namePlaceholder': 'e.g. Hermes Community Edition',
+  'agents.rootLabel': 'Skills Directory',
+  'agents.rootPlaceholder': 'Absolute path of the directory this agent reads skills from',
+  'agents.pickDir': 'Choose directory…',
+  'agents.addBtn': 'Add',
+  'agents.adding': 'Adding…',
+  'agents.empty': 'No custom agent added yet',
+  'agents.pathHint': 'The directory does not need to exist yet; it is created automatically when the first skill is installed.',
+  'agents.remove': 'Remove',
+  'agents.confirmRemove': 'Remove custom agent "{name}"?\nSkill files in the directory are NOT deleted — it is only unregistered from Skillkit.',
+  'agents.addFail': 'Add failed: {error}',
+  'agents.removeFail': 'Remove failed: {error}',
 };
 
 export type MessageKey = keyof typeof zh;

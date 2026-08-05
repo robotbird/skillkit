@@ -3,6 +3,7 @@ import type { IpcRendererEvent } from 'electron';
 import type {
   SkillkitApi,
   Tool,
+  CustomTool,
   InstalledFilter,
   MarketListQuery,
   InstallOpts,
@@ -99,6 +100,14 @@ const api: SkillkitApi = {
   // 设置（meta KV）
   getSetting: (key: string) => ipcRenderer.invoke('setting:get', key),
   setSetting: (key: string, value: string) => ipcRenderer.invoke('setting:set', key, value),
+
+  // 自定义 agent（路径非内置默认目录的 agent 变体，如 Hermes 中文社区版）
+  listCustomTools: () => ipcRenderer.invoke('customTools:list') as Promise<CustomTool[]>,
+  addCustomTool: (label: string, skillsRoot: string) =>
+    ipcRenderer.invoke('customTools:add', label, skillsRoot) as Promise<CustomTool>,
+  removeCustomTool: (id: string) => ipcRenderer.invoke('customTools:remove', id),
+  // 选目录（系统文件夹选择框，取消返回 null）
+  pickDirectory: (title?: string) => ipcRenderer.invoke('dialog:pickDir', title) as Promise<string | null>,
 
   // 外观
   getTheme: () => ipcRenderer.invoke('theme:get'),

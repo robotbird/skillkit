@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ALL_TOOLS, type Tool, type InstallOpts } from '@shared/types';
+import { type Tool, type InstallOpts } from '@shared/types';
 import { useInstalledTools } from '../lib/useInstalledTools';
+import { useToolCatalog } from '../lib/toolCatalog';
 import ToolCheckRow from './ToolCheckRow';
 import ModalPortal from './ModalPortal';
 import { useI18n } from '../i18n';
@@ -74,15 +75,16 @@ export default function ToolPicker({
   // allTools=true 时改为展示全部 ALL_TOOLS（仅按 excludeTools 过滤），与安装页一致。
   // fixedTargets 场景不需要本机探测列表。
   const { tools: installed } = useInstalledTools();
+  const { allTools: catalogTools } = useToolCatalog();
   const availableSet = useMemo(() => new Set(installed), [installed]);
 
   const visibleTools = useMemo(
     () =>
-      ALL_TOOLS.filter((tool) => {
+      catalogTools.filter((tool) => {
         if (excludeTools?.includes(tool)) return false;
         return allTools || availableSet.has(tool);
       }),
-    [excludeTools, availableSet, allTools],
+    [catalogTools, excludeTools, availableSet, allTools],
   );
   const disabledSet = useMemo(() => new Set(disableTools ?? []), [disableTools]);
   const initial = useMemo(

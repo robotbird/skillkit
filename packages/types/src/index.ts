@@ -2,8 +2,8 @@
 // desktop 专用的 IPC 契约(SkillkitApi)与自动更新类型(UpdateAvailableInfo)不在此处,
 // 留在 apps/desktop 内。
 
-// 短 key（skillkit 内部/DB/分享协议）。与 npx skills 的 --agent 名可能不同（如 claude ≠ claude-code）。
-export type Tool =
+// 内置 agent 短 key（闭集，参与分享协议、DB 字面量）。与 npx skills 的 --agent 名可能不同（如 claude ≠ claude-code）。
+export type BuiltinTool =
   | 'claude'
   | 'codex'
   | 'cursor'
@@ -25,7 +25,19 @@ export type Tool =
   | 'warp'
   | 'kimi';
 
-export const TOOL_LABELS: Record<Tool, string> = {
+/**
+ * 工具 id：内置 key，或自定义 agent id（运行期由 desktop DB 注入，形如 `custom:<slug>`）。
+ * 内置字面量仍带自动补全；`(string & {})` 品牌 trick 让任意自定义 id 也合法，
+ * 使自定义工具能像内置工具一样流过 InstalledSkill.tool / IPC targets / DB 列（DB 本就存 TEXT）。
+ * 注意：内置静态映射（TOOL_LABELS / ALL_TOOLS / TOOLS / TOOL_ICON）仍按 BuiltinTool 键控，
+ * 自定义 id 的 label/icon 由渲染层 toolCatalog 合并解析、配置由主进程 getToolConfig 解析。
+ */
+export type Tool = BuiltinTool | (string & {});
+
+/** 自定义 agent id 前缀；其余为内置 key。tools.ts / 渲染层据此区分。 */
+export const CUSTOM_TOOL_PREFIX = 'custom:';
+
+export const TOOL_LABELS: Record<BuiltinTool, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   cursor: 'Cursor',
@@ -48,8 +60,8 @@ export const TOOL_LABELS: Record<Tool, string> = {
   kimi: 'Kimi Code CLI',
 };
 
-/** UI / 扫描顺序：现有工具在前，其余按常用度与字母大致排列。 */
-export const ALL_TOOLS: Tool[] = [
+/** UI / 扫描顺序：现有工具在前，其余按常用度与字母大致排列。内置闭集；自定义 id 运行期追加在末尾。 */
+export const ALL_TOOLS: BuiltinTool[] = [
   'claude',
   'codex',
   'cursor',
@@ -71,6 +83,18 @@ export const ALL_TOOLS: Tool[] = [
   'warp',
   'kimi',
 ];
+
+/**
+ * 用户自定义 agent（持久化于 desktop 主进程 custom_tools 表）。
+ * 用于路径不在内置 TOOLS 默认目录的 agent 变体（如 Hermes 中文社区版装在 AppData 下）。
+ * id = `custom:<slug>`，渲染层据此合成 ToolConfig（roots/installRoot 均指向 skillsRoot）。
+ */
+export interface CustomTool {
+  id: string; // 'custom:<slug>'，即 Tool 取值之一
+  label: string; // 用户起的展示名
+  skillsRoot: string; // skill 目录绝对路径（扫描/安装均指向此）
+  createdAt: number; // epoch ms
+}
 
 export interface InstalledSkill {
   tool: Tool;

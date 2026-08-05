@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  TOOL_LABELS,
   type Tool,
   type InstallResult,
   type InstallOpts,
@@ -20,6 +19,7 @@ import { useI18n } from '../i18n';
 import type { MessageKey } from '../i18n/messages';
 import { classifyInstallSource } from '../lib/install-source';
 import { useLocalTools } from '../lib/useLocalTools';
+import { toolLabel } from '../lib/toolCatalog';
 
 // 安装记录字段 → i18n 键（状态/报错分类/渠道的小标签）
 const RECORD_STATUS_KEY: Record<InstallRecordStatus, MessageKey> = {
@@ -45,11 +45,11 @@ const RECORD_CHANNEL_KEY: Record<InstallRecordChannel, MessageKey> = {
 type T = (key: MessageKey, vars?: Record<string, string | number>) => string;
 
 function summarize(results: InstallResult[], t: T): string {
-  const ok = results.filter((r) => r.ok).map((r) => TOOL_LABELS[r.tool]);
+  const ok = results.filter((r) => r.ok).map((r) => toolLabel(r.tool));
   const fail = results.filter((r) => !r.ok);
   const parts: string[] = [];
   if (ok.length) parts.push(t('inst.sum.installedTo', { tools: ok.join(', ') }));
-  if (fail.length) parts.push(t('inst.sum.failed', { detail: fail.map((r) => `${TOOL_LABELS[r.tool]} (${r.error})`).join('; ') }));
+  if (fail.length) parts.push(t('inst.sum.failed', { detail: fail.map((r) => `${toolLabel(r.tool)} (${r.error})`).join('; ') }));
   return parts.join('; ') || t('inst.sum.noTool');
 }
 
@@ -57,7 +57,7 @@ function summarize(results: InstallResult[], t: T): string {
 function summarizeBatch(batch: RepoBatchResult[], t: T): string {
   const okSkills = batch.filter((b) => b.results.some((r) => r.ok)).map((b) => b.skillName);
   const failed = batch.flatMap((b) =>
-    b.results.filter((r) => !r.ok).map((r) => `${b.skillName}->${TOOL_LABELS[r.tool]} (${r.error})`),
+    b.results.filter((r) => !r.ok).map((r) => `${b.skillName}->${toolLabel(r.tool)} (${r.error})`),
   );
   const parts: string[] = [];
   if (okSkills.length) {
@@ -519,7 +519,7 @@ export default function InstallView({
                     {detailRecord.targets.map((tg, i) => (
                       <li key={i} className={`log-target ${tg.ok ? 'is-ok' : 'is-fail'}`}>
                         <span className="log-target-mark">{tg.ok ? '✓' : '✗'}</span>
-                        <span className="log-target-tool">{TOOL_LABELS[tg.tool]}</span>
+                        <span className="log-target-tool">{toolLabel(tg.tool)}</span>
                         {tg.ok ? (
                           <span className="log-target-detail" title={tg.path}>{tg.path}</span>
                         ) : (

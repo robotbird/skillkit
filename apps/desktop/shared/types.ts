@@ -6,6 +6,7 @@
 export {
   TOOL_LABELS,
   ALL_TOOLS,
+  CUSTOM_TOOL_PREFIX,
   SHARE_BASE_URL,
   SHARE_TTL_MS,
   SHARE_MAX_BYTES,
@@ -13,6 +14,8 @@ export {
 
 export type {
   Tool,
+  BuiltinTool,
+  CustomTool,
   InstalledSkill,
   MarketSkill,
   InstallResult,
@@ -30,6 +33,7 @@ export type {
 
 import type {
   Tool,
+  CustomTool,
   InstalledSkill,
   InstalledFilter,
   InstallResult,
@@ -291,6 +295,16 @@ export interface SkillkitApi {
   // ===== 设置（meta KV 通用读写）=====
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
+
+  // ===== 自定义 agent（路径非内置默认目录的 agent 变体）=====
+  /** 全部自定义 agent（按创建时间升序）。 */
+  listCustomTools(): Promise<CustomTool[]>;
+  /** 新增自定义 agent：name + skill 目录；返回新建条目（id 形如 custom:<slug>）。 */
+  addCustomTool(label: string, skillsRoot: string): Promise<CustomTool>;
+  /** 删除自定义 agent（仅解注册，skill 目录文件不动）。 */
+  removeCustomTool(id: string): Promise<void>;
+  /** 系统文件夹选择框，取消返回 null（自定义 agent 选目录用）。 */
+  pickDirectory(title?: string): Promise<string | null>;
 
   // ===== 外观 / 语言 / 版本 / 外链 / 全局仓库路径 =====
   /** 取当前主题设置 + 已解析的有效主题（system→dark/light）。 */

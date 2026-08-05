@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { TOOLS, ALL_TOOLS } from './tools.js';
+import { getToolConfig, allToolIds } from './tools.js';
 import { readSkillMd } from './skill-md.js';
 import { copyDir, rmDir, dirSize, safeExists, isWindowsSymlinkError } from './fs-util.js';
 import type { Tool, InstallResult, GlobalRepoSkill, GlobalRepoRemoveResult } from '../shared/types.js';
@@ -67,7 +67,8 @@ export function linkOrCopyFromCanonical(
   method: 'symlink' | 'copy',
   name: string,
 ): InstallResult {
-  const cfg = TOOLS[tool];
+  const cfg = getToolConfig(tool);
+  if (!cfg) return { tool, ok: false, error: '未知工具' };
   fs.mkdirSync(cfg.installRoot, { recursive: true });
   const dst = path.join(cfg.installRoot, name);
 
@@ -152,8 +153,9 @@ export function removeFromGlobalRepo(name: string): GlobalRepoRemoveResult {
 
   const removedLinks: Tool[] = [];
   const leftCopies: Tool[] = [];
-  for (const t of ALL_TOOLS) {
-    const cfg = TOOLS[t];
+  for (const t of allToolIds()) {
+    const cfg = getToolConfig(t);
+    if (!cfg) continue;
     const dst = path.join(cfg.installRoot, name);
     const lst = fs.lstatSync(dst, { throwIfNoEntry: false });
     if (!lst) continue;

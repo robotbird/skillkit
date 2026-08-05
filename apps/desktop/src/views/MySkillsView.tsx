@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ALL_TOOLS, TOOL_LABELS, type InstalledSkill, type Tool, type GlobalRepoSkill, type SkillUpdateState, type SkillUpdateSummary } from '@shared/types';
+import { type InstalledSkill, type Tool, type GlobalRepoSkill, type SkillUpdateState, type SkillUpdateSummary } from '@shared/types';
 import SkillCard from '../components/SkillCard';
 import GlobalRepoCard from '../components/GlobalRepoCard';
 import ShareDialog from '../components/ShareDialog';
@@ -14,8 +14,8 @@ import { useToolbarSlot } from '../components/ToolbarSlot';
 import type { ToastState } from '../components/Toast';
 import { groupBySkill, type SkillGroup } from '../lib/groupSkills';
 import { useInstalledTools } from '../lib/useInstalledTools';
+import { useToolCatalog } from '../lib/toolCatalog';
 import { useI18n } from '../i18n';
-import { TOOL_ICON } from '../lib/toolIcons';
 
 type ViewMode = 'grid' | 'list';
 
@@ -27,6 +27,7 @@ export default function MySkillsView({
   onChanged: () => void;
 }) {
   const { t } = useI18n();
+  const { allTools, label, icon } = useToolCatalog();
   const [items, setItems] = useState<InstalledSkill[] | null>(null);
   // skill 更新状态（按 `${tool}|${name}` 索引）；与 items join 出每张卡片的「可更新」徽章
   const [updateMap, setUpdateMap] = useState<Record<string, SkillUpdateState> | null>(null);
@@ -121,14 +122,14 @@ export default function MySkillsView({
   async function startUpdate(group: SkillGroup) {
     try {
       const results = await window.skillkit.applySkillUpdate(group.primary.tool, group.name);
-      const ok = results.filter((r) => r.ok).map((r) => TOOL_LABELS[r.tool]);
+      const ok = results.filter((r) => r.ok).map((r) => label(r.tool));
       const fail = results.filter((r) => !r.ok);
       if (ok.length && !fail.length) {
         toast.show(t('my.toast.updated', { name: group.name, tools: ok.join(', ') }));
       } else if (fail.length) {
         const okPart = ok.length ? t('my.toast.updated', { name: group.name, tools: ok.join(', ') }) : '';
         const failPart = fail
-          .map((r) => t('my.toast.failedDetail', { tool: TOOL_LABELS[r.tool], error: r.error ?? t('my.toast.failFallback') }))
+          .map((r) => t('my.toast.failedDetail', { tool: label(r.tool), error: r.error ?? t('my.toast.failFallback') }))
           .join('; ');
         toast.show([okPart, failPart].filter(Boolean).join('; '), 'error', 4000);
       }
@@ -145,7 +146,7 @@ export default function MySkillsView({
   }
 
   // 扁平记录 -> 按 name 合并的组（跨工具同一 skill 一组）
-  const groups = useMemo(() => (items ? groupBySkill(items) : []), [items]);
+  const groups = useMemo(() => (items ? groupBySkill(items, allTools) : []), [items, allTools]);
 
   const filtered = useMemo(() => {
     const text = q.trim().toLowerCase();
@@ -191,7 +192,7 @@ export default function MySkillsView({
 
   // 每个 chip 的计数 = 包含该工具的「组」数（而非行数）
   const counts = useMemo(() => {
-    const map = Object.fromEntries(ALL_TOOLS.map((t) => [t, 0])) as Record<Tool, number>;
+    const map = Object.fromEntries(allTools.map((t) => [t, 0])) as Record<Tool, number>;
     for (const g of groups) for (const tl of g.tools) map[tl]++;
     return map;
   }, [groups]);
@@ -230,7 +231,7 @@ export default function MySkillsView({
     if (removable.length <= 1) {
       const target = removable[0];
       if (!target) return;
-      if (!confirm(t('my.confirm.uninstall', { name: group.name, tool: TOOL_LABELS[target] }))) return;
+      if (!confirm(t('my.confirm.uninstall', { name: group.name, tool: label(target) }))) return;
       void doUninstall(group.name, [target]);
     } else {
       setUninstallGroup(group);
@@ -241,7 +242,7 @@ export default function MySkillsView({
     setUninstalling(true);
     try {
       for (const target of tools) await window.skillkit.uninstallSkill(target, name);
-      toast.show(t('my.toast.uninstalled', { name, tools: tools.map((target) => TOOL_LABELS[target]).join(', ') }));
+      toast.show(t('my.toast.uninstalled', { name, tools: tools.map((target) => label(target)).join(', ') }));
       await refresh();
       onChanged();
     } catch (e: any) {
@@ -262,14 +263,14 @@ export default function MySkillsView({
         copyGroup.primary.name,
         targets,
       );
-      const ok = results.filter((r) => r.ok).map((r) => TOOL_LABELS[r.tool]);
+      const ok = results.filter((r) => r.ok).map((r) => label(r.tool));
       const fail = results.filter((r) => !r.ok);
       if (ok.length && !fail.length) {
         toast.show(t('my.toast.copiedTo', { tools: ok.join(', ') }));
       } else if (fail.length) {
         const okPart = ok.length ? t('my.toast.copiedTo', { tools: ok.join(', ') }) : '';
         const failPart = fail
-          .map((r) => t('my.toast.failedDetail', { tool: TOOL_LABELS[r.tool], error: r.error ?? t('my.toast.failFallback') }))
+          .map((r) => t('my.toast.failedDetail', { tool: label(r.tool), error: r.error ?? t('my.toast.failFallback') }))
           .join('; ');
         toast.show([okPart, failPart].filter(Boolean).join('; '), 'error', 4000);
       }
@@ -289,14 +290,14 @@ export default function MySkillsView({
     setInstallingGlobal(true);
     try {
       const results = await window.skillkit.installGlobalToTools(globalTarget.name, targets, method);
-      const ok = results.filter((r) => r.ok).map((r) => TOOL_LABELS[r.tool]);
+      const ok = results.filter((r) => r.ok).map((r) => label(r.tool));
       const fail = results.filter((r) => !r.ok);
       if (ok.length && !fail.length) {
         toast.show(t('my.toast.linkedTo', { tools: ok.join(', ') }));
       } else if (fail.length) {
         const okPart = ok.length ? t('my.toast.linkedTo', { tools: ok.join(', ') }) : '';
         const failPart = fail
-          .map((r) => t('my.toast.failedDetail', { tool: TOOL_LABELS[r.tool], error: r.error ?? t('my.toast.failFallback') }))
+          .map((r) => t('my.toast.failedDetail', { tool: label(r.tool), error: r.error ?? t('my.toast.failFallback') }))
           .join('; ');
         toast.show([okPart, failPart].filter(Boolean).join('; '), 'error', 4000);
       }
@@ -316,10 +317,10 @@ export default function MySkillsView({
       const r = await window.skillkit.removeFromGlobalRepo(target.name);
       const parts: string[] = [t('my.toast.removedGlobal', { name: target.name })];
       if (r.removedLinks.length) {
-        parts.push(t('my.toast.cleanedLinks', { tools: r.removedLinks.map((tl) => TOOL_LABELS[tl]).join(', ') }));
+        parts.push(t('my.toast.cleanedLinks', { tools: r.removedLinks.map((tl) => label(tl)).join(', ') }));
       }
       if (r.leftCopies.length) {
-        parts.push(t('my.toast.leftCopies', { tools: r.leftCopies.map((tl) => TOOL_LABELS[tl]).join(', ') }));
+        parts.push(t('my.toast.leftCopies', { tools: r.leftCopies.map((tl) => label(tl)).join(', ') }));
       }
       toast.show(parts.join('; '), 'info', 5000);
       await refresh();
@@ -437,8 +438,8 @@ export default function MySkillsView({
               className={`chip chip-tool${tool === tl ? ' is-active' : ''}`}
               onClick={() => setTool(tl)}
             >
-              <img className="chip-ico" src={TOOL_ICON[tl]} alt="" draggable={false} />
-              {t('my.chipTool', { label: TOOL_LABELS[tl], count: counts[tl] })}
+              <img className="chip-ico" src={icon(tl)} alt="" draggable={false} />
+              {t('my.chipTool', { label: label(tl), count: counts[tl] })}
             </button>
           ))}
         </div>
@@ -481,7 +482,7 @@ export default function MySkillsView({
                 onUninstall={startUninstall}
                 onReveal={startReveal}
                 onShare={(grp) => setShareSkill(grp.primary)}
-                onCopyTo={g.tools.length < ALL_TOOLS.length ? setCopyGroup : undefined}
+                onCopyTo={g.tools.length < allTools.length ? setCopyGroup : undefined}
                 onUpdate={updateStatusOf(g) === 'update_available' ? startUpdate : undefined}
                 onOpenDetail={(grp) => setDetail(skillDetailFromGroup(grp))}
               />
@@ -515,7 +516,7 @@ export default function MySkillsView({
         }
         excludeTools={
           // 只展示本组已装的工具
-          uninstallGroup ? ALL_TOOLS.filter((tool) => !uninstallGroup.tools.includes(tool)) : []
+          uninstallGroup ? allTools.filter((tool) => !uninstallGroup.tools.includes(tool)) : []
         }
         disableTools={
           uninstallGroup
@@ -538,7 +539,7 @@ export default function MySkillsView({
         title={copyGroup ? t('my.picker.copyTitle', { name: copyGroup.name }) : undefined}
         subtitle={
           copyGroup
-            ? t('my.picker.copySubtitle', { tool: TOOL_LABELS[copyGroup.primary.tool] })
+            ? t('my.picker.copySubtitle', { tool: label(copyGroup.primary.tool) })
             : ''
         }
         defaultSelected={
@@ -562,7 +563,7 @@ export default function MySkillsView({
         defaultSelected={revealGroup ? [revealGroup.primary.tool] : []}
         excludeTools={
           // 只展示本组已装的工具（内置也可打开，不置灰）
-          revealGroup ? ALL_TOOLS.filter((tool) => !revealGroup.tools.includes(tool)) : []
+          revealGroup ? allTools.filter((tool) => !revealGroup.tools.includes(tool)) : []
         }
         confirmLabel={t('my.picker.revealConfirm')}
         busyLabel={t('my.picker.revealBusy')}

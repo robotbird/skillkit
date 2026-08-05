@@ -5,21 +5,42 @@ import { useTheme } from '../lib/useTheme';
 import { useAccount } from '../lib/useAccount';
 import { useUpdate } from '../lib/useUpdate';
 import { formatTime } from '../lib/format';
-import { SETTING_KEYS, type Theme, type Locale, type SkillUpdateInterval } from '@shared/types';
+import {
+  SETTING_KEYS,
+  type Theme,
+  type Locale,
+  type SkillUpdateInterval,
+  type CustomTool,
+} from '@shared/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { GitHubIcon, GoogleIcon } from './oauth-icons';
+import {
+  useCustomTools,
+  invalidateCustomTools,
+} from '../lib/toolCatalog';
+import { invalidateInstalledTools } from '../lib/useInstalledTools';
+import { invalidateLocalTools } from '../lib/useLocalTools';
 
-type Section = 'account' | 'appearance' | 'language' | 'space' | 'updates' | 'about';
+type Section = 'account' | 'appearance' | 'language' | 'space' | 'updates' | 'agents' | 'about';
 
 /** 把绝对路径的 home 前缀缩写为 ~（跨平台：/Users/x/.agents/… → ~/.agents/… ； C:\Users\x\.agents\… → ~\.agents\…）。 */
 function abbreviateHome(p: string): string {
   return p.replace(/^(.+?)([/\\]\.agents[/\\].*)$/, '~$2');
 }
 
-export default function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function SettingsDialog({
+  open,
+  onClose,
+  onChanged,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** 设置内发生需刷新主页的数据变更（如增删自定义 agent）时回调，触发「我的 Skill」重扫。 */
+  onChanged?: () => void;
+}) {
   const { t } = useI18n();
   const [section, setSection] = useState<Section>('account');
   const [busy, setBusy] = useState(false);
@@ -42,6 +63,7 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
     { key: 'language', label: t('settings.nav.language') },
     { key: 'space', label: t('settings.nav.space') },
     { key: 'updates', label: t('settings.nav.updates') },
+    { key: 'agents', label: t('settings.nav.agents') },
     { key: 'about', label: t('settings.nav.about') },
   ];
 
@@ -72,6 +94,7 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
             {section === 'language' && <LanguageSection />}
             {section === 'space' && <SpaceSection />}
             {section === 'updates' && <UpdatesSection />}
+            {section === 'agents' && <AgentsSection onChanged={onChanged} />}
             {section === 'about' && <AboutSection />}
           </div>
           <button className="settings-close" onClick={onClose} title={t('settings.close')} aria-label={t('settings.close')}>
@@ -368,6 +391,126 @@ function UpdatesSection() {
         </Button>
       </div>
       <p className="settings-hint">{t('skillUpdate.hint')}</p>
+    </div>
+  );
+}
+
+// ===== 自定义 Agent =====
+function AgentsSection({ onChanged }: { onChanged?: () => void }) {
+  const { t } = useI18n();
+  const { customs } = useCustomTools();
+  const [name, setName] = useState('');
+  const [root, setRoot] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // 增删后让其余视图同步：失效三处模块缓存 + bump installedVersion（remount「我的 Skill」触发重扫）。
+  function syncOthers() {
+    invalidateCustomTools();
+    invalidateInstalledTools();
+    invalidateLocalTools();
+    onChanged?.();
+  }
+
+  async function pickDir() {
+    const p = await window.skillkit.pickDirectory(t('agents.rootLabel'));
+    if (p) setRoot(p);
+  }
+
+  async function onAdd(e: FormEvent) {
+    e.preventDefault();
+    const n = name.trim();
+    const r = root.trim();
+    if (!n || !r) return;
+    setAdding(true);
+    setError(null);
+    try {
+      await window.skillkit.addCustomTool(n, r);
+      setName('');
+      setRoot('');
+      syncOthers();
+    } catch (err: any) {
+      setError(t('agents.addFail', { error: err?.message ?? String(err) }));
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function onRemove(c: CustomTool) {
+    if (!confirm(t('agents.confirmRemove', { name: c.label }))) return;
+    try {
+      await window.skillkit.removeCustomTool(c.id);
+      syncOthers();
+    } catch (err: any) {
+      setError(t('agents.removeFail', { error: err?.message ?? String(err) }));
+    }
+  }
+
+  return (
+    <div className="settings-section">
+      <h3>{t('agents.label')}</h3>
+      <p className="settings-hint">{t('agents.hint')}</p>
+
+      {customs.length === 0 ? (
+        <div className="kv-card">
+          <div className="kv-value">{t('agents.empty')}</div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {customs.map((c) => (
+            <div className="kv-card" key={c.id}>
+              <div className="kv-label">{c.label}</div>
+              <div className="kv-value" title={c.skillsRoot}>
+                {c.skillsRoot}
+              </div>
+              <div className="settings-actions">
+                <Button variant="outline" size="sm" onClick={() => onRemove(c)}>
+                  {t('agents.remove')}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <form className="settings-subform" onSubmit={onAdd}>
+        <h4>{t('agents.add')}</h4>
+        <FieldGroup className="gap-3">
+          <Field>
+            <FieldLabel htmlFor="agent-name">{t('agents.nameLabel')}</FieldLabel>
+            <Input
+              id="agent-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t('agents.namePlaceholder')}
+              required
+              autoFocus
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="agent-root">{t('agents.rootLabel')}</FieldLabel>
+            <div className="flex items-center gap-2">
+              <Input
+                id="agent-root"
+                value={root}
+                onChange={(e) => setRoot(e.target.value)}
+                placeholder={t('agents.rootPlaceholder')}
+                required
+              />
+              <Button type="button" variant="outline" onClick={pickDir} disabled={adding}>
+                {t('agents.pickDir')}
+              </Button>
+            </div>
+            <p className="settings-hint">{t('agents.pathHint')}</p>
+          </Field>
+          {error && <FieldError>{error}</FieldError>}
+        </FieldGroup>
+        <div className="settings-actions">
+          <Button type="submit" disabled={adding || !name.trim() || !root.trim()}>
+            {adding ? t('agents.adding') : t('agents.addBtn')}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
-import { TOOLS, ALL_TOOLS, isGlobalAgentsOnlyTool } from './tools.js';
+import { TOOLS, ALL_TOOLS, getToolConfig, listCustomToolIds, isGlobalAgentsOnlyTool } from './tools.js';
 import type { Tool, ToolDetection } from '../shared/types.js';
 
 /**
@@ -167,7 +167,8 @@ export async function detectTool(tool: Tool): Promise<ToolDetection> {
   if (isGlobalAgentsOnlyTool(tool)) {
     return { tool, installed: false, via: null, detail: '' };
   }
-  const cfg = TOOLS[tool];
+  const cfg = getToolConfig(tool);
+  if (!cfg) return { tool, installed: false, via: null, detail: '' };
   const app = findAppBundle(cfg.appBundles);
   if (app) return { tool, installed: true, via: 'app', detail: abbreviateHome(app) };
   const cli = await findCliBinary(cfg.cliBinaries);
@@ -187,8 +188,13 @@ export function detectAllTools(): Promise<ToolDetection[]> {
   return cache;
 }
 
-/** 安装页工具网格用：真身探测命中的工具（app 或 cli）。 */
+/**
+ * 安装页工具网格用：真身探测命中的工具（app 或 cli）。
+ * 自定义 agent 无 app/cli 可探测，但用户已显式声明，故全部并入（作为合法安装目标）。
+ */
 export async function localTools(): Promise<Tool[]> {
   const all = await detectAllTools();
-  return all.filter((d) => d.installed).map((d) => d.tool);
+  const detected = all.filter((d) => d.installed).map((d) => d.tool);
+  const customs = listCustomToolIds().filter((id) => !detected.includes(id));
+  return [...detected, ...customs];
 }

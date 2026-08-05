@@ -10,7 +10,7 @@ import { ALL_TOOLS, type InstalledSkill, type Tool } from '@shared/types';
 export interface SkillGroup {
   /** 跨工具身份键。codebase 早已默认 name = 跨工具身份（copyToTools 即按 name 复制）。 */
   name: string;
-  /** 本组覆盖的工具，固定按 ALL_TOOLS 顺序排列（展示稳定、不跳动）。 */
+  /** 本组覆盖的工具，按传入顺序排列（默认 ALL_TOOLS；含自定义 agent 时由调用方传合并列表）。 */
   tools: Tool[];
   /** 各工具下的实际记录（可能不含全部工具）。 */
   byTool: Partial<Record<Tool, InstalledSkill>>;
@@ -27,8 +27,9 @@ function betterPrimary(cur: InstalledSkill, cand: InstalledSkill): boolean {
 /**
  * 把扁平的 InstalledSkill[] 按 name 聚合成 SkillGroup[]。
  * 同名即视为同一个 skill（与 copyToTools 的跨工具身份假设一致）。
+ * orderedTools 决定每组 tools 的排序基准（默认内置 ALL_TOOLS；自定义 agent 需传入合并列表以保证稳定排序）。
  */
-export function groupBySkill(rows: InstalledSkill[]): SkillGroup[] {
+export function groupBySkill(rows: InstalledSkill[], orderedTools: Tool[] = ALL_TOOLS): SkillGroup[] {
   const map = new Map<string, SkillGroup>();
   for (const r of rows) {
     let g = map.get(r.name);
@@ -41,7 +42,7 @@ export function groupBySkill(rows: InstalledSkill[]): SkillGroup[] {
   }
   const groups = [...map.values()];
   for (const g of groups) {
-    g.tools = ALL_TOOLS.filter((t) => g.byTool[t]);
+    g.tools = orderedTools.filter((t) => g.byTool[t]);
   }
   groups.sort((a, b) => a.name.localeCompare(b.name));
   return groups;

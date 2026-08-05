@@ -1,4 +1,4 @@
-import type { Tool } from '@shared/types';
+import type { BuiltinTool } from '@shared/types';
 import claudeIcon from '../assets/agents/claude.svg';
 import codexIcon from '../assets/agents/codex.svg';
 import cursorIcon from '../assets/agents/cursor.svg';
@@ -20,8 +20,8 @@ import clineIcon from '../assets/agents/cline.svg';
 import warpIcon from '../assets/agents/warp.svg';
 import kimiIcon from '../assets/agents/kimi.svg';
 
-/** 工具 → 图标；ToolPicker / ToolStack / MySkillsView 共用单源。 */
-export const TOOL_ICON: Record<Tool, string> = {
+/** 内置工具 → 图标；自定义 agent 的图标由 toolCatalog 用首字母兜底合成。 */
+export const TOOL_ICON: Record<BuiltinTool, string> = {
   claude: claudeIcon,
   codex: codexIcon,
   cursor: cursorIcon,
