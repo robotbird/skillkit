@@ -10,6 +10,7 @@ import type {
   MarketListQuery,
   InstallOpts,
   UpdateAvailableInfo,
+  DownloadProgress,
   Theme,
   EffectiveTheme,
   AccountLoginResult,
@@ -86,6 +87,11 @@ const api: SkillkitApi = {
   getUpdateStatus: () => ipcRenderer.invoke('update:status'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   applyUpdate: () => ipcRenderer.invoke('update:apply'),
+  onUpdateDownloadProgress: (cb: (p: DownloadProgress) => void) => {
+    const listener = (_e: IpcRendererEvent, p: DownloadProgress) => cb(p);
+    ipcRenderer.on('update:download-progress', listener);
+    return () => ipcRenderer.removeListener('update:download-progress', listener);
+  },
 
   // skill 更新检测
   checkSkillUpdates: (force?: boolean) => ipcRenderer.invoke('skillUpdate:checkAll', force),

@@ -151,6 +151,18 @@ export interface UpdateAvailableInfo {
   downloadName: string; // 安装包文件名
 }
 
+/** 安装包下载进度（主进程在下载过程中逐次推送给渲染层，节流 ~200ms 一次）。 */
+export interface DownloadProgress {
+  attempt: number; // 当前第几次尝试（1-based；>1 表示已在断点续传/重试）
+  maxAttempts: number; // 总尝试次数上限（3）
+  transferred: number; // 已下载字节（含续传累计）
+  total: number | null; // 总字节；无 Content-Length 时为 null
+  percent: number | null; // 0~100；total 未知时为 null
+  speedBps: number; // 当前估算速率 bytes/s（移动平均）
+  phase: 'downloading' | 'retrying'; // 正在下 / 正在退避重试
+  message?: string; // 重试/失败时的原因文案（重试间隙推送）
+}
+
 // ===== skill 更新检测(desktop 专用) =====
 /** 自动检测间隔。off=关闭；默认 8h。 */
 export type SkillUpdateInterval = 'off' | '4h' | '8h' | '12h' | '24h';
@@ -236,8 +248,10 @@ export interface SkillkitApi {
   getUpdateStatus(): Promise<{ available: boolean; info: UpdateAvailableInfo | null }>;
   /** 主动检查更新（实时请求 GitHub releases）。 */
   checkUpdate(): Promise<{ available: boolean; info: UpdateAvailableInfo | null }>;
-  /** 触发更新:下载安装包到 ~/Downloads 并打开。 */
+  /** 触发更新:下载安装包到 ~/Downloads 并打开。下载内置 3 次重试,全失败后抛错。 */
   applyUpdate(): Promise<string>;
+  /** 监听安装包下载进度（速度/百分比/重试）。返回取消订阅。 */
+  onUpdateDownloadProgress(cb: (p: DownloadProgress) => void): () => void;
 
   // ===== skill 更新检测 =====
   /** 检查所有已装 skill 的更新（force=true 绕过 TTL 防抖）。返回本轮汇总。 */

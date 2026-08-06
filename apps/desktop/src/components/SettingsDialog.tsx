@@ -4,7 +4,7 @@ import { useI18n } from '../i18n';
 import { useTheme } from '../lib/useTheme';
 import { useAccount } from '../lib/useAccount';
 import { useUpdate } from '../lib/useUpdate';
-import { formatTime } from '../lib/format';
+import { formatTime, formatBytes, formatSpeed } from '../lib/format';
 import {
   SETTING_KEYS,
   type Theme,
@@ -680,7 +680,7 @@ function IconPicker({
 function AboutSection() {
   const { t } = useI18n();
   const [version, setVersion] = useState('');
-  const { info, phase, checkState, check, apply } = useUpdate();
+  const { info, phase, checkState, progress, check, apply } = useUpdate();
 
   useEffect(() => {
     window.skillkit.getVersion().then((v) => setVersion(v)).catch(() => {});
@@ -688,7 +688,16 @@ function AboutSection() {
 
   const phaseLabel =
     phase === 'downloading'
-      ? t('about.downloading')
+      ? progress?.phase === 'retrying'
+        ? t('about.retrying', { attempt: progress.attempt, max: progress.maxAttempts })
+        : progress && progress.percent != null
+          ? t('about.downloadingProgress', {
+              percent: Math.floor(progress.percent),
+              speed: formatSpeed(progress.speedBps),
+              done: formatBytes(progress.transferred),
+              total: progress.total ? formatBytes(progress.total) : '?',
+            })
+          : t('about.downloading')
       : phase === 'done'
         ? t('about.done', { version: info?.version ?? '' })
         : phase === 'error'

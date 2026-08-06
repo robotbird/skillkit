@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { UpdateAvailableInfo } from '@shared/types';
+import type { UpdateAvailableInfo, DownloadProgress } from '@shared/types';
 
 type Phase = 'idle' | 'downloading' | 'done' | 'error';
 type CheckState = 'idle' | 'checking' | 'upToDate' | 'available' | 'error';
 
 /**
  * 自动更新状态。挂载时取启动期缓存 + 监听后台推送；
- * check() 主动请求 GitHub releases；apply() 下载安装包并打开。
+ * check() 主动请求 GitHub releases；apply() 下载安装包并打开（下载进度经 progress 暴露）。
  */
 export function useUpdate() {
   const [info, setInfo] = useState<UpdateAvailableInfo | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
   const [checkState, setCheckState] = useState<CheckState>('idle');
+  const [progress, setProgress] = useState<DownloadProgress | null>(null);
 
   useEffect(() => {
     window.skillkit
@@ -27,6 +28,7 @@ export function useUpdate() {
       setInfo(i);
       setCheckState('available');
     });
+    return window.skillkit.onUpdateDownloadProgress((p) => setProgress(p));
   }, []);
 
   const check = useCallback(async () => {
@@ -48,6 +50,7 @@ export function useUpdate() {
   const apply = useCallback(async () => {
     if (phase === 'downloading' || phase === 'done') return;
     setPhase('downloading');
+    setProgress(null);
     try {
       await window.skillkit.applyUpdate();
       setPhase('done');
@@ -56,5 +59,5 @@ export function useUpdate() {
     }
   }, [phase]);
 
-  return { info, phase, checkState, check, apply };
+  return { info, phase, checkState, progress, check, apply };
 }

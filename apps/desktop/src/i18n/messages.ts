@@ -60,6 +60,8 @@ const zh = {
   'about.downloading': '正在下载更新…',
   'about.done': '已下载 v{version}，请在弹出的安装窗口完成更新',
   'about.updateError': '下载失败，点此重试',
+  'about.downloadingProgress': '下载中 {percent}% · {done}/{total} · {speed}',
+  'about.retrying': '下载中断，正在重试（{attempt}/{max}）…',
 
   'common.cancel': '取消',
   'common.close': '关闭',
@@ -111,6 +113,9 @@ const zh = {
   'update.downloading': '正在下载更新…',
   'update.done': '已下载 v{version}，请在弹出的安装窗口完成更新（安装完会替换当前版本）',
   'update.error': '下载失败，点此重试（或稍后再试）',
+  'update.progress': '下载中 {percent}% · {done}/{total} · {speed}',
+  'update.retrying': '下载中断，正在重试（{attempt}/{max}）… 原因：{reason}',
+  'update.retryingShort': '重试 {attempt}/{max}',
 
   'settings.nav.updates': '更新',
 
@@ -383,6 +388,8 @@ const en: Record<keyof typeof zh, string> = {
   'about.downloading': 'Downloading update…',
   'about.done': 'Downloaded v{version}. Complete the update in the installer window.',
   'about.updateError': 'Download failed. Retry',
+  'about.downloadingProgress': 'Downloading {percent}% · {done}/{total} · {speed}',
+  'about.retrying': 'Download interrupted, retrying ({attempt}/{max})…',
 
   'common.cancel': 'Cancel',
   'common.close': 'Close',
@@ -434,6 +441,9 @@ const en: Record<keyof typeof zh, string> = {
   'update.downloading': 'Downloading update…',
   'update.done': 'Downloaded v{version}. Complete the update in the installer window (it will replace the current version).',
   'update.error': 'Download failed. Retry (or try again later).',
+  'update.progress': 'Downloading {percent}% · {done}/{total} · {speed}',
+  'update.retrying': 'Download interrupted, retrying ({attempt}/{max})… {reason}',
+  'update.retryingShort': 'Retry {attempt}/{max}',
 
   'settings.nav.updates': 'Updates',
 
