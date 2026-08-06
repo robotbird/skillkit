@@ -80,6 +80,51 @@ function customIcon(label: string): string {
   return uri;
 }
 
+/**
+ * 按名称推荐品牌图标：label 含某品牌关键词（含中文/别名）→ 对应 BuiltinTool；无命中 null。
+ * 用于新建自定义 Agent / 项目时的「默认推荐分配」（选择器里高亮该项）。
+ * ASCII 词按词边界匹配（避免 'pi' 命中 'pipeline'/'api'）；含非 ASCII（中文）的词用子串。
+ */
+const ICON_KEYWORDS: { key: BuiltinTool; words: string[] }[] = [
+  { key: 'claude', words: ['claude', 'claude code', 'claude-code', 'sonnet', 'opus', 'haiku', 'anthropic', '克劳德'] },
+  { key: 'codex', words: ['codex', 'openai', 'chatgpt', 'gpt'] },
+  { key: 'cursor', words: ['cursor', '光标'] },
+  { key: 'trae', words: ['trae'] },
+  { key: 'qoder', words: ['qoder'] },
+  { key: 'grok', words: ['grok'] },
+  { key: 'opencode', words: ['opencode'] },
+  { key: 'gemini', words: ['gemini', 'bard'] },
+  { key: 'antigravity', words: ['antigravity'] },
+  { key: 'windsurf', words: ['windsurf', 'codeium'] },
+  { key: 'augment', words: ['augment'] },
+  { key: 'codebuddy', words: ['codebuddy', 'code buddy'] },
+  { key: 'pi', words: ['pi'] },
+  { key: 'kiro', words: ['kiro'] },
+  { key: 'hermes', words: ['hermes', '赫尔墨斯'] },
+  { key: 'openclaw', words: ['openclaw', 'clawdbot', 'moltbot'] },
+  { key: 'cline', words: ['cline'] },
+  { key: 'warp', words: ['warp'] },
+  { key: 'kimi', words: ['kimi'] },
+  { key: 'workbuddy', words: ['workbuddy', 'work buddy'] },
+];
+
+function labelHasWord(labelLc: string, word: string): boolean {
+  const w = word.toLowerCase();
+  if (/[^\x00-\x7f]/.test(w)) return labelLc.includes(w); // 中文等：直接子串
+  // ASCII：词边界，防止 'pi' 命中 'pipeline' / 'api' 等
+  const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`).test(labelLc);
+}
+
+export function recommendIcon(label: string): BuiltinTool | null {
+  const lc = (label || '').toLowerCase();
+  if (!lc.trim()) return null;
+  for (const { key, words } of ICON_KEYWORDS) {
+    if (words.some((wd) => labelHasWord(lc, wd))) return key;
+  }
+  return null;
+}
+
 /** 工具展示名：自定义 agent 取用户起的 label，否则内置 TOOL_LABELS，再兜底原 id。 */
 export function toolLabel(tool: Tool): string {
   if (typeof tool === 'string' && tool.startsWith(CUSTOM_TOOL_PREFIX)) {
@@ -88,10 +133,11 @@ export function toolLabel(tool: Tool): string {
   return TOOL_LABELS[tool as BuiltinTool] ?? tool;
 }
 
-/** 工具图标：自定义 agent 用首字母兜底图，否则内置 TOOL_ICON。 */
+/** 工具图标：自定义 agent/项目若设了品牌图标用之，否则首字母兜底；内置用 TOOL_ICON。 */
 export function toolIcon(tool: Tool): string {
   if (typeof tool === 'string' && tool.startsWith(CUSTOM_TOOL_PREFIX)) {
     const c = customs.find((x) => x.id === tool);
+    if (c?.icon) return TOOL_ICON[c.icon];
     return customIcon(c?.label ?? '?');
   }
   return TOOL_ICON[tool as BuiltinTool] ?? customIcon('?');

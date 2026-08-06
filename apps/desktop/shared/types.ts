@@ -16,6 +16,7 @@ export type {
   Tool,
   BuiltinTool,
   CustomTool,
+  CustomToolKind,
   InstalledSkill,
   MarketSkill,
   InstallResult,
@@ -33,7 +34,9 @@ export type {
 
 import type {
   Tool,
+  BuiltinTool,
   CustomTool,
+  CustomToolKind,
   InstalledSkill,
   InstalledFilter,
   InstallResult,
@@ -125,6 +128,18 @@ export interface GlobalRepoRemoveResult {
 export interface SkillDoc {
   filename: string; // 实际命中的文件名（SKILL.md / AGENTS.md）
   body: string; // 剥掉开头 frontmatter 后的 Markdown 正文
+}
+
+// ===== 自定义 skill 源（agent 变体 / 项目）的新增/编辑参数 =====
+/** 新增时的可选项：分类 + 图标。 */
+export interface CustomToolAddOpts {
+  kind?: CustomToolKind;
+  icon?: BuiltinTool | null;
+}
+/** 编辑已有条目时可改的字段（名称 / 图标）。 */
+export interface CustomToolPatch {
+  label?: string;
+  icon?: BuiltinTool | null;
 }
 
 // ===== 自动更新(desktop 专用) =====
@@ -296,14 +311,16 @@ export interface SkillkitApi {
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
 
-  // ===== 自定义 agent（路径非内置默认目录的 agent 变体）=====
-  /** 全部自定义 agent（按创建时间升序）。 */
+  // ===== 自定义 skill 源（路径非内置默认目录的 agent 变体 / 项目）=====
+  /** 全部自定义 skill 源（按创建时间升序）。 */
   listCustomTools(): Promise<CustomTool[]>;
-  /** 新增自定义 agent：name + skill 目录；返回新建条目（id 形如 custom:<slug>）。 */
-  addCustomTool(label: string, skillsRoot: string): Promise<CustomTool>;
-  /** 删除自定义 agent（仅解注册，skill 目录文件不动）。 */
+  /** 新增：name + skill 目录 + 可选 kind/icon；返回新建条目（id 形如 custom:<slug>）。 */
+  addCustomTool(label: string, skillsRoot: string, opts?: CustomToolAddOpts): Promise<CustomTool>;
+  /** 编辑已有条目的展示元数据（名称 / 图标）。 */
+  updateCustomTool(id: string, patch: CustomToolPatch): Promise<void>;
+  /** 删除（仅解注册，skill 目录文件不动）。 */
   removeCustomTool(id: string): Promise<void>;
-  /** 系统文件夹选择框，取消返回 null（自定义 agent 选目录用）。 */
+  /** 系统文件夹选择框，取消返回 null（选 skill 目录用）。 */
   pickDirectory(title?: string): Promise<string | null>;
 
   // ===== 外观 / 语言 / 版本 / 外链 / 全局仓库路径 =====

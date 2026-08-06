@@ -1,4 +1,4 @@
-import type { BuiltinTool } from '@shared/types';
+import { ALL_TOOLS, TOOL_LABELS, type BuiltinTool } from '@shared/types';
 import claudeIcon from '../assets/agents/claude.svg';
 import codexIcon from '../assets/agents/codex.svg';
 import cursorIcon from '../assets/agents/cursor.svg';
@@ -43,3 +43,11 @@ export const TOOL_ICON: Record<BuiltinTool, string> = {
   warp: warpIcon,
   kimi: kimiIcon,
 };
+
+/**
+ * 图标选择器数据源：复用系统现有 21 个品牌 SVG（按 ALL_TOOLS 顺序）。
+ * 自定义 Agent / 项目登记时从这里挑图标；不新增图标资源。
+ */
+export const ICON_CHOICES: { key: BuiltinTool; label: string; url: string }[] = ALL_TOOLS.map(
+  (key) => ({ key, label: TOOL_LABELS[key], url: TOOL_ICON[key] }),
+);

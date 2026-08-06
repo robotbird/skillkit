@@ -85,8 +85,9 @@ export const ALL_TOOLS: BuiltinTool[] = [
 ];
 
 /**
- * 用户自定义 agent（持久化于 desktop 主进程 custom_tools 表）。
- * 用于路径不在内置 TOOLS 默认目录的 agent 变体（如 Hermes 中文社区版装在 AppData 下）。
+ * 用户自定义 skill 源（持久化于 desktop 主进程 custom_tools 表）。
+ * 用于路径不在内置 TOOLS 默认目录的 skill 目录——既可以是某个 agent 变体
+ * （如 Hermes 中文社区版装在 AppData 下），也可以是某个项目里的 skill 目录。
  * id = `custom:<slug>`，渲染层据此合成 ToolConfig（roots/installRoot 均指向 skillsRoot）。
  */
 export interface CustomTool {
@@ -94,7 +95,14 @@ export interface CustomTool {
   label: string; // 用户起的展示名
   skillsRoot: string; // skill 目录绝对路径（扫描/安装均指向此）
   createdAt: number; // epoch ms
+  /** 分类：agent 变体 / 项目（同形数据，仅 UI 分组与默认图标推荐用）。老数据默认 'agent'。 */
+  kind: CustomToolKind;
+  /** 选用的品牌图标（内置 BuiltinTool key）；null = 首字母生成图兜底。 */
+  icon: BuiltinTool | null;
 }
+
+/** 自定义 skill 源的分类：agent 变体 vs 项目。 */
+export type CustomToolKind = 'agent' | 'project';
 
 export interface InstalledSkill {
   tool: Tool;

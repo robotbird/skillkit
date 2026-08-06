@@ -1,7 +1,7 @@
 import path from 'node:path';
 import os from 'node:os';
-import { ALL_TOOLS, CUSTOM_TOOL_PREFIX, type Tool, type BuiltinTool, type CustomTool } from '../shared/types.js';
-import { listCustomTools, insertCustomTool, deleteCustomTool } from './db.js';
+import { ALL_TOOLS, CUSTOM_TOOL_PREFIX, type Tool, type BuiltinTool, type CustomTool, type CustomToolKind } from '../shared/types.js';
+import { listCustomTools, insertCustomTool, deleteCustomTool, updateCustomToolMeta as dbUpdateCustomToolMeta } from './db.js';
 
 export { ALL_TOOLS };
 
@@ -294,10 +294,15 @@ function slugify(label: string): string {
 }
 
 /**
- * 新增自定义 agent：生成去重 id（custom:<slug>[-n]）、解析绝对路径、落库并刷新缓存。
+ * 新增自定义 skill 源：生成去重 id（custom:<slug>[-n]）、解析绝对路径、落库并刷新缓存。
  * 目录无需预先存在（安装时 installRoot 会 mkdir -p）；此处仅校验非空。
+ * opts.kind 区分 agent 变体 / 项目（仅 UI 分组与默认图标推荐用）；opts.icon 为品牌图标 key，空则首字母兜底。
  */
-export function addCustomTool(label: string, skillsRoot: string): CustomTool {
+export function addCustomTool(
+  label: string,
+  skillsRoot: string,
+  opts?: { kind?: CustomToolKind; icon?: BuiltinTool | null },
+): CustomTool {
   const trimmedLabel = label.trim();
   if (!trimmedLabel) throw new Error('名称不能为空');
   const root = skillsRoot.trim();
@@ -312,6 +317,8 @@ export function addCustomTool(label: string, skillsRoot: string): CustomTool {
     label: trimmedLabel,
     skillsRoot: path.resolve(root),
     createdAt: Date.now(),
+    kind: opts?.kind === 'project' ? 'project' : 'agent',
+    icon: opts?.icon ?? null,
   };
   insertCustomTool(tool);
   reloadCustomTools();
@@ -319,7 +326,20 @@ export function addCustomTool(label: string, skillsRoot: string): CustomTool {
 }
 
 /**
- * 删除自定义 agent：仅校验是自定义 id（防误删内置），DB 层负责级联清理孤儿行。
+ * 修改自定义 skill 源的展示元数据（名称 / 图标）。仅更新传入字段；改完刷新内存缓存。
+ * 渲染层「点击换图」走这里。
+ */
+export function updateCustomToolMeta(
+  id: string,
+  patch: { label?: string; icon?: BuiltinTool | null },
+): void {
+  if (!id.startsWith(CUSTOM_TOOL_PREFIX)) throw new Error('只能修改自定义 skill 源');
+  dbUpdateCustomToolMeta(id, patch);
+  reloadCustomTools();
+}
+
+/**
+ * 删除自定义 skill 源：仅校验是自定义 id（防误删内置），DB 层负责级联清理孤儿行。
  * skill 目录文件不动——归用户所有，仅从 Skillkit 解除管理。
  */
 export function removeCustomTool(id: string): void {
