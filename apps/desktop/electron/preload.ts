@@ -3,10 +3,14 @@ import type { IpcRendererEvent } from 'electron';
 import type {
   SkillkitApi,
   Tool,
+  CustomTool,
+  CustomToolAddOpts,
+  CustomToolPatch,
   InstalledFilter,
   MarketListQuery,
   InstallOpts,
   UpdateAvailableInfo,
+  DownloadProgress,
   Theme,
   EffectiveTheme,
   AccountLoginResult,
@@ -83,6 +87,11 @@ const api: SkillkitApi = {
   getUpdateStatus: () => ipcRenderer.invoke('update:status'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   applyUpdate: () => ipcRenderer.invoke('update:apply'),
+  onUpdateDownloadProgress: (cb: (p: DownloadProgress) => void) => {
+    const listener = (_e: IpcRendererEvent, p: DownloadProgress) => cb(p);
+    ipcRenderer.on('update:download-progress', listener);
+    return () => ipcRenderer.removeListener('update:download-progress', listener);
+  },
 
   // skill 更新检测
   checkSkillUpdates: (force?: boolean) => ipcRenderer.invoke('skillUpdate:checkAll', force),
@@ -99,6 +108,16 @@ const api: SkillkitApi = {
   // 设置（meta KV）
   getSetting: (key: string) => ipcRenderer.invoke('setting:get', key),
   setSetting: (key: string, value: string) => ipcRenderer.invoke('setting:set', key, value),
+
+  // 自定义 skill 源（路径非内置默认目录的 agent 变体 / 项目）
+  listCustomTools: () => ipcRenderer.invoke('customTools:list') as Promise<CustomTool[]>,
+  addCustomTool: (label: string, skillsRoot: string, opts?: CustomToolAddOpts) =>
+    ipcRenderer.invoke('customTools:add', label, skillsRoot, opts) as Promise<CustomTool>,
+  updateCustomTool: (id: string, patch: CustomToolPatch) =>
+    ipcRenderer.invoke('customTools:update', id, patch),
+  removeCustomTool: (id: string) => ipcRenderer.invoke('customTools:remove', id),
+  // 选目录（系统文件夹选择框，取消返回 null）
+  pickDirectory: (title?: string) => ipcRenderer.invoke('dialog:pickDir', title) as Promise<string | null>,
 
   // 外观
   getTheme: () => ipcRenderer.invoke('theme:get'),

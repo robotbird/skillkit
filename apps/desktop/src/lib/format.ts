@@ -34,3 +34,24 @@ export function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   return s.slice(0, max - 1).trimEnd() + '…';
 }
+
+/** 字节数 → 人类可读完整版（B/KB/MB/GB/TB，保留 1 位）。给安装包下载等大文件用。 */
+export function formatBytes(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '0 B';
+  if (n < 1024) return `${Math.floor(n)} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(1)} ${units[i]}`;
+}
+
+/** 速率 bytes/s → 人类可读（如 1.2 MB/s）。 */
+export function formatSpeed(bps: number): string {
+  if (!Number.isFinite(bps) || bps <= 0) return '0 B/s';
+  return `${formatBytes(bps)}/s`;
+}
+

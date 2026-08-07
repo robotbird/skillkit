@@ -1,20 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { TOOL_LABELS, type MarketSkill, type Tool, type InstallResult, type InstallOpts } from '@shared/types';
+import { type MarketSkill, type Tool, type InstallResult, type InstallOpts } from '@shared/types';
 import ToolPicker from '../components/ToolPicker';
 import type { ToastState } from '../components/Toast';
 import { useI18n } from '../i18n';
 import type { MessageKey } from '../i18n/messages';
+import { toolLabel } from '../lib/toolCatalog';
 
 const PAGE_SIZE = 30;
 
 type T = (key: MessageKey, vars?: Record<string, string | number>) => string;
 
-function summarizeResults(results: InstallResult[], labels: Record<Tool, string>, t: T): { ok: string; fail: string } {
-  const ok = results.filter((r) => r.ok).map((r) => labels[r.tool]);
+function summarizeResults(results: InstallResult[], t: T): { ok: string; fail: string } {
+  const ok = results.filter((r) => r.ok).map((r) => toolLabel(r.tool));
   const fail = results.filter((r) => !r.ok);
   return {
     ok: ok.length ? t('market.installedTo', { tools: ok.join(', ') }) : '',
-    fail: fail.length ? t('market.failed', { detail: fail.map((r) => `${labels[r.tool]} (${r.error})`).join('; ') }) : '',
+    fail: fail.length ? t('market.failed', { detail: fail.map((r) => `${toolLabel(r.tool)} (${r.error})`).join('; ') }) : '',
   };
 }
 
@@ -107,7 +108,7 @@ export default function MarketView({
     setInstalling(true);
     try {
       const results = await window.skillkit.installFromMarket(picker.slug, targets, opts);
-      const { ok, fail } = summarizeResults(results, TOOL_LABELS, t);
+      const { ok, fail } = summarizeResults(results, t);
       if (ok && !fail) toast.show(ok);
       else if (fail) toast.show([ok, fail].filter(Boolean).join('; '), 'error', 4000);
       onInstalled();

@@ -1,6 +1,7 @@
 import path from 'node:path';
 import os from 'node:os';
-import { ALL_TOOLS, type Tool } from '../shared/types.js';
+import { ALL_TOOLS, CUSTOM_TOOL_PREFIX, type Tool, type BuiltinTool, type CustomTool, type CustomToolKind } from '../shared/types.js';
+import { listCustomTools, insertCustomTool, deleteCustomTool, updateCustomToolMeta as dbUpdateCustomToolMeta } from './db.js';
 
 export { ALL_TOOLS };
 
@@ -39,7 +40,7 @@ export interface ToolConfig {
  * - cline / warp / kimi 与全局仓共享 ~/.agents/skills（方案 A）
  * - 本阶段仅用户级；项目级目录不扫不装
  */
-export const TOOLS: Record<Tool, ToolConfig> = {
+export const TOOLS: Record<BuiltinTool, ToolConfig> = {
   claude: {
     label: 'Claude Code',
     roots: [skillRoot('.claude', 'skills')],
@@ -207,10 +208,143 @@ export function globalAgentsSkillsRoot(): string {
 /**
  * 工具的 skill 路径是否「完全等同」全局仓 ~/.agents/skills（无独立用户目录）。
  * 这类工具不在 chip / 安装选择器里单独出现，统一走全局仓库。
+ * 自定义 agent 恒为 false（其根目录是用户指定的独立目录）。
  */
 export function isGlobalAgentsOnlyTool(tool: Tool): boolean {
-  const cfg = TOOLS[tool];
+  if (isCustomTool(tool)) return false; // 自定义 agent 恒为独立工具，不并入全局仓
+  const cfg = getToolConfig(tool);
+  if (!cfg) return false;
   const global = path.resolve(globalAgentsSkillsRoot());
   if (path.resolve(cfg.installRoot) !== global) return false;
   return cfg.roots.every((r) => path.resolve(r) === global);
 }
+
+// ===== 自定义 agent 运行期注册表（DB 持久化，缓存于内存）=====
+// 内置 TOOLS 是静态闭集；自定义 agent 由用户在设置里声明，启动后从 custom_tools 表懒加载合并。
+// getToolConfig / allToolIds 是所有「按 tool 取配置 / 遍历工具」入口的统一去向，
+// 使自定义工具能像内置工具一样被扫描/安装/卸载/复制。
+
+let customCache: CustomTool[] = [];
+let customConfigMap = new Map<string, ToolConfig>();
+let customLoaded = false;
+
+/** 把一条自定义 agent 合成 ToolConfig（roots/installRoot 均指向 skillsRoot，无 builtin/app/cli）。 */
+function customToConfig(c: CustomTool): ToolConfig {
+  return {
+    label: c.label,
+    roots: [c.skillsRoot],
+    installRoot: c.skillsRoot,
+    detectRoots: [c.skillsRoot],
+  };
+}
+
+/** 从 DB 加载自定义 agent 到内存缓存（幂等；仅首次访问时触发，add/remove 后显式 reload）。 */
+function ensureCustomLoaded(): void {
+  if (customLoaded) return;
+  customCache = listCustomTools();
+  customConfigMap = new Map(customCache.map((c) => [c.id, customToConfig(c)]));
+  customLoaded = true;
+}
+
+/** 强制重新从 DB 加载（add/remove 后调用）。 */
+export function reloadCustomTools(): void {
+  customCache = listCustomTools();
+  customConfigMap = new Map(customCache.map((c) => [c.id, customToConfig(c)]));
+  customLoaded = true;
+}
+
+/** 是否为自定义 agent id。 */
+export function isCustomTool(tool: Tool): boolean {
+  return typeof tool === 'string' && tool.startsWith(CUSTOM_TOOL_PREFIX);
+}
+
+/**
+ * 取某工具的合并配置（内置 TOOLS 优先，否则自定义 agent）。未知 id 返回 undefined。
+ * 所有原 `TOOLS[tool]` 访问均改走这里，使自定义工具透明可用。
+ */
+export function getToolConfig(tool: Tool): ToolConfig | undefined {
+  ensureCustomLoaded();
+  const custom = customConfigMap.get(tool);
+  if (custom) return custom;
+  return TOOLS[tool as BuiltinTool];
+}
+
+/** 全部工具 id（内置闭集 + 自定义），用于遍历扫描/全局仓清理等。 */
+export function allToolIds(): Tool[] {
+  ensureCustomLoaded();
+  return [...ALL_TOOLS, ...customCache.map((c) => c.id)];
+}
+
+/** 自定义 agent 元信息列表（渲染层 label 解析用）。 */
+export function listCustomToolsMeta(): CustomTool[] {
+  ensureCustomLoaded();
+  return customCache;
+}
+
+/** 自定义 agent id 列表（detect.localTools 把它们并入「本机已装」以作安装目标）。 */
+export function listCustomToolIds(): string[] {
+  ensureCustomLoaded();
+  return customCache.map((c) => c.id);
+}
+
+/** label → slug（小写、非字母数字归一为 -）；空则兜底 'agent'。 */
+function slugify(label: string): string {
+  const s = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return s || 'agent';
+}
+
+/**
+ * 新增自定义 skill 源：生成去重 id（custom:<slug>[-n]）、解析绝对路径、落库并刷新缓存。
+ * 目录无需预先存在（安装时 installRoot 会 mkdir -p）；此处仅校验非空。
+ * opts.kind 区分 agent 变体 / 项目（仅 UI 分组与默认图标推荐用）；opts.icon 为品牌图标 key，空则首字母兜底。
+ */
+export function addCustomTool(
+  label: string,
+  skillsRoot: string,
+  opts?: { kind?: CustomToolKind; icon?: BuiltinTool | null },
+): CustomTool {
+  const trimmedLabel = label.trim();
+  if (!trimmedLabel) throw new Error('名称不能为空');
+  const root = skillsRoot.trim();
+  if (!root) throw new Error('Skill 目录不能为空');
+  ensureCustomLoaded();
+  const slug = slugify(trimmedLabel);
+  let id = `${CUSTOM_TOOL_PREFIX}${slug}`;
+  let n = 2;
+  while (customConfigMap.has(id)) id = `${CUSTOM_TOOL_PREFIX}${slug}-${n++}`;
+  const tool: CustomTool = {
+    id,
+    label: trimmedLabel,
+    skillsRoot: path.resolve(root),
+    createdAt: Date.now(),
+    kind: opts?.kind === 'project' ? 'project' : 'agent',
+    icon: opts?.icon ?? null,
+  };
+  insertCustomTool(tool);
+  reloadCustomTools();
+  return tool;
+}
+
+/**
+ * 修改自定义 skill 源的展示元数据（名称 / 图标）。仅更新传入字段；改完刷新内存缓存。
+ * 渲染层「点击换图」走这里。
+ */
+export function updateCustomToolMeta(
+  id: string,
+  patch: { label?: string; icon?: BuiltinTool | null },
+): void {
+  if (!id.startsWith(CUSTOM_TOOL_PREFIX)) throw new Error('只能修改自定义 skill 源');
+  dbUpdateCustomToolMeta(id, patch);
+  reloadCustomTools();
+}
+
+/**
+ * 删除自定义 skill 源：仅校验是自定义 id（防误删内置），DB 层负责级联清理孤儿行。
+ * skill 目录文件不动——归用户所有，仅从 Skillkit 解除管理。
+ */
+export function removeCustomTool(id: string): void {
+  if (!id.startsWith(CUSTOM_TOOL_PREFIX)) throw new Error('只能删除自定义 agent');
+  deleteCustomTool(id);
+  reloadCustomTools();
+}
+

@@ -1,7 +1,5 @@
-import { ALL_TOOLS, TOOL_LABELS, type Tool } from '@shared/types';
-import { TOOL_ICON } from '../lib/toolIcons';
-
-export { TOOL_ICON };
+import { ALL_TOOLS, type Tool } from '@shared/types';
+import { toolIcon, toolLabel } from '../lib/toolCatalog';
 
 interface Props {
   tool: Tool;
@@ -32,8 +30,8 @@ export default function ToolCheckRow({
         onChange={() => onToggle(tool)}
         disabled={parentBusy || disabled}
       />
-      <img className="opt-ico" src={TOOL_ICON[tool]} alt="" draggable={false} />
-      <span className="tool-name">{TOOL_LABELS[tool]}</span>
+      <img className="opt-ico" src={toolIcon(tool)} alt="" draggable={false} />
+      <span className="tool-name">{toolLabel(tool)}</span>
       {disabled && note && <span className="opt-note">{note}</span>}
     </label>
   );

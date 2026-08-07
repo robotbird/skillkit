@@ -20,7 +20,8 @@ Run from the repo root.
 pnpm install                 # workspace install (links @skillkit/types, installs apps/desktop deps)
 
 # Desktop (apps/desktop)
-pnpm --filter desktop rebuild   # REQUIRED: rebuilds better-sqlite3 against Electron's ABI. Run after install / Electron bumps.
+pnpm --filter desktop run rebuild   # REQUIRED: rebuilds better-sqlite3 against Electron's ABI. Run after install / Electron bumps.
+                                   # ⚠️ Must use `run rebuild` — `pnpm rebuild` is a pnpm built-in that reruns install scripts against the *system* Node ABI (→ NODE_MODULE_VERSION mismatch); only the `scripts.rebuild` entry (`electron-rebuild -f -w better-sqlite3`) compiles against Electron's headers.
 pnpm --filter desktop dev       # Full Electron app in dev (vite-plugin-electron launches Electron + watches all 3 bundles)
 pnpm --filter desktop build     # tsc -p both tsconfigs (typecheck, noEmit) + vite build
 pnpm --filter desktop pack      # build + electron-builder --dir (unpacked, for debugging)

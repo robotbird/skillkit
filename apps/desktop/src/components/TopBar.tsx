@@ -11,9 +11,12 @@ export type TabKey = 'my' | 'market' | 'install';
 export default function TopBar({
   tab,
   onTab,
+  onChanged,
 }: {
   tab: TabKey;
   onTab: (t: TabKey) => void;
+  /** 设置内发生需刷新主页的数据变更（如增删自定义 agent）时回调。 */
+  onChanged?: () => void;
 }) {
   const { t } = useI18n();
   const slotRef = useToolbarSlotHost();
@@ -103,7 +106,7 @@ export default function TopBar({
           </div>
         )}
       </header>
-      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} onChanged={onChanged} />
     </>
   );
 }

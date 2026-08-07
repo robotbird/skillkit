@@ -6,6 +6,8 @@ import type {
   InstalledSkill,
   MarketSkill,
   Tool,
+  BuiltinTool,
+  CustomTool,
   InstallRecord,
   InstallRecordTarget,
   InstallRecordStatus,
@@ -138,9 +140,22 @@ function migrate(d: Database.Database) {
       last_check_error TEXT,
       PRIMARY KEY (tool, name)
     );
+
+    -- 自定义 agent：用户声明的非内置 agent（如路径特殊的社区变体）。
+    -- id 形如 'custom:<slug>'，即 Tool 取值之一；skills_root 为其 skill 目录绝对路径。
+    -- 独立表，不被 scanAll 清理（installed_skills 会在扫描时按 allToolIds() 自然剔除已删 agent 的行）。
+    CREATE TABLE IF NOT EXISTS custom_tools (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      skills_root TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
   `);
   // install_records 是增量引入的表：早期构建可能缺 error 列，按需补上（已存在则跳过）。
   ensureColumn(d, 'install_records', 'error', 'TEXT');
+  // custom_tools 增量列：kind（agent/project 分类，老数据默认 'agent'）+ icon（品牌图标 key，null=首字母兜底）。
+  ensureColumn(d, 'custom_tools', 'kind', "TEXT NOT NULL DEFAULT 'agent'");
+  ensureColumn(d, 'custom_tools', 'icon', 'TEXT');
 }
 
 /** 幂等加列：表已存在但缺某列时 ALTER 补上；列已存在则跳过。 */
@@ -525,3 +540,86 @@ export function getSkillUpdateStateMap(): Map<string, SkillUpdateState> {
 export function deleteSkillUpdateState(tool: Tool, name: string): void {
   getDb().prepare('DELETE FROM skill_update_state WHERE tool = ? AND name = ?').run(tool, name);
 }
+
+// ===== custom_tools（自定义 skill 源：agent 变体 / 项目）=====
+function rowToCustom(r: any): CustomTool {
+  return {
+    id: r.id,
+    label: r.label,
+    skillsRoot: r.skills_root,
+    createdAt: r.created_at,
+    kind: r.kind === 'project' ? 'project' : 'agent',
+    icon: (r.icon as BuiltinTool) ?? null,
+  };
+}
+
+/** 全部自定义 skill 源（按创建时间升序）。 */
+export function listCustomTools(): CustomTool[] {
+  return (getDb().prepare('SELECT * FROM custom_tools ORDER BY created_at ASC').all() as any[]).map(
+    rowToCustom,
+  );
+}
+
+/** 已存在的自定义 skill 源 id 集合（供 id 去重用）。 */
+export function customToolIds(): Set<string> {
+  const rows = getDb().prepare('SELECT id FROM custom_tools').all() as Array<{ id: string }>;
+  return new Set(rows.map((r) => r.id));
+}
+
+/** 新增一条自定义 skill 源（id 由 tools.ts 生成并去重）。 */
+export function insertCustomTool(c: CustomTool): void {
+  getDb()
+    .prepare(
+      `INSERT INTO custom_tools (id, label, skills_root, created_at, kind, icon) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         label=excluded.label,
+         skills_root=excluded.skills_root,
+         kind=excluded.kind,
+         icon=excluded.icon`,
+    )
+    .run(c.id, c.label, c.skillsRoot, c.createdAt, c.kind, c.icon);
+}
+
+/**
+ * 修改自定义 skill 源的展示元数据（名称 / 图标）。仅更新传入的字段；
+ * 不传的字段保持原值。改完由 tools.ts 触发 reloadCustomTools() 刷新内存缓存。
+ */
+export function updateCustomToolMeta(
+  id: string,
+  patch: { label?: string; icon?: BuiltinTool | null },
+): void {
+  const sets: string[] = [];
+  const params: any[] = [];
+  if (patch.label !== undefined) {
+    sets.push('label = ?');
+    params.push(patch.label);
+  }
+  if (patch.icon !== undefined) {
+    sets.push('icon = ?');
+    params.push(patch.icon);
+  }
+  if (sets.length === 0) return;
+  params.push(id);
+  getDb().prepare(`UPDATE custom_tools SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+}
+
+/**
+ * 删除自定义 agent，并清理其在各表中的孤儿行（installed_skills 在下次 scanAll 时也会自然剔除，
+ * 此处一并清；share_links / skill_update_state 不被 scanAll 清理，必须显式删）。
+ * skill 目录本身不动——文件归用户所有，仅从 Skillkit 解除管理。
+ */
+export function deleteCustomTool(id: string): void {
+  const d = getDb();
+  d.exec('BEGIN');
+  try {
+    d.prepare('DELETE FROM custom_tools WHERE id = ?').run(id);
+    d.prepare('DELETE FROM installed_skills WHERE tool = ?').run(id);
+    d.prepare('DELETE FROM share_links WHERE tool = ?').run(id);
+    d.prepare('DELETE FROM skill_update_state WHERE tool = ?').run(id);
+    d.exec('COMMIT');
+  } catch (e) {
+    d.exec('ROLLBACK');
+    throw e;
+  }
+}
+

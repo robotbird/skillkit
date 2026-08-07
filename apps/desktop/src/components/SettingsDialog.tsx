@@ -1,25 +1,51 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import ModalPortal from './ModalPortal';
 import { useI18n } from '../i18n';
 import { useTheme } from '../lib/useTheme';
 import { useAccount } from '../lib/useAccount';
 import { useUpdate } from '../lib/useUpdate';
-import { formatTime } from '../lib/format';
-import { SETTING_KEYS, type Theme, type Locale, type SkillUpdateInterval } from '@shared/types';
+import { formatTime, formatBytes, formatSpeed } from '../lib/format';
+import {
+  SETTING_KEYS,
+  type Theme,
+  type Locale,
+  type SkillUpdateInterval,
+  type CustomTool,
+  type CustomToolKind,
+  type BuiltinTool,
+} from '@shared/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { GitHubIcon, GoogleIcon } from './oauth-icons';
+import {
+  useCustomTools,
+  invalidateCustomTools,
+  recommendIcon,
+  toolIcon,
+} from '../lib/toolCatalog';
+import { ICON_CHOICES } from '../lib/toolIcons';
+import { invalidateInstalledTools } from '../lib/useInstalledTools';
+import { invalidateLocalTools } from '../lib/useLocalTools';
 
-type Section = 'account' | 'appearance' | 'language' | 'space' | 'updates' | 'about';
+type Section = 'account' | 'appearance' | 'language' | 'space' | 'updates' | 'agents' | 'about';
 
 /** 把绝对路径的 home 前缀缩写为 ~（跨平台：/Users/x/.agents/… → ~/.agents/… ； C:\Users\x\.agents\… → ~\.agents\…）。 */
 function abbreviateHome(p: string): string {
   return p.replace(/^(.+?)([/\\]\.agents[/\\].*)$/, '~$2');
 }
 
-export default function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function SettingsDialog({
+  open,
+  onClose,
+  onChanged,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** 设置内发生需刷新主页的数据变更（如增删自定义 agent）时回调，触发「我的 Skill」重扫。 */
+  onChanged?: () => void;
+}) {
   const { t } = useI18n();
   const [section, setSection] = useState<Section>('account');
   const [busy, setBusy] = useState(false);
@@ -42,6 +68,7 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
     { key: 'language', label: t('settings.nav.language') },
     { key: 'space', label: t('settings.nav.space') },
     { key: 'updates', label: t('settings.nav.updates') },
+    { key: 'agents', label: t('settings.nav.agents') },
     { key: 'about', label: t('settings.nav.about') },
   ];
 
@@ -72,6 +99,7 @@ export default function SettingsDialog({ open, onClose }: { open: boolean; onClo
             {section === 'language' && <LanguageSection />}
             {section === 'space' && <SpaceSection />}
             {section === 'updates' && <UpdatesSection />}
+            {section === 'agents' && <AgentsSection onChanged={onChanged} />}
             {section === 'about' && <AboutSection />}
           </div>
           <button className="settings-close" onClick={onClose} title={t('settings.close')} aria-label={t('settings.close')}>
@@ -372,11 +400,287 @@ function UpdatesSection() {
   );
 }
 
+// ===== 自定义 skill 源（Agent / 项目）=====
+function AgentsSection({ onChanged }: { onChanged?: () => void }) {
+  const { t } = useI18n();
+  const { customs } = useCustomTools();
+  const [name, setName] = useState('');
+  const [root, setRoot] = useState('');
+  const [kind, setKind] = useState<CustomToolKind>('agent');
+  const [icon, setIcon] = useState<BuiltinTool | null>(null); // null = 自动（首字母兜底）
+  const [iconTouched, setIconTouched] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [editingIconId, setEditingIconId] = useState<string | null>(null);
+
+  // 名称驱动的推荐图标；用户未手动改过时它即默认选中（「默认推荐分配」）。
+  const recommend = useMemo(() => recommendIcon(name), [name]);
+  const effectiveIcon = iconTouched ? icon : recommend;
+
+  const agents = customs.filter((c) => c.kind !== 'project');
+  const projects = customs.filter((c) => c.kind === 'project');
+
+  // 增删改后让其余视图同步：失效三处模块缓存 + bump installedVersion（remount「我的 Skill」触发重扫）。
+  function syncOthers() {
+    invalidateCustomTools();
+    invalidateInstalledTools();
+    invalidateLocalTools();
+    onChanged?.();
+  }
+
+  async function pickDir() {
+    const p = await window.skillkit.pickDirectory(t('agents.rootLabel'));
+    if (p) setRoot(p);
+  }
+
+  function resetForm() {
+    setName('');
+    setRoot('');
+    setKind('agent');
+    setIcon(null);
+    setIconTouched(false);
+  }
+
+  async function onAdd(e: FormEvent) {
+    e.preventDefault();
+    const n = name.trim();
+    const r = root.trim();
+    if (!n || !r) return;
+    setAdding(true);
+    setError(null);
+    try {
+      // 未手动改过 → 用推荐（可能为 null=首字母）；手动改过 → 用用户所选（可为 null=显式自动）
+      const submitIcon = iconTouched ? icon : recommend;
+      await window.skillkit.addCustomTool(n, r, { kind, icon: submitIcon });
+      resetForm();
+      syncOthers();
+    } catch (err: any) {
+      setError(t('agents.addFail', { error: err?.message ?? String(err) }));
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function onRemove(c: CustomTool) {
+    if (!confirm(t('agents.confirmRemove', { name: c.label }))) return;
+    try {
+      await window.skillkit.removeCustomTool(c.id);
+      if (editingIconId === c.id) setEditingIconId(null);
+      syncOthers();
+    } catch (err: any) {
+      setError(t('agents.removeFail', { error: err?.message ?? String(err) }));
+    }
+  }
+
+  async function onChangeIcon(c: CustomTool, v: BuiltinTool | null) {
+    try {
+      await window.skillkit.updateCustomTool(c.id, { icon: v });
+      syncOthers();
+    } catch (err: any) {
+      setError(t('agents.changeIconFail', { error: err?.message ?? String(err) }));
+    } finally {
+      setEditingIconId(null);
+    }
+  }
+
+  function renderGroup(list: CustomTool[], titleKey: 'agents.agentsGroup' | 'agents.projectsGroup') {
+    if (list.length === 0) return null;
+    return (
+      <div className="space-y-2">
+        <div className="text-sm font-semibold text-foreground">{t(titleKey)}</div>
+        {list.map((c) => (
+          <div className="kv-card" key={c.id}>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                className="relative shrink-0 cursor-pointer rounded-lg p-1 hover:bg-muted/60"
+                title={t('agents.changeIcon')}
+                onClick={() => setEditingIconId(editingIconId === c.id ? null : c.id)}
+              >
+                <img className="h-7 w-7" src={toolIcon(c.id)} alt="" draggable={false} />
+              </button>
+              <div className="min-w-0 flex-1">
+                <div className="kv-label">{c.label}</div>
+                <div className="kv-value" title={c.skillsRoot}>
+                  {c.skillsRoot}
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => onRemove(c)}>
+                {t('agents.remove')}
+              </Button>
+            </div>
+            {editingIconId === c.id && (
+              <div className="mt-3 border-t border-border pt-3">
+                <IconPicker
+                  value={c.icon}
+                  recommend={recommendIcon(c.label)}
+                  autoLetter={(c.label.trim()[0] || '?').toUpperCase()}
+                  onChange={(v) => onChangeIcon(c, v)}
+                />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings-section">
+      <h3>{t('agents.label')}</h3>
+      <p className="settings-hint">{t('agents.hint')}</p>
+
+      {customs.length === 0 ? (
+        <div className="kv-card">
+          <div className="kv-value">{t('agents.empty')}</div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {renderGroup(agents, 'agents.agentsGroup')}
+          {renderGroup(projects, 'agents.projectsGroup')}
+        </div>
+      )}
+
+      <form className="settings-subform" onSubmit={onAdd}>
+        <h4>{t('agents.add')}</h4>
+        <FieldGroup className="gap-3">
+          <Field>
+            <FieldLabel>{t('agents.kindLabel')}</FieldLabel>
+            <ToggleGroup
+              type="single"
+              value={kind}
+              onValueChange={(v) => {
+                if (v === 'agent' || v === 'project') setKind(v);
+              }}
+              variant="outline"
+            >
+              <ToggleGroupItem value="agent">{t('agents.kindAgent')}</ToggleGroupItem>
+              <ToggleGroupItem value="project">{t('agents.kindProject')}</ToggleGroupItem>
+            </ToggleGroup>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="agent-name">{t('agents.nameLabel')}</FieldLabel>
+            <Input
+              id="agent-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t('agents.namePlaceholder')}
+              required
+              autoFocus
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="agent-root">{t('agents.rootLabel')}</FieldLabel>
+            <div className="flex items-center gap-2">
+              <Input
+                id="agent-root"
+                value={root}
+                onChange={(e) => setRoot(e.target.value)}
+                placeholder={t('agents.rootPlaceholder')}
+                required
+              />
+              <Button type="button" variant="outline" onClick={pickDir} disabled={adding}>
+                {t('agents.pickDir')}
+              </Button>
+            </div>
+            <p className="settings-hint">{t('agents.pathHint')}</p>
+          </Field>
+          <Field>
+            <FieldLabel>{t('agents.iconLabel')}</FieldLabel>
+            <IconPicker
+              value={effectiveIcon}
+              recommend={recommend}
+              autoLetter={(name.trim()[0] || '?').toUpperCase()}
+              onChange={(v) => {
+                setIcon(v);
+                setIconTouched(true);
+              }}
+              disabled={adding}
+            />
+            <p className="settings-hint">{t('agents.iconHint')}</p>
+          </Field>
+          {error && <FieldError>{error}</FieldError>}
+        </FieldGroup>
+        <div className="settings-actions">
+          <Button type="submit" disabled={adding || !name.trim() || !root.trim()}>
+            {adding ? t('agents.adding') : t('agents.addBtn')}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/**
+ * 图标选择器：复用系统现有 21 个品牌 SVG + 一个「自动（首字母）」选项。
+ * - value=null 表示「自动」（首字母生成图）。
+ * - recommend 命中时在该品牌项上叠一个「推荐」角标；用户未手动选择时它也作为默认选中。
+ */
+function IconPicker({
+  value,
+  recommend,
+  autoLetter,
+  disabled,
+  onChange,
+}: {
+  value: BuiltinTool | null;
+  recommend: BuiltinTool | null;
+  autoLetter: string;
+  disabled?: boolean;
+  onChange: (v: BuiltinTool | null) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t('agents.iconLabel')}>
+      <button
+        type="button"
+        role="radio"
+        aria-checked={value === null}
+        disabled={disabled}
+        title={t('agents.iconAuto')}
+        onClick={() => onChange(null)}
+        className={`relative flex size-10 items-center justify-center rounded-lg border transition-colors hover:bg-muted/50 ${
+          value === null ? 'border-transparent ring-2 ring-ring' : 'border-border'
+        }`}
+      >
+        <span className="flex size-7 items-center justify-center rounded-md bg-[#71717a] text-[13px] font-semibold text-white">
+          {autoLetter || '?'}
+        </span>
+      </button>
+      {ICON_CHOICES.map((c) => {
+        const selected = value === c.key;
+        const isRec = recommend === c.key;
+        return (
+          <button
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            disabled={disabled}
+            key={c.key}
+            title={c.label + (isRec ? ` · ${t('agents.iconRecommend')}` : '')}
+            onClick={() => onChange(c.key)}
+            className={`relative flex size-10 items-center justify-center rounded-lg border transition-colors hover:bg-muted/50 ${
+              selected ? 'border-transparent ring-2 ring-ring' : 'border-border'
+            }`}
+          >
+            <img className="h-6 w-6" src={c.url} alt={c.label} draggable={false} />
+            {isRec && (
+              <span className="absolute -right-1 -top-1 rounded-full bg-accent px-1 text-[9px] font-medium leading-[1.3] text-accent-foreground">
+                {t('agents.iconRecommendShort')}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ===== 关于 =====
 function AboutSection() {
   const { t } = useI18n();
   const [version, setVersion] = useState('');
-  const { info, phase, checkState, check, apply } = useUpdate();
+  const { info, phase, checkState, progress, check, apply } = useUpdate();
 
   useEffect(() => {
     window.skillkit.getVersion().then((v) => setVersion(v)).catch(() => {});
@@ -384,7 +688,16 @@ function AboutSection() {
 
   const phaseLabel =
     phase === 'downloading'
-      ? t('about.downloading')
+      ? progress?.phase === 'retrying'
+        ? t('about.retrying', { attempt: progress.attempt, max: progress.maxAttempts })
+        : progress && progress.percent != null
+          ? t('about.downloadingProgress', {
+              percent: Math.floor(progress.percent),
+              speed: formatSpeed(progress.speedBps),
+              done: formatBytes(progress.transferred),
+              total: progress.total ? formatBytes(progress.total) : '?',
+            })
+          : t('about.downloading')
       : phase === 'done'
         ? t('about.done', { version: info?.version ?? '' })
         : phase === 'error'

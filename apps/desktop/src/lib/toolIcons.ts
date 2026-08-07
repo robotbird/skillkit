@@ -1,4 +1,4 @@
-import type { Tool } from '@shared/types';
+import { ALL_TOOLS, TOOL_LABELS, type BuiltinTool } from '@shared/types';
 import claudeIcon from '../assets/agents/claude.svg';
 import codexIcon from '../assets/agents/codex.svg';
 import cursorIcon from '../assets/agents/cursor.svg';
@@ -20,8 +20,8 @@ import clineIcon from '../assets/agents/cline.svg';
 import warpIcon from '../assets/agents/warp.svg';
 import kimiIcon from '../assets/agents/kimi.svg';
 
-/** 工具 → 图标；ToolPicker / ToolStack / MySkillsView 共用单源。 */
-export const TOOL_ICON: Record<Tool, string> = {
+/** 内置工具 → 图标；自定义 agent 的图标由 toolCatalog 用首字母兜底合成。 */
+export const TOOL_ICON: Record<BuiltinTool, string> = {
   claude: claudeIcon,
   codex: codexIcon,
   cursor: cursorIcon,
@@ -43,3 +43,11 @@ export const TOOL_ICON: Record<Tool, string> = {
   warp: warpIcon,
   kimi: kimiIcon,
 };
+
+/**
+ * 图标选择器数据源：复用系统现有 21 个品牌 SVG（按 ALL_TOOLS 顺序）。
+ * 自定义 Agent / 项目登记时从这里挑图标；不新增图标资源。
+ */
+export const ICON_CHOICES: { key: BuiltinTool; label: string; url: string }[] = ALL_TOOLS.map(
+  (key) => ({ key, label: TOOL_LABELS[key], url: TOOL_ICON[key] }),
+);

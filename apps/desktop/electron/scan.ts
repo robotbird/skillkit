@@ -1,13 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { TOOLS, ALL_TOOLS, isGlobalAgentsOnlyTool } from './tools.js';
+import { getToolConfig, allToolIds, isCustomTool, isGlobalAgentsOnlyTool } from './tools.js';
 import { readSkillMd } from './skill-md.js';
 import { upsertInstalled, listInstalled as dbListInstalled, deleteStaleInstalled } from './db.js';
 import { dirSize } from './fs-util.js';
 import type { InstalledSkill, Tool, InstalledFilter } from '../shared/types.js';
 
 export function scanTool(tool: Tool): InstalledSkill[] {
-  const cfg = TOOLS[tool];
+  const cfg = getToolConfig(tool);
+  if (!cfg) return [];
   const out: InstalledSkill[] = [];
   for (const root of cfg.roots) {
     if (!fs.existsSync(root)) continue;
@@ -67,9 +68,12 @@ export function scanTool(tool: Tool): InstalledSkill[] {
 export function isToolInstalled(tool: Tool): boolean {
   // 完全沿用 ~/.agents/skills → 不单独显示/扫描为独立工具
   if (isGlobalAgentsOnlyTool(tool)) return false;
+  // 自定义 agent：用户显式声明，恒视为已存在（目录可后由安装 mkdir -p 创建）。
+  if (isCustomTool(tool)) return true;
 
-  const roots = TOOLS[tool].detectRoots;
-  for (const p of roots) {
+  const cfg = getToolConfig(tool);
+  if (!cfg) return false;
+  for (const p of cfg.detectRoots) {
     if (p && fs.existsSync(p)) return true;
   }
   return false;
@@ -85,13 +89,13 @@ export function toolHasSkills(tool: Tool): boolean {
  * skill 数为 0 的不出现在 chip / 安装选择器（避免空壳工具占位）。
  */
 export function installedTools(): Tool[] {
-  return ALL_TOOLS.filter((tool) => isToolInstalled(tool) && toolHasSkills(tool));
+  return allToolIds().filter((tool) => isToolInstalled(tool) && toolHasSkills(tool));
 }
 
 export function scanAll(): InstalledSkill[] {
   const all: InstalledSkill[] = [];
   // 只扫本机有配置且非「纯全局仓」的工具；共享目录 skill 见 scanGlobalRepo
-  for (const tool of ALL_TOOLS) {
+  for (const tool of allToolIds()) {
     if (!isToolInstalled(tool)) continue;
     all.push(...scanTool(tool));
   }

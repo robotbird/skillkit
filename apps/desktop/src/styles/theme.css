@@ -237,6 +237,19 @@ html, body, #root {
 .update-btn .spinner { width: 14px; height: 14px; }
 .update-btn.is-done { color: var(--green, #4ade80); }
 .update-btn.is-error { color: #ff6b6b; }
+/* 下载中：圆形按钮展开为胶囊，实时显示百分比/重试次数 */
+.update-btn.is-downloading {
+  width: auto;
+  min-width: 36px;
+  padding: 0 12px;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+.update-btn.is-retrying { color: var(--amber, #ffb24d); }
+.update-progress-text { letter-spacing: 0.2px; }
 .update-dot {
   position: absolute;
   top: 5px; right: 5px;

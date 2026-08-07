@@ -2,7 +2,7 @@ import { ipcMain, dialog, shell, app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { scanAll, listInstalled, installedTools } from './scan.js';
 import { localTools } from './detect.js';
-import { TOOLS } from './tools.js';
+import { TOOLS, addCustomTool, updateCustomToolMeta, removeCustomTool, listCustomToolsMeta } from './tools.js';
 import { refreshMarket, listMarketSkills, fetchMarketDetail } from './market.js';
 import {
   installFromMarket,
@@ -44,6 +44,8 @@ import type {
   InstallResult,
   RepoBatchResult,
   InstallRecordChannel,
+  CustomToolAddOpts,
+  CustomToolPatch,
 } from '../shared/types.js';
 
 /** 把一次安装结果落库为一条安装记录（无任何目标被处理时跳过）。 */
@@ -272,6 +274,32 @@ export function registerIpc() {
   // ===== 设置（meta KV 通用读写）=====
   ipcMain.handle('setting:get', (_e, key: string) => metaGet(key));
   ipcMain.handle('setting:set', (_e, key: string, value: string) => metaSet(key, value));
+
+  // ===== 自定义 skill 源（路径非内置默认目录的 agent 变体 / 项目）=====
+  // list/add/update/remove 直接读写 custom_tools 表 + 刷新 tools.ts 内存缓存；
+  // 渲染层在变更后自行 invalidate useInstalledTools/useLocalTools 缓存并重扫。
+  ipcMain.handle('customTools:list', () => listCustomToolsMeta());
+  ipcMain.handle(
+    'customTools:add',
+    (_e, label: string, skillsRoot: string, opts?: CustomToolAddOpts) =>
+      addCustomTool(label, skillsRoot, opts),
+  );
+  ipcMain.handle('customTools:update', (_e, id: string, patch: CustomToolPatch) =>
+    updateCustomToolMeta(id, patch),
+  );
+  ipcMain.handle('customTools:remove', (_e, id: string) => {
+    removeCustomTool(id);
+  });
+
+  // 选目录（自定义 agent 的 skill 目录用）：返回绝对路径，取消返回 null。
+  ipcMain.handle('dialog:pickDir', async (_e, title?: string) => {
+    const result = await dialog.showOpenDialog({
+      title: title ?? '选择目录',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (result.canceled || !result.filePaths.length) return null;
+    return result.filePaths[0];
+  });
 
   // ===== 安装记录（读 / 清空）=====
   ipcMain.handle('install:records:list', () => listInstallRecords());

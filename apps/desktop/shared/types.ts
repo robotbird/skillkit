@@ -6,6 +6,7 @@
 export {
   TOOL_LABELS,
   ALL_TOOLS,
+  CUSTOM_TOOL_PREFIX,
   SHARE_BASE_URL,
   SHARE_TTL_MS,
   SHARE_MAX_BYTES,
@@ -13,6 +14,9 @@ export {
 
 export type {
   Tool,
+  BuiltinTool,
+  CustomTool,
+  CustomToolKind,
   InstalledSkill,
   MarketSkill,
   InstallResult,
@@ -30,6 +34,9 @@ export type {
 
 import type {
   Tool,
+  BuiltinTool,
+  CustomTool,
+  CustomToolKind,
   InstalledSkill,
   InstalledFilter,
   InstallResult,
@@ -123,6 +130,18 @@ export interface SkillDoc {
   body: string; // 剥掉开头 frontmatter 后的 Markdown 正文
 }
 
+// ===== 自定义 skill 源（agent 变体 / 项目）的新增/编辑参数 =====
+/** 新增时的可选项：分类 + 图标。 */
+export interface CustomToolAddOpts {
+  kind?: CustomToolKind;
+  icon?: BuiltinTool | null;
+}
+/** 编辑已有条目时可改的字段（名称 / 图标）。 */
+export interface CustomToolPatch {
+  label?: string;
+  icon?: BuiltinTool | null;
+}
+
 // ===== 自动更新(desktop 专用) =====
 export interface UpdateAvailableInfo {
   version: string; // 最新版本号(去 v 前缀)
@@ -130,6 +149,18 @@ export interface UpdateAvailableInfo {
   releaseUrl: string; // release 页(兜底)
   downloadUrl: string; // 匹配平台/架构的安装包直链
   downloadName: string; // 安装包文件名
+}
+
+/** 安装包下载进度（主进程在下载过程中逐次推送给渲染层，节流 ~200ms 一次）。 */
+export interface DownloadProgress {
+  attempt: number; // 当前第几次尝试（1-based；>1 表示已在断点续传/重试）
+  maxAttempts: number; // 总尝试次数上限（3）
+  transferred: number; // 已下载字节（含续传累计）
+  total: number | null; // 总字节；无 Content-Length 时为 null
+  percent: number | null; // 0~100；total 未知时为 null
+  speedBps: number; // 当前估算速率 bytes/s（移动平均）
+  phase: 'downloading' | 'retrying'; // 正在下 / 正在退避重试
+  message?: string; // 重试/失败时的原因文案（重试间隙推送）
 }
 
 // ===== skill 更新检测(desktop 专用) =====
@@ -217,8 +248,10 @@ export interface SkillkitApi {
   getUpdateStatus(): Promise<{ available: boolean; info: UpdateAvailableInfo | null }>;
   /** 主动检查更新（实时请求 GitHub releases）。 */
   checkUpdate(): Promise<{ available: boolean; info: UpdateAvailableInfo | null }>;
-  /** 触发更新:下载安装包到 ~/Downloads 并打开。 */
+  /** 触发更新:下载安装包到 ~/Downloads 并打开。下载内置 3 次重试,全失败后抛错。 */
   applyUpdate(): Promise<string>;
+  /** 监听安装包下载进度（速度/百分比/重试）。返回取消订阅。 */
+  onUpdateDownloadProgress(cb: (p: DownloadProgress) => void): () => void;
 
   // ===== skill 更新检测 =====
   /** 检查所有已装 skill 的更新（force=true 绕过 TTL 防抖）。返回本轮汇总。 */
@@ -291,6 +324,18 @@ export interface SkillkitApi {
   // ===== 设置（meta KV 通用读写）=====
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
+
+  // ===== 自定义 skill 源（路径非内置默认目录的 agent 变体 / 项目）=====
+  /** 全部自定义 skill 源（按创建时间升序）。 */
+  listCustomTools(): Promise<CustomTool[]>;
+  /** 新增：name + skill 目录 + 可选 kind/icon；返回新建条目（id 形如 custom:<slug>）。 */
+  addCustomTool(label: string, skillsRoot: string, opts?: CustomToolAddOpts): Promise<CustomTool>;
+  /** 编辑已有条目的展示元数据（名称 / 图标）。 */
+  updateCustomTool(id: string, patch: CustomToolPatch): Promise<void>;
+  /** 删除（仅解注册，skill 目录文件不动）。 */
+  removeCustomTool(id: string): Promise<void>;
+  /** 系统文件夹选择框，取消返回 null（选 skill 目录用）。 */
+  pickDirectory(title?: string): Promise<string | null>;
 
   // ===== 外观 / 语言 / 版本 / 外链 / 全局仓库路径 =====
   /** 取当前主题设置 + 已解析的有效主题（system→dark/light）。 */
