@@ -1,8 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
+import type { Writable } from 'node:stream';
 import { app } from 'electron';
 import * as tar from 'tar';
 import AdmZip from 'adm-zip';
@@ -11,6 +10,7 @@ import { readSkillMd, parseFrontmatter, type SkillMd } from './skill-md.js';
 import { upsertInstalled, listInstalled } from './db.js';
 import { copyDir, rmDir, safeExists } from './fs-util.js';
 import { writeToCanonical, linkOrCopyFromCanonical } from './global-repo.js';
+import { githubFetch, githubStreamFetch, pipelineWithStall, GH_NET_TIMEOUT_MS } from './github-net.js';
 import type {
   InstallResult,
   InstallOpts,
@@ -203,8 +203,9 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**
  * 把 tarball 中 owner/repo[#sub] 这一段解包到 tmpDir，返回它的根目录。
- * 经 Clash 等代理下大 tarball 时,socket 常被对端中途关闭(UND_ERR_SOCKET / "other side closed")——
- * 这类瞬时错误自动重试若干次;每次失败清理半成品 tmpDir,避免遗留垃圾。
+ * 下载走 github-net：6s 首字节超时 + 下载停滞检测 + 直连不通自动回退国内公共镜像。
+ * 经 Clash 等代理下大 tarball 时,socket 常被对端中途关闭(UND_ERR_SOCKET / stall)——
+ * 这类瞬时错误 / 超时自动重试若干次(重试时直连若已被标记不通会直接走镜像);每次失败清理半成品 tmpDir。
  */
 async function fetchAndExtractTar(ref: RepoRef): Promise<string> {
   const branch = ref.branch ?? 'HEAD';
@@ -214,12 +215,14 @@ async function fetchAndExtractTar(ref: RepoRef): Promise<string> {
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skillkit-'));
     try {
-      const res = await fetch(url, { headers: { 'user-agent': 'Skillkit/0.2' } });
-      if (!res.ok || !res.body) {
-        throw new Error(`无法下载 ${url}（HTTP ${res.status}）`);
+      const handle = await githubStreamFetch(url, { headers: { 'user-agent': 'Skillkit/0.2' } });
+      const { response } = handle;
+      if (!response.ok || !response.body) {
+        throw new Error(`无法下载 ${url}（HTTP ${response.status}）`);
       }
-      // tar.x 接 stream(tar 的 Unpack 与 @types/node 的 WritableStream 签名有细微出入,这里强转)
-      await pipeline(Readable.fromWeb(res.body as any), tar.x({ cwd: tmpDir }) as unknown as NodeJS.WritableStream);
+      // tar.x 接 stream(tar 的 Unpack 与 @types/node 的 WritableStream 签名有细微出入,这里强转)。
+      // pipelineWithStall 在 body 下载停滞 6s 时 abort 连接(并标记直连不通,供重试走镜像)。
+      await pipelineWithStall(response.body, tar.x({ cwd: tmpDir }) as unknown as Writable, handle);
       // tarball 内只有一个顶层目录 `<repo>-<sha>/`
       const top = fs.readdirSync(tmpDir).find((n) => fs.statSync(path.join(tmpDir, n)).isDirectory());
       if (!top) throw new Error('tarball 解包后未找到顶层目录');
@@ -228,13 +231,17 @@ async function fetchAndExtractTar(ref: RepoRef): Promise<string> {
       // 清理本次半成品 tmpDir,避免遗留垃圾(无论何种失败)
       try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* 忽略清理失败 */ }
       lastErr = e;
-      // 仅瞬时网络错误重试;HTTP 状态码/解析错误等确定性失败立即抛出
-      if (!isTransientNetError(e) || attempt === MAX_ATTEMPTS) break;
+      // 瞬时网络错误 / 下载停滞(stall 触发的 AbortError)才重试——重试会重新选候选(直连不通则走镜像)。
+      // HTTP 状态码 / 解析错误等确定性失败立即抛出;「网络不可达」(镜像全失败)也不再重试。
+      const retriable = isTransientNetError(e) || (e as any)?.name === 'AbortError';
+      if (!retriable || attempt === MAX_ATTEMPTS) break;
       await sleep(400 * attempt); // 退避:400ms、800ms
     }
   }
-  if (isTransientNetError(lastErr)) {
-    throw new Error(`下载 ${url} 时网络中断，已重试 ${MAX_ATTEMPTS} 次仍失败，请检查代理/网络后重试`);
+  if (isTransientNetError(lastErr) || (lastErr as any)?.name === 'AbortError') {
+    throw new Error(
+      `下载 ${url} 时网络超时或中断，已重试 ${MAX_ATTEMPTS} 次（含国内镜像回退）仍失败，请检查网络/代理后重试`,
+    );
   }
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
@@ -517,23 +524,13 @@ export const GH_API = 'https://api.github.com';
 const GH_RAW = 'https://raw.githubusercontent.com';
 const GH_TOKEN = process.env.GITHUB_TOKEN?.trim(); // 可选：把匿名 60/小时限流抬到 5000/小时
 
-/** GitHub GET（API 或 raw）：UA + 超时 + 可选 token + 瞬时错误重试（复用 isTransientNetError）。 */
+/** GitHub GET（API 或 raw）：UA + 可选 token + 6s 首字节超时 + 国内镜像回退（见 github-net）。
+ *  设了 GH_TOKEN 时仅直连不回退镜像——避免 token 经公共镜像泄露给第三方。 */
 async function ghGet(url: string, json: boolean): Promise<Response> {
   const headers: Record<string, string> = { 'user-agent': 'Skillkit/0.2' };
   if (json) headers.accept = 'application/vnd.github+json';
   if (GH_TOKEN) headers.authorization = `bearer ${GH_TOKEN}`;
-  const MAX = 3;
-  let lastErr: unknown;
-  for (let attempt = 1; attempt <= MAX; attempt++) {
-    try {
-      return await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
-    } catch (e) {
-      lastErr = e;
-      if (!isTransientNetError(e) || attempt === MAX) break;
-      await sleep(400 * attempt);
-    }
-  }
-  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+  return githubFetch(url, { headers }, GH_NET_TIMEOUT_MS, { noMirror: !!GH_TOKEN });
 }
 
 export async function ghApiJson<T>(url: string): Promise<T> {
