@@ -296,12 +296,13 @@ function slugify(label: string): string {
 /**
  * 新增自定义 skill 源：生成去重 id（custom:<slug>[-n]）、解析绝对路径、落库并刷新缓存。
  * 目录无需预先存在（安装时 installRoot 会 mkdir -p）；此处仅校验非空。
- * opts.kind 区分 agent 变体 / 项目（仅 UI 分组与默认图标推荐用）；opts.icon 为品牌图标 key，空则首字母兜底。
+ * opts.kind 区分 agent 变体 / 项目（仅 UI 分组与默认图标推荐用）；
+ * opts.icon 为品牌图标 key，空则首字母兜底；opts.iconImage 为上传图片 data URI，设置后优先于 icon。
  */
 export function addCustomTool(
   label: string,
   skillsRoot: string,
-  opts?: { kind?: CustomToolKind; icon?: BuiltinTool | null },
+  opts?: { kind?: CustomToolKind; icon?: BuiltinTool | null; iconImage?: string | null },
 ): CustomTool {
   const trimmedLabel = label.trim();
   if (!trimmedLabel) throw new Error('名称不能为空');
@@ -319,6 +320,7 @@ export function addCustomTool(
     createdAt: Date.now(),
     kind: opts?.kind === 'project' ? 'project' : 'agent',
     icon: opts?.icon ?? null,
+    iconImage: opts?.iconImage ?? null,
   };
   insertCustomTool(tool);
   reloadCustomTools();
@@ -326,12 +328,12 @@ export function addCustomTool(
 }
 
 /**
- * 修改自定义 skill 源的展示元数据（名称 / 图标）。仅更新传入字段；改完刷新内存缓存。
- * 渲染层「点击换图」走这里。
+ * 修改自定义 skill 源的展示元数据（名称 / 图标 / 上传图片）。仅更新传入字段；改完刷新内存缓存。
+ * 渲染层「点击换图 / 上传图片」走这里。
  */
 export function updateCustomToolMeta(
   id: string,
-  patch: { label?: string; icon?: BuiltinTool | null },
+  patch: { label?: string; icon?: BuiltinTool | null; iconImage?: string | null },
 ): void {
   if (!id.startsWith(CUSTOM_TOOL_PREFIX)) throw new Error('只能修改自定义 skill 源');
   dbUpdateCustomToolMeta(id, patch);

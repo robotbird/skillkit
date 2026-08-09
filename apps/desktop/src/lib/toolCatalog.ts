@@ -133,14 +133,40 @@ export function toolLabel(tool: Tool): string {
   return TOOL_LABELS[tool as BuiltinTool] ?? tool;
 }
 
-/** 工具图标：自定义 agent/项目若设了品牌图标用之，否则首字母兜底；内置用 TOOL_ICON。 */
+/** 工具图标：自定义 agent/项目优先用上传图片，其次品牌图标，最后首字母兜底；内置用 TOOL_ICON。 */
 export function toolIcon(tool: Tool): string {
   if (typeof tool === 'string' && tool.startsWith(CUSTOM_TOOL_PREFIX)) {
     const c = customs.find((x) => x.id === tool);
+    if (c?.iconImage) return c.iconImage;
     if (c?.icon) return TOOL_ICON[c.icon];
     return customIcon(c?.label ?? '?');
   }
   return TOOL_ICON[tool as BuiltinTool] ?? customIcon('?');
+}
+
+// ===== 图标选择器取值模型 =====
+// 把持久化在 CustomTool 里的两个图标字段（品牌 key icon / 上传图片 iconImage）归一成
+// 选择器的单一取值；三选一互斥：上传图片 > 品牌图标 > 自动（首字母）。
+export type IconSelection =
+  | { t: 'auto' }
+  | { t: 'brand'; key: BuiltinTool }
+  | { t: 'image'; src: string };
+
+/** 从持久化的 CustomTool 推出当前选择（按 image > brand > auto 优先级）。 */
+export function customToolIconSelection(c: CustomTool): IconSelection {
+  if (c.iconImage) return { t: 'image', src: c.iconImage };
+  if (c.icon) return { t: 'brand', key: c.icon };
+  return { t: 'auto' };
+}
+
+/** 选择器取值 → 写库 patch（互斥：选其一、清其余），供 addCustomTool/updateCustomTool 用。 */
+export function selectionToPatch(sel: IconSelection): {
+  icon: BuiltinTool | null;
+  iconImage: string | null;
+} {
+  if (sel.t === 'brand') return { icon: sel.key, iconImage: null };
+  if (sel.t === 'image') return { icon: null, iconImage: sel.src };
+  return { icon: null, iconImage: null };
 }
 
 /** 全部工具 id（内置闭集 + 自定义），按内置顺序在前、自定义在后。 */

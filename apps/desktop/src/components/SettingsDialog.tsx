@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import ModalPortal from './ModalPortal';
 import { useI18n } from '../i18n';
 import { useTheme } from '../lib/useTheme';
@@ -23,9 +24,12 @@ import {
   useCustomTools,
   invalidateCustomTools,
   recommendIcon,
-  toolIcon,
+  customToolIconSelection,
+  selectionToPatch,
+  type IconSelection,
 } from '../lib/toolCatalog';
-import { ICON_CHOICES } from '../lib/toolIcons';
+import { ICON_CHOICES, TOOL_ICON } from '../lib/toolIcons';
+import { fileToIconDataUri } from '../lib/iconImage';
 import { invalidateInstalledTools } from '../lib/useInstalledTools';
 import { invalidateLocalTools } from '../lib/useLocalTools';
 
@@ -407,15 +411,13 @@ function AgentsSection({ onChanged }: { onChanged?: () => void }) {
   const [name, setName] = useState('');
   const [root, setRoot] = useState('');
   const [kind, setKind] = useState<CustomToolKind>('agent');
-  const [icon, setIcon] = useState<BuiltinTool | null>(null); // null = 自动（首字母兜底）
-  const [iconTouched, setIconTouched] = useState(false);
+  // 图标取值：自动（首字母）/ 品牌图标 / 上传图片，三选一互斥。
+  const [iconSel, setIconSel] = useState<IconSelection>({ t: 'auto' });
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editingIconId, setEditingIconId] = useState<string | null>(null);
 
-  // 名称驱动的推荐图标；用户未手动改过时它即默认选中（「默认推荐分配」）。
+  // 名称驱动的推荐图标：仅作为浮层里的「荐」角标提示；头像默认始终显示名称首字。
   const recommend = useMemo(() => recommendIcon(name), [name]);
-  const effectiveIcon = iconTouched ? icon : recommend;
 
   const agents = customs.filter((c) => c.kind !== 'project');
   const projects = customs.filter((c) => c.kind === 'project');
@@ -437,8 +439,7 @@ function AgentsSection({ onChanged }: { onChanged?: () => void }) {
     setName('');
     setRoot('');
     setKind('agent');
-    setIcon(null);
-    setIconTouched(false);
+    setIconSel({ t: 'auto' });
   }
 
   async function onAdd(e: FormEvent) {
@@ -449,9 +450,8 @@ function AgentsSection({ onChanged }: { onChanged?: () => void }) {
     setAdding(true);
     setError(null);
     try {
-      // 未手动改过 → 用推荐（可能为 null=首字母）；手动改过 → 用用户所选（可为 null=显式自动）
-      const submitIcon = iconTouched ? icon : recommend;
-      await window.skillkit.addCustomTool(n, r, { kind, icon: submitIcon });
+      // iconSel 统一表达「自动 / 品牌 / 上传图片」三态；写库时按互斥规则拆成 icon/iconImage。
+      await window.skillkit.addCustomTool(n, r, { kind, ...selectionToPatch(iconSel) });
       resetForm();
       syncOthers();
     } catch (err: any) {
@@ -465,21 +465,18 @@ function AgentsSection({ onChanged }: { onChanged?: () => void }) {
     if (!confirm(t('agents.confirmRemove', { name: c.label }))) return;
     try {
       await window.skillkit.removeCustomTool(c.id);
-      if (editingIconId === c.id) setEditingIconId(null);
       syncOthers();
     } catch (err: any) {
       setError(t('agents.removeFail', { error: err?.message ?? String(err) }));
     }
   }
 
-  async function onChangeIcon(c: CustomTool, v: BuiltinTool | null) {
+  async function onChangeIcon(c: CustomTool, sel: IconSelection) {
     try {
-      await window.skillkit.updateCustomTool(c.id, { icon: v });
+      await window.skillkit.updateCustomTool(c.id, selectionToPatch(sel));
       syncOthers();
     } catch (err: any) {
       setError(t('agents.changeIconFail', { error: err?.message ?? String(err) }));
-    } finally {
-      setEditingIconId(null);
     }
   }
 
@@ -491,14 +488,13 @@ function AgentsSection({ onChanged }: { onChanged?: () => void }) {
         {list.map((c) => (
           <div className="kv-card" key={c.id}>
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                className="relative shrink-0 cursor-pointer rounded-lg p-1 hover:bg-muted/60"
-                title={t('agents.changeIcon')}
-                onClick={() => setEditingIconId(editingIconId === c.id ? null : c.id)}
-              >
-                <img className="h-7 w-7" src={toolIcon(c.id)} alt="" draggable={false} />
-              </button>
+              <IconPickerPopover
+                value={customToolIconSelection(c)}
+                recommend={recommendIcon(c.label)}
+                autoLetter={(c.label.trim()[0] || '?').toUpperCase()}
+                onChange={(sel) => onChangeIcon(c, sel)}
+                onUploadError={(m) => setError(m)}
+              />
               <div className="min-w-0 flex-1">
                 <div className="kv-label">{c.label}</div>
                 <div className="kv-value" title={c.skillsRoot}>
@@ -509,16 +505,6 @@ function AgentsSection({ onChanged }: { onChanged?: () => void }) {
                 {t('agents.remove')}
               </Button>
             </div>
-            {editingIconId === c.id && (
-              <div className="mt-3 border-t border-border pt-3">
-                <IconPicker
-                  value={c.icon}
-                  recommend={recommendIcon(c.label)}
-                  autoLetter={(c.label.trim()[0] || '?').toUpperCase()}
-                  onChange={(v) => onChangeIcon(c, v)}
-                />
-              </div>
-            )}
           </div>
         ))}
       </div>
@@ -560,14 +546,25 @@ function AgentsSection({ onChanged }: { onChanged?: () => void }) {
           </Field>
           <Field>
             <FieldLabel htmlFor="agent-name">{t('agents.nameLabel')}</FieldLabel>
-            <Input
-              id="agent-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t('agents.namePlaceholder')}
-              required
-              autoFocus
-            />
+            <div className="flex items-center gap-2">
+              <IconPickerPopover
+                value={iconSel}
+                recommend={recommend}
+                autoLetter={(name.trim()[0] || '?').toUpperCase()}
+                onChange={setIconSel}
+                onUploadError={(m) => setError(m)}
+                disabled={adding}
+              />
+              <Input
+                id="agent-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t('agents.namePlaceholder')}
+                required
+                autoFocus
+                className="flex-1"
+              />
+            </div>
           </Field>
           <Field>
             <FieldLabel htmlFor="agent-root">{t('agents.rootLabel')}</FieldLabel>
@@ -585,20 +582,6 @@ function AgentsSection({ onChanged }: { onChanged?: () => void }) {
             </div>
             <p className="settings-hint">{t('agents.pathHint')}</p>
           </Field>
-          <Field>
-            <FieldLabel>{t('agents.iconLabel')}</FieldLabel>
-            <IconPicker
-              value={effectiveIcon}
-              recommend={recommend}
-              autoLetter={(name.trim()[0] || '?').toUpperCase()}
-              onChange={(v) => {
-                setIcon(v);
-                setIconTouched(true);
-              }}
-              disabled={adding}
-            />
-            <p className="settings-hint">{t('agents.iconHint')}</p>
-          </Field>
           {error && <FieldError>{error}</FieldError>}
         </FieldGroup>
         <div className="settings-actions">
@@ -612,67 +595,226 @@ function AgentsSection({ onChanged }: { onChanged?: () => void }) {
 }
 
 /**
- * 图标选择器：复用系统现有 21 个品牌 SVG + 一个「自动（首字母）」选项。
- * - value=null 表示「自动」（首字母生成图）。
- * - recommend 命中时在该品牌项上叠一个「推荐」角标；用户未手动选择时它也作为默认选中。
+ * 图标头像 + 轻量浮层选择器。
+ * - 触发器是名称前的一个头像按钮：选了品牌图标显示该 logo，否则显示名称首字（「自动」）。
+ * - 点击弹出轻量 popover（portal 到 body、固定定位，避开设置弹窗的 overflow 裁剪），
+ *   选完即关；点外部 / Esc / 滚动 / 窗口缩放都会关闭。
+ * - value=null 表示「自动」（首字母生成图）；recommend 命中时在该品牌项叠「推荐」角标。
  */
-function IconPicker({
+function IconPickerPopover({
   value,
   recommend,
   autoLetter,
   disabled,
   onChange,
+  onUploadError,
 }: {
-  value: BuiltinTool | null;
+  value: IconSelection;
   recommend: BuiltinTool | null;
   autoLetter: string;
   disabled?: boolean;
-  onChange: (v: BuiltinTool | null) => void;
+  onChange: (v: IconSelection) => void;
+  onUploadError?: (msg: string) => void;
 }) {
   const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  // 浮层宽高：宽固定 300；高先按估值占位，挂载后用真实 offsetHeight 精修（见下方 useLayoutEffect）。
+  const POP_W = 300;
+  const EST_H = 200;
+  const GAP = 6;
+
+  // 算浮层坐标：默认紧贴头像「上方」（6px）；上方空间不够才回落到下方。并夹在视口内。
+  // measured=false 用估值高度（打开瞬间、浮层尚未挂载），=true 用真实高度精修。
+  function place(measured: boolean) {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const panelH = measured ? panelRef.current?.offsetHeight ?? EST_H : EST_H;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - POP_W - 8));
+    const aboveTop = r.top - GAP - panelH;
+    const top = aboveTop >= 8 ? aboveTop : r.bottom + GAP;
+    setPos({ top, left });
+  }
+
+  // 浮层挂载后用真实高度重算，消除估值误差导致的过大间距。
+  useLayoutEffect(() => {
+    if (!open) return;
+    place(true);
+  }, [open]);
+
+  function toggle() {
+    if (disabled) return;
+    if (!open) place(false); // 先用估值占位，渲染后由 useLayoutEffect 用真实高度精修
+    setOpen((o) => !o);
+  }
+
+  function pick(v: IconSelection) {
+    onChange(v);
+    setOpen(false);
+  }
+
+  // 选了文件：缩放为方形 PNG data URI，成功则作为「上传图片」选中并关浮层；失败提示。
+  async function onFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // 清空 value，使同一文件可被再次选择（否则二次选同一文件不触发 change）。
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const src = await fileToIconDataUri(file);
+      onChange({ t: 'image', src });
+      setOpen(false);
+    } catch (err: any) {
+      onUploadError?.(t('agents.uploadImageFail', { error: err?.message ?? String(err) }));
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    function close() {
+      setOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('scroll', close, true); // capture：捕捉任意可滚动祖先
+    window.addEventListener('resize', close);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [open]);
+
+  const isImage = value.t === 'image';
+
   return (
-    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t('agents.iconLabel')}>
+    <>
       <button
         type="button"
-        role="radio"
-        aria-checked={value === null}
+        ref={btnRef}
         disabled={disabled}
-        title={t('agents.iconAuto')}
-        onClick={() => onChange(null)}
-        className={`relative flex size-10 items-center justify-center rounded-lg border transition-colors hover:bg-muted/50 ${
-          value === null ? 'border-transparent ring-2 ring-ring' : 'border-border'
-        }`}
+        title={t('agents.changeIcon')}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={toggle}
+        className="icon-avatar"
       >
-        <span className="flex size-7 items-center justify-center rounded-md bg-[#71717a] text-[13px] font-semibold text-white">
-          {autoLetter || '?'}
-        </span>
+        {value.t === 'brand' ? (
+          <img className="h-6 w-6" src={TOOL_ICON[value.key]} alt="" draggable={false} />
+        ) : isImage ? (
+          <img className="h-7 w-7 rounded-md object-contain" src={value.src} alt="" draggable={false} />
+        ) : (
+          <span className="flex size-7 items-center justify-center rounded-md bg-[#71717a] text-[13px] font-semibold text-white">
+            {autoLetter || '?'}
+          </span>
+        )}
       </button>
-      {ICON_CHOICES.map((c) => {
-        const selected = value === c.key;
-        const isRec = recommend === c.key;
-        return (
-          <button
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            disabled={disabled}
-            key={c.key}
-            title={c.label + (isRec ? ` · ${t('agents.iconRecommend')}` : '')}
-            onClick={() => onChange(c.key)}
-            className={`relative flex size-10 items-center justify-center rounded-lg border transition-colors hover:bg-muted/50 ${
-              selected ? 'border-transparent ring-2 ring-ring' : 'border-border'
-            }`}
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className="icon-popover"
+            style={{ position: 'fixed', top: pos.top, left: pos.left }}
+            role="dialog"
+            aria-label={t('agents.iconLabel')}
           >
-            <img className="h-6 w-6" src={c.url} alt={c.label} draggable={false} />
-            {isRec && (
-              <span className="absolute -right-1 -top-1 rounded-full bg-accent px-1 text-[9px] font-medium leading-[1.3] text-accent-foreground">
-                {t('agents.iconRecommendShort')}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
+            <div className="icon-popover-title">{t('agents.iconLabel')}</div>
+            <div className="icon-popover-grid" role="radiogroup">
+              {/* 上传图片：网格首格，点选触发系统文件框；选中后显示该图，点「自动/品牌」可清除 */}
+              <button
+                type="button"
+                title={isImage ? t('agents.changeImage') : t('agents.uploadImage')}
+                aria-label={isImage ? t('agents.changeImage') : t('agents.uploadImage')}
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex size-9 items-center justify-center rounded-lg border transition-colors hover:bg-muted/50 ${
+                  isImage
+                    ? 'border-transparent ring-2 ring-ring'
+                    : 'border-dashed border-border'
+                }`}
+              >
+                {isImage ? (
+                  <img className="h-6 w-6 rounded object-contain" src={value.src} alt="" draggable={false} />
+                ) : (
+                  <svg
+                    className="size-4 text-muted-foreground"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.8}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 15V3" />
+                    <path d="M8 7l4-4 4 4" />
+                    <path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5" />
+                  </svg>
+                )}
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={value.t === 'auto'}
+                title={t('agents.iconAuto')}
+                onClick={() => pick({ t: 'auto' })}
+                className={`relative flex size-9 items-center justify-center rounded-lg border transition-colors hover:bg-muted/50 ${
+                  value.t === 'auto' ? 'border-transparent ring-2 ring-ring' : 'border-border'
+                }`}
+              >
+                <span className="flex size-6 items-center justify-center rounded-md bg-[#71717a] text-[12px] font-semibold text-white">
+                  {autoLetter || '?'}
+                </span>
+              </button>
+              {ICON_CHOICES.map((c) => {
+                const selected = value.t === 'brand' && value.key === c.key;
+                const isRec = recommend === c.key;
+                return (
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    key={c.key}
+                    title={c.label + (isRec ? ` · ${t('agents.iconRecommend')}` : '')}
+                    onClick={() => pick({ t: 'brand', key: c.key })}
+                    className={`relative flex size-9 items-center justify-center rounded-lg border transition-colors hover:bg-muted/50 ${
+                      selected ? 'border-transparent ring-2 ring-ring' : 'border-border'
+                    }`}
+                  >
+                    <img className="h-5 w-5" src={c.url} alt={c.label} draggable={false} />
+                    {isRec && (
+                      <span className="absolute -right-1 -top-1 rounded-full bg-accent px-1 text-[9px] font-medium leading-[1.3] text-accent-foreground">
+                        {t('agents.iconRecommendShort')}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {/* 隐藏文件输入：由上传图块 click() 触发；放在浮层内，仅浮层打开时存在 */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={onFileChange}
+            />
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 

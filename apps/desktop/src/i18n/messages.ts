@@ -330,6 +330,9 @@ const zh = {
   'agents.iconRecommendShort': '荐',
   'agents.changeIcon': '点击更换图标',
   'agents.changeIconFail': '更换图标失败：{error}',
+  'agents.uploadImage': '上传图片…',
+  'agents.changeImage': '更换图片…',
+  'agents.uploadImageFail': '图片读取失败：{error}',
 };
 
 const en: Record<keyof typeof zh, string> = {
@@ -658,6 +661,9 @@ const en: Record<keyof typeof zh, string> = {
   'agents.iconRecommendShort': 'Rec',
   'agents.changeIcon': 'Click to change icon',
   'agents.changeIconFail': 'Change icon failed: {error}',
+  'agents.uploadImage': 'Upload image…',
+  'agents.changeImage': 'Change image…',
+  'agents.uploadImageFail': 'Failed to read image: {error}',
 };
 
 export type MessageKey = keyof typeof zh;

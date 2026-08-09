@@ -99,6 +99,8 @@ export interface CustomTool {
   kind: CustomToolKind;
   /** 选用的品牌图标（内置 BuiltinTool key）；null = 首字母生成图兜底。 */
   icon: BuiltinTool | null;
+  /** 用户上传的自定义图标（PNG data URI，渲染层 canvas 缩放到 128px 方形）；设置后优先于 icon/首字母。null = 未上传。 */
+  iconImage: string | null;
 }
 
 /** 自定义 skill 源的分类：agent 变体 vs 项目。 */
