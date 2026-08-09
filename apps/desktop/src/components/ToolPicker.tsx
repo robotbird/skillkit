@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { type Tool, type InstallOpts } from '@shared/types';
 import { useInstalledTools } from '../lib/useInstalledTools';
-import { useToolCatalog } from '../lib/toolCatalog';
+import { useToolCatalog, useCustomTools } from '../lib/toolCatalog';
 import ToolCheckRow from './ToolCheckRow';
 import ModalPortal from './ModalPortal';
 import { useI18n } from '../i18n';
@@ -78,13 +78,21 @@ export default function ToolPicker({
   const { allTools: catalogTools } = useToolCatalog();
   const availableSet = useMemo(() => new Set(installed), [installed]);
 
+  // 「项目」类型是只读扫描来源（projectRoot 下多个 agent 子目录），不作安装/复制目标——选择器里隐藏。
+  const { customs } = useCustomTools();
+  const projectIds = useMemo(
+    () => new Set(customs.filter((c) => c.kind === 'project').map((c) => c.id)),
+    [customs],
+  );
+
   const visibleTools = useMemo(
     () =>
       catalogTools.filter((tool) => {
         if (excludeTools?.includes(tool)) return false;
+        if (projectIds.has(tool)) return false;
         return allTools || availableSet.has(tool);
       }),
-    [catalogTools, excludeTools, availableSet, allTools],
+    [catalogTools, excludeTools, availableSet, allTools, projectIds],
   );
   const disabledSet = useMemo(() => new Set(disableTools ?? []), [disableTools]);
   const initial = useMemo(
@@ -92,9 +100,10 @@ export default function ToolPicker({
       defaultSelected.filter((tool) => {
         if (excludeTools?.includes(tool)) return false;
         if (disabledSet.has(tool)) return false;
+        if (projectIds.has(tool)) return false;
         return allTools || availableSet.has(tool);
       }),
-    [defaultSelected, excludeTools, disabledSet, availableSet, allTools],
+    [defaultSelected, excludeTools, disabledSet, availableSet, allTools, projectIds],
   );
   const [picked, setPicked] = useState<Tool[]>(initial);
   const [method, setMethod] = useState<'symlink' | 'copy'>('symlink');

@@ -20,6 +20,7 @@ import {
   metaGet,
   metaSet,
 } from './db.js';
+import { customKindOf } from './tools.js';
 import { SETTING_KEYS } from '../shared/types.js';
 import type {
   Tool,
@@ -236,8 +237,14 @@ export async function applySkillUpdate(tool: Tool, name: string): Promise<Instal
   const parsed = parseUpdateSource(row.source);
   if (!parsed) throw new Error('该 skill 无可用的远端更新源（仅 GitHub / 市场源可更新）');
 
-  // 同名 skill 装在多个工具 → 一并更新（与卡片按 name 分组的语义一致）
-  const targets = Array.from(new Set(all.filter((s) => s.name === name).map((s) => s.tool)));
+  // 同名 skill 装在多个工具 → 一并更新（与卡片按 name 分组的语义一致）。
+  // 排除「项目」类型：其 installRoot=projectRoot，重装会落到项目根而非 .<agent>/skills 错位；
+  // 且项目 skill 多无 source、本就不可更新。
+  const targets = Array.from(
+    new Set(
+      all.filter((s) => s.name === name && customKindOf(s.tool) !== 'project').map((s) => s.tool),
+    ),
+  );
 
   let results: InstallResult[];
   if (parsed.kind === 'github') {

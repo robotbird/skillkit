@@ -163,6 +163,9 @@ export default function SkillCard({ group, mode, updateStatus, onUninstall, onRe
   const { t } = useI18n();
   const { primary, tools } = group;
   const builtinTools = tools.filter((tool) => group.byTool[tool]?.isBuiltin);
+  // 项目类型 skill 的 tool 是项目 custom id，但应显示其所在内置 agent 的 icon：把 tool 映射成
+  // agent（无 agent 的保留原 tool）。仅用于 ToolStack 图标展示；卸载/复制/分享仍走真实 tool。
+  const displayTools = Array.from(new Set(tools.map((t) => group.byTool[t]?.agent ?? t)));
   const multi = tools.length > 1;
   // 只要有一个非内置工具就允许卸载（弹窗里再按工具勾选，内置会置灰）
   const canUninstall = tools.some((tool) => !group.byTool[tool]?.isBuiltin);
@@ -203,7 +206,7 @@ export default function SkillCard({ group, mode, updateStatus, onUninstall, onRe
           <div className="skill-ico">{emojiFor(group.name)}</div>
           <div className="skill-grid-head-right">
             {updatable && <span className="skill-tag tag-update">{t('skill.updateAvailable')}</span>}
-            <ToolStack tools={tools} builtinTools={builtinTools} />
+            <ToolStack tools={displayTools} builtinTools={builtinTools} />
             <KebabMenu canUninstall={canUninstall} onReveal={reveal} onUninstall={uninstall} onShare={share} onCopyTo={copyTo} onUpdate={update} />
           </div>
         </header>
@@ -232,7 +235,7 @@ export default function SkillCard({ group, mode, updateStatus, onUninstall, onRe
           <div className="skill-name" title={group.name}>
             {group.name}
           </div>
-          <ToolStack tools={tools} builtinTools={builtinTools} size="md" />
+          <ToolStack tools={displayTools} builtinTools={builtinTools} size="md" />
           {updatable && <span className="skill-tag tag-update">{t('skill.updateAvailable')}</span>}
           {multi && <span className="skill-tag tag-multi">{t('skill.toolCount', { count: tools.length })}</span>}
           {builtinTools.length > 0 && <span className="skill-tag tag-builtin">{t('skill.hasBuiltin')}</span>}

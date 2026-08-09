@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
-import { TOOLS, ALL_TOOLS, getToolConfig, listCustomToolIds, isGlobalAgentsOnlyTool } from './tools.js';
+import { TOOLS, ALL_TOOLS, getToolConfig, listCustomToolsMeta, isGlobalAgentsOnlyTool } from './tools.js';
 import type { Tool, ToolDetection } from '../shared/types.js';
 
 /**
@@ -195,6 +195,11 @@ export function detectAllTools(): Promise<ToolDetection[]> {
 export async function localTools(): Promise<Tool[]> {
   const all = await detectAllTools();
   const detected = all.filter((d) => d.installed).map((d) => d.tool);
-  const customs = listCustomToolIds().filter((id) => !detected.includes(id));
+  // 自定义中只把 agent 变体并入安装目标；「项目」类型是只读扫描来源（projectRoot 下多个 agent
+  // 子目录），installRoot 语义不明，不应作为安装目标。MySkills 筛选 chip 仍保留项目。
+  const customs = listCustomToolsMeta()
+    .filter((c) => c.kind !== 'project')
+    .map((c) => c.id)
+    .filter((id) => !detected.includes(id));
   return [...detected, ...customs];
 }

@@ -116,6 +116,13 @@ export interface InstalledSkill {
   mtime: number | null;
   source: string | null;
   installedAt: number | null;
+  /**
+   * 该 skill 实际所在的内置 agent（仅「项目」类型 custom tool 下的 skill 有值）。
+   * 项目 skill 的 `tool` 仍是项目 custom id（保持 DB UNIQUE + 项目隔离），
+   * 而 `agent` 标记它来自项目下哪个 agent 子目录（如 .claude/skills → 'claude'），
+   * 渲染层据此显示对应 agent 的 icon。内置/agent 变体的 skill 恒为 null。
+   */
+  agent?: BuiltinTool | null;
 }
 
 export interface MarketSkill {

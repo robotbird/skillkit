@@ -76,6 +76,7 @@ function migrate(d: Database.Database) {
       mtime INTEGER,
       source TEXT,
       installed_at INTEGER,
+      agent TEXT,
       UNIQUE (tool, name)
     );
 
@@ -158,6 +159,8 @@ function migrate(d: Database.Database) {
   ensureColumn(d, 'custom_tools', 'kind', "TEXT NOT NULL DEFAULT 'agent'");
   ensureColumn(d, 'custom_tools', 'icon', 'TEXT');
   ensureColumn(d, 'custom_tools', 'icon_image', 'TEXT');
+  // installed_skills 增量列：agent（项目类型 skill 实际所在的内置 agent key；老数据 NULL）
+  ensureColumn(d, 'installed_skills', 'agent', 'TEXT');
 }
 
 /** 幂等加列：表已存在但缺某列时 ALTER 补上；列已存在则跳过。 */
@@ -194,14 +197,15 @@ function rowToInstalled(r: any): InstalledSkill {
     mtime: r.mtime ?? null,
     source: r.source ?? null,
     installedAt: r.installed_at ?? null,
+    agent: (r.agent as BuiltinTool | null) ?? null,
   };
 }
 
 export function upsertInstalled(s: InstalledSkill): void {
   getDb()
     .prepare(
-      `INSERT INTO installed_skills (tool, name, description, path, is_builtin, size_bytes, mtime, source, installed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO installed_skills (tool, name, description, path, is_builtin, size_bytes, mtime, source, installed_at, agent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(tool, name) DO UPDATE SET
          description=excluded.description,
          path=excluded.path,
@@ -209,7 +213,8 @@ export function upsertInstalled(s: InstalledSkill): void {
          size_bytes=excluded.size_bytes,
          mtime=excluded.mtime,
          source=COALESCE(excluded.source, installed_skills.source),
-         installed_at=COALESCE(installed_skills.installed_at, excluded.installed_at)`,
+         installed_at=COALESCE(installed_skills.installed_at, excluded.installed_at),
+         agent=excluded.agent`,
     )
     .run(
       s.tool,
@@ -221,6 +226,7 @@ export function upsertInstalled(s: InstalledSkill): void {
       s.mtime,
       s.source,
       s.installedAt,
+      s.agent ?? null,
     );
 }
 

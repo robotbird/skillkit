@@ -1563,6 +1563,34 @@ html, body, #root {
   flex-wrap: wrap;
 }
 
+/* Skill 空间内的两个区块（全局仓库 / 自定义 Agent 与项目）：相邻区块之间加分隔线 */
+.settings-subblock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-subblock + .settings-subblock {
+  padding-top: 14px;
+  margin-top: 2px;
+  border-top: 1px solid var(--line);
+}
+.settings-subblock-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  letter-spacing: 0.01em;
+}
+/* 按钮触发的折叠添加表单：作为独立卡片面板，与上方列表区分 */
+.settings-subform {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-line);
+  border-radius: var(--radius-card);
+}
+
 /* 通用按钮 */
 .btn {
   appearance: none;

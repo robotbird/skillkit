@@ -228,6 +228,28 @@ export function globalAgentsSkillsRoot(): string {
 }
 
 /**
+ * 「项目」类型 skill 源下，各内置 agent 的**项目级** skill 子目录（相对项目根）。
+ * 添加项目时填项目根目录，scanTool 据此扫描 `<projectRoot>/.claude/skills` 等，
+ * 把扫到的 skill 归属项目 custom tool、并标记 agent 用于显示对应 icon。
+ *
+ * 显式策展（而非从 TOOLS 用 path.relative 派生）：用户级目录命名并不总与项目级一致
+ * （如 opencode 用户级 ~/.config/opencode/skills、windsurf ~/.codeium/windsurf/skills、
+ * hermes 的 appData 段等），派生会把无意义路径拼进项目根。这里只列项目级有公认约定的 agent。
+ * 清单可按产品意愿增减；不确定的一律不列。
+ */
+export const PROJECT_AGENT_DIRS: { agent: BuiltinTool; dir: string }[] = [
+  { agent: 'claude', dir: '.claude/skills' },
+  { agent: 'codex', dir: '.codex/skills' },
+  { agent: 'cursor', dir: '.cursor/skills' },
+  { agent: 'gemini', dir: '.gemini/skills' },
+  { agent: 'grok', dir: '.grok/skills' },
+  { agent: 'qoder', dir: '.qoder/skills' },
+  { agent: 'augment', dir: '.augment/skills' },
+  { agent: 'trae', dir: '.trae/skills' },
+  { agent: 'windsurf', dir: '.windsurf/skills' },
+];
+
+/**
  * 工具的 skill 路径是否「完全等同」全局仓 ~/.agents/skills（无独立用户目录）。
  * 这类工具不在 chip / 安装选择器里单独出现，统一走全局仓库。
  * 自定义 agent 恒为 false（其根目录是用户指定的独立目录）。
@@ -307,6 +329,18 @@ export function listCustomToolsMeta(): CustomTool[] {
 export function listCustomToolIds(): string[] {
   ensureCustomLoaded();
   return customCache.map((c) => c.id);
+}
+
+/** 取某自定义 skill 源的分类（agent / project）；非自定义 id 返回 null。供 scanTool 判 project 分支。 */
+export function customKindOf(tool: Tool): CustomToolKind | null {
+  ensureCustomLoaded();
+  return customCache.find((c) => c.id === tool)?.kind ?? null;
+}
+
+/** 取某自定义 skill 源的根目录绝对路径（项目类型即项目根）；非自定义 id 返回 null。 */
+export function customSkillsRootOf(tool: Tool): string | null {
+  ensureCustomLoaded();
+  return customCache.find((c) => c.id === tool)?.skillsRoot ?? null;
 }
 
 /** label → slug（小写、非字母数字归一为 -）；空则兜底 'agent'。 */
