@@ -13,6 +13,19 @@ const home = os.homedir();
 /** 拼出某工具在用户主目录下的路径(路径分隔由 path.join 跨平台归一化)。 */
 const skillRoot = (...seg: string[]) => path.join(home, ...seg);
 
+/**
+ * 跨平台「应用数据目录」(对齐 Electron app.getPath('appData'))，
+ * 用于定位他应用(如 hermes 中文版)的数据根：
+ * - macOS: ~/Library/Application Support
+ * - Windows: %APPDATA%(回退 ~/AppData/Roaming)
+ * - Linux: $XDG_CONFIG_HOME(回退 ~/.config)
+ */
+const appDataDir = (): string => {
+  if (process.platform === 'win32') return process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+  if (process.platform === 'darwin') return path.join(home, 'Library', 'Application Support');
+  return process.env.XDG_CONFIG_HOME || path.join(home, '.config');
+};
+
 export interface ToolConfig {
   label: string;
   // 扫描的所有 root（一个工具可能有多个，比如 cursor 的 skills 和 skills-cursor）
@@ -162,9 +175,18 @@ export const TOOLS: Record<BuiltinTool, ToolConfig> = {
   },
   hermes: {
     label: 'Hermes',
-    roots: [skillRoot('.hermes', 'skills')],
+    // roots 兼容两种布局：
+    // - ~/.hermes/skills：英文版/标准用户级目录（一级 skill）；
+    // - hermes 中文版（桌面 bundle id cn.org.hermesagent.desktop）把 skill 放在
+    //   <appData>/cn.org.hermesagent.desktop/runtime/hermes-home/skills，且为 <分类>/<skill>/ 两级布局
+    //   （由 scanTool 的 2 级扫描兜底解析）。
+    roots: [
+      skillRoot('.hermes', 'skills'),
+      path.join(appDataDir(), 'cn.org.hermesagent.desktop', 'runtime', 'hermes-home', 'skills'),
+    ],
+    // installRoot 保持中立的用户级目录：不写入 hermes 运行期托管目录（避免被其更新覆盖）。
     installRoot: skillRoot('.hermes', 'skills'),
-    detectRoots: [skillRoot('.hermes')],
+    detectRoots: [skillRoot('.hermes'), path.join(appDataDir(), 'cn.org.hermesagent.desktop')],
     cliBinaries: ['hermes'],
   },
   openclaw: {

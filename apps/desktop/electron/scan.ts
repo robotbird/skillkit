@@ -10,52 +10,57 @@ export function scanTool(tool: Tool): InstalledSkill[] {
   const cfg = getToolConfig(tool);
   if (!cfg) return [];
   const out: InstalledSkill[] = [];
-  for (const root of cfg.roots) {
-    if (!fs.existsSync(root)) continue;
+
+  // 最多扫描 2 级：兼容 hermes 中文版 skills/<分类>/<skill>/SKILL.md 这种多级布局——
+  // 同一 root 下混着「一级 skill」(root/<skill>/SKILL.md) 与「分组目录 + 二级 skill」
+  // (root/<分类>/<skill>/SKILL.md，分类目录只有 DESCRIPTION.md)。
+  // 规则：某级目录自身有 SKILL.md/AGENTS.md 就视作 skill（不再下沉）；否则下沉一层继续找。
+  // 普通一级布局的工具行为不变——一级命中后不会递归，二级分支只在一级无 SKILL.md 时触发。
+  const MAX_DEPTH = 2;
+  const scan = (dir: string, depth: number, topRoot: string): void => {
     let entries: fs.Dirent[];
     try {
-      entries = fs.readdirSync(root, { withFileTypes: true });
+      entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch {
-      continue;
+      return;
     }
     for (const e of entries) {
       if (!e.isDirectory() && !e.isSymbolicLink()) continue;
       if (e.name.startsWith('.')) continue;
-      const skillDir = path.join(root, e.name);
-
-      let realDir = skillDir;
+      const sub = path.join(dir, e.name);
+      let st: fs.Stats;
       try {
-        const st = fs.statSync(skillDir); // 跟随软链
-        if (!st.isDirectory()) continue;
+        st = fs.statSync(sub); // 跟随软链；悬空软链抛错 → 跳过
       } catch {
         continue;
       }
+      if (!st.isDirectory()) continue;
 
-      const md = readSkillMd(realDir);
-      if (!md) continue;
-      const name = md.name?.trim() || e.name;
-      const description = md.description?.trim() || null;
-
-      const isBuiltin = !!cfg.builtinRoot && root === cfg.builtinRoot;
-      let mtime: number | null = null;
-      try {
-        mtime = fs.statSync(realDir).mtimeMs;
-      } catch {
-        /* ignore */
+      const md = readSkillMd(sub);
+      if (md) {
+        const name = md.name?.trim() || e.name;
+        const isBuiltin = !!cfg.builtinRoot && topRoot === cfg.builtinRoot;
+        out.push({
+          tool,
+          name,
+          description: md.description?.trim() || null,
+          path: sub,
+          isBuiltin,
+          sizeBytes: dirSize(sub),
+          mtime: st.mtimeMs,
+          source: isBuiltin ? 'builtin' : null,
+          installedAt: null,
+        });
+      } else if (depth < MAX_DEPTH) {
+        // 当前目录无 SKILL.md → 当作分组目录，下沉一层（不超过 2 级）
+        scan(sub, depth + 1, topRoot);
       }
-
-      out.push({
-        tool,
-        name,
-        description,
-        path: realDir,
-        isBuiltin,
-        sizeBytes: dirSize(realDir),
-        mtime,
-        source: isBuiltin ? 'builtin' : null,
-        installedAt: null,
-      });
     }
+  };
+
+  for (const root of cfg.roots) {
+    if (!fs.existsSync(root)) continue;
+    scan(root, 1, root);
   }
   return out;
 }
