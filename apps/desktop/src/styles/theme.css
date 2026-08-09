@@ -1418,9 +1418,9 @@ html, body, #root {
 /* 设置弹窗：左导航 + 右内容（覆盖默认 .modal 的窄宽） */
 .modal.settings-dialog {
   position: relative;
-  width: 640px;
+  width: 760px;
   max-width: 92vw;
-  min-height: 420px;
+  min-height: 560px;
   max-height: 84vh;
   display: flex;
   padding: 0;
@@ -1491,6 +1491,51 @@ html, body, #root {
   padding: 24px 26px;
   overflow-y: auto;
 }
+
+/* 名称前的图标头像：默认显示首字，点选后显示品牌 logo；点击弹出 .icon-popover 选 logo */
+.icon-avatar {
+  -webkit-app-region: no-drag;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.icon-avatar:hover {
+  background: var(--pill-bg-hover);
+  border-color: var(--ink-mute);
+}
+.icon-avatar:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 图标选择浮层：portal 到 body、固定定位，避开设置弹窗的 overflow 裁剪；z-index 高于 .modal-mask(100) */
+.icon-popover {
+  z-index: 200;
+  width: 300px;
+  padding: 12px;
+  background: linear-gradient(180deg, #2a2018 0%, #1f1611 100%);
+  border: 1px solid rgba(255, 200, 140, 0.16);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+.icon-popover-title {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  margin: 0 4px 8px;
+}
+.icon-popover-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 .settings-section {
   display: flex;
   flex-direction: column;
@@ -1516,6 +1561,34 @@ html, body, #root {
   align-items: center;
   margin-top: 4px;
   flex-wrap: wrap;
+}
+
+/* Skill 空间内的两个区块（全局仓库 / 自定义 Agent 与项目）：相邻区块之间加分隔线 */
+.settings-subblock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-subblock + .settings-subblock {
+  padding-top: 14px;
+  margin-top: 2px;
+  border-top: 1px solid var(--line);
+}
+.settings-subblock-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  letter-spacing: 0.01em;
+}
+/* 按钮触发的折叠添加表单：作为独立卡片面板，与上方列表区分 */
+.settings-subform {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-line);
+  border-radius: var(--radius-card);
 }
 
 /* 通用按钮 */
@@ -1723,6 +1796,14 @@ html, body, #root {
 }
 [data-theme="light"] .modal-mask {
   background: rgba(0, 0, 0, 0.32);
+}
+[data-theme="light"] .icon-avatar {
+  background: rgba(0, 0, 0, 0.03);
+}
+[data-theme="light"] .icon-popover {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
 }
 [data-theme="light"] .settings-rail {
   background: transparent;

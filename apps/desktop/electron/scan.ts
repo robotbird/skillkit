@@ -1,61 +1,97 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { getToolConfig, allToolIds, isCustomTool, isGlobalAgentsOnlyTool } from './tools.js';
+import {
+  getToolConfig,
+  allToolIds,
+  isCustomTool,
+  isGlobalAgentsOnlyTool,
+  customKindOf,
+  customSkillsRootOf,
+  PROJECT_AGENT_DIRS,
+} from './tools.js';
 import { readSkillMd } from './skill-md.js';
 import { upsertInstalled, listInstalled as dbListInstalled, deleteStaleInstalled } from './db.js';
 import { dirSize } from './fs-util.js';
-import type { InstalledSkill, Tool, InstalledFilter } from '../shared/types.js';
+import type { InstalledSkill, Tool, BuiltinTool, InstalledFilter } from '../shared/types.js';
 
 export function scanTool(tool: Tool): InstalledSkill[] {
   const cfg = getToolConfig(tool);
   if (!cfg) return [];
   const out: InstalledSkill[] = [];
-  for (const root of cfg.roots) {
-    if (!fs.existsSync(root)) continue;
+
+  // 最多扫描 2 级：兼容 hermes 中文版 skills/<分类>/<skill>/SKILL.md 这种多级布局——
+  // 同一 root 下混着「一级 skill」(root/<skill>/SKILL.md) 与「分组目录 + 二级 skill」
+  // (root/<分类>/<skill>/SKILL.md，分类目录只有 DESCRIPTION.md)。
+  // 规则：某级目录自身有 SKILL.md/AGENTS.md 就视作 skill（不再下沉）；否则下沉一层继续找。
+  // 普通一级布局的工具行为不变——一级命中后不会递归，二级分支只在一级无 SKILL.md 时触发。
+  const MAX_DEPTH = 2;
+  // curAgent：当前扫描上下文所属的内置 agent。仅「项目」类型扫描项目根下各 agent 子目录时
+  // 带值（如 .claude/skills → 'claude'）；其余分支恒为 null。项目 skill 的 tool 仍是项目
+  // custom id（保持 DB UNIQUE + 项目隔离），agent 仅用于渲染层显示对应 agent 的 icon。
+  const scan = (dir: string, depth: number, topRoot: string, curAgent: BuiltinTool | null): void => {
     let entries: fs.Dirent[];
     try {
-      entries = fs.readdirSync(root, { withFileTypes: true });
+      entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch {
-      continue;
+      return;
     }
     for (const e of entries) {
       if (!e.isDirectory() && !e.isSymbolicLink()) continue;
       if (e.name.startsWith('.')) continue;
-      const skillDir = path.join(root, e.name);
-
-      let realDir = skillDir;
+      const sub = path.join(dir, e.name);
+      let st: fs.Stats;
       try {
-        const st = fs.statSync(skillDir); // 跟随软链
-        if (!st.isDirectory()) continue;
+        st = fs.statSync(sub); // 跟随软链；悬空软链抛错 → 跳过
       } catch {
         continue;
       }
+      if (!st.isDirectory()) continue;
 
-      const md = readSkillMd(realDir);
-      if (!md) continue;
-      const name = md.name?.trim() || e.name;
-      const description = md.description?.trim() || null;
-
-      const isBuiltin = !!cfg.builtinRoot && root === cfg.builtinRoot;
-      let mtime: number | null = null;
-      try {
-        mtime = fs.statSync(realDir).mtimeMs;
-      } catch {
-        /* ignore */
+      const md = readSkillMd(sub);
+      if (md) {
+        const name = md.name?.trim() || e.name;
+        const isBuiltin = !!cfg.builtinRoot && topRoot === cfg.builtinRoot;
+        out.push({
+          tool,
+          name,
+          description: md.description?.trim() || null,
+          path: sub,
+          isBuiltin,
+          sizeBytes: dirSize(sub),
+          mtime: st.mtimeMs,
+          source: isBuiltin ? 'builtin' : null,
+          installedAt: null,
+          agent: curAgent,
+        });
+      } else if (depth < MAX_DEPTH) {
+        // 当前目录无 SKILL.md → 当作分组目录，下沉一层（不超过 2 级）
+        scan(sub, depth + 1, topRoot, curAgent);
       }
-
-      out.push({
-        tool,
-        name,
-        description,
-        path: realDir,
-        isBuiltin,
-        sizeBytes: dirSize(realDir),
-        mtime,
-        source: isBuiltin ? 'builtin' : null,
-        installedAt: null,
-      });
     }
+  };
+
+  // 「项目」类型：扫描项目根下各内置 agent 的标准 skill 子目录，每个子目录命中的 skill
+  // 标记对应 agent。skill 仍归属项目 custom tool，由渲染层据 agent 显示对应 icon。
+  if (customKindOf(tool) === 'project') {
+    const projectRoot = customSkillsRootOf(tool);
+    if (projectRoot && fs.existsSync(projectRoot)) {
+      for (const { agent, dir } of PROJECT_AGENT_DIRS) {
+        const sub = path.join(projectRoot, dir);
+        if (!fs.existsSync(sub)) continue;
+        scan(sub, 1, sub, agent);
+      }
+      // fallback：项目下没有任何标准 agent 子目录（或都为空）——可能是老用户把 skill 目录
+      // 直接填成了 skillsRoot，退回把它当普通 skill 根扫一遍，避免升级后列表「凭空消失」。
+      if (out.length === 0) {
+        scan(projectRoot, 1, projectRoot, null);
+      }
+    }
+    return out;
+  }
+
+  for (const root of cfg.roots) {
+    if (!fs.existsSync(root)) continue;
+    scan(root, 1, root, null);
   }
   return out;
 }

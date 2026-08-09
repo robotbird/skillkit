@@ -13,6 +13,19 @@ const home = os.homedir();
 /** 拼出某工具在用户主目录下的路径(路径分隔由 path.join 跨平台归一化)。 */
 const skillRoot = (...seg: string[]) => path.join(home, ...seg);
 
+/**
+ * 跨平台「应用数据目录」(对齐 Electron app.getPath('appData'))，
+ * 用于定位他应用(如 hermes 中文版)的数据根：
+ * - macOS: ~/Library/Application Support
+ * - Windows: %APPDATA%(回退 ~/AppData/Roaming)
+ * - Linux: $XDG_CONFIG_HOME(回退 ~/.config)
+ */
+const appDataDir = (): string => {
+  if (process.platform === 'win32') return process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+  if (process.platform === 'darwin') return path.join(home, 'Library', 'Application Support');
+  return process.env.XDG_CONFIG_HOME || path.join(home, '.config');
+};
+
 export interface ToolConfig {
   label: string;
   // 扫描的所有 root（一个工具可能有多个，比如 cursor 的 skills 和 skills-cursor）
@@ -162,9 +175,18 @@ export const TOOLS: Record<BuiltinTool, ToolConfig> = {
   },
   hermes: {
     label: 'Hermes',
-    roots: [skillRoot('.hermes', 'skills')],
+    // roots 兼容两种布局：
+    // - ~/.hermes/skills：英文版/标准用户级目录（一级 skill）；
+    // - hermes 中文版（桌面 bundle id cn.org.hermesagent.desktop）把 skill 放在
+    //   <appData>/cn.org.hermesagent.desktop/runtime/hermes-home/skills，且为 <分类>/<skill>/ 两级布局
+    //   （由 scanTool 的 2 级扫描兜底解析）。
+    roots: [
+      skillRoot('.hermes', 'skills'),
+      path.join(appDataDir(), 'cn.org.hermesagent.desktop', 'runtime', 'hermes-home', 'skills'),
+    ],
+    // installRoot 保持中立的用户级目录：不写入 hermes 运行期托管目录（避免被其更新覆盖）。
     installRoot: skillRoot('.hermes', 'skills'),
-    detectRoots: [skillRoot('.hermes')],
+    detectRoots: [skillRoot('.hermes'), path.join(appDataDir(), 'cn.org.hermesagent.desktop')],
     cliBinaries: ['hermes'],
   },
   openclaw: {
@@ -204,6 +226,28 @@ export const TOOLS: Record<BuiltinTool, ToolConfig> = {
 export function globalAgentsSkillsRoot(): string {
   return skillRoot('.agents', 'skills');
 }
+
+/**
+ * 「项目」类型 skill 源下，各内置 agent 的**项目级** skill 子目录（相对项目根）。
+ * 添加项目时填项目根目录，scanTool 据此扫描 `<projectRoot>/.claude/skills` 等，
+ * 把扫到的 skill 归属项目 custom tool、并标记 agent 用于显示对应 icon。
+ *
+ * 显式策展（而非从 TOOLS 用 path.relative 派生）：用户级目录命名并不总与项目级一致
+ * （如 opencode 用户级 ~/.config/opencode/skills、windsurf ~/.codeium/windsurf/skills、
+ * hermes 的 appData 段等），派生会把无意义路径拼进项目根。这里只列项目级有公认约定的 agent。
+ * 清单可按产品意愿增减；不确定的一律不列。
+ */
+export const PROJECT_AGENT_DIRS: { agent: BuiltinTool; dir: string }[] = [
+  { agent: 'claude', dir: '.claude/skills' },
+  { agent: 'codex', dir: '.codex/skills' },
+  { agent: 'cursor', dir: '.cursor/skills' },
+  { agent: 'gemini', dir: '.gemini/skills' },
+  { agent: 'grok', dir: '.grok/skills' },
+  { agent: 'qoder', dir: '.qoder/skills' },
+  { agent: 'augment', dir: '.augment/skills' },
+  { agent: 'trae', dir: '.trae/skills' },
+  { agent: 'windsurf', dir: '.windsurf/skills' },
+];
 
 /**
  * 工具的 skill 路径是否「完全等同」全局仓 ~/.agents/skills（无独立用户目录）。
@@ -287,6 +331,18 @@ export function listCustomToolIds(): string[] {
   return customCache.map((c) => c.id);
 }
 
+/** 取某自定义 skill 源的分类（agent / project）；非自定义 id 返回 null。供 scanTool 判 project 分支。 */
+export function customKindOf(tool: Tool): CustomToolKind | null {
+  ensureCustomLoaded();
+  return customCache.find((c) => c.id === tool)?.kind ?? null;
+}
+
+/** 取某自定义 skill 源的根目录绝对路径（项目类型即项目根）；非自定义 id 返回 null。 */
+export function customSkillsRootOf(tool: Tool): string | null {
+  ensureCustomLoaded();
+  return customCache.find((c) => c.id === tool)?.skillsRoot ?? null;
+}
+
 /** label → slug（小写、非字母数字归一为 -）；空则兜底 'agent'。 */
 function slugify(label: string): string {
   const s = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -296,12 +352,13 @@ function slugify(label: string): string {
 /**
  * 新增自定义 skill 源：生成去重 id（custom:<slug>[-n]）、解析绝对路径、落库并刷新缓存。
  * 目录无需预先存在（安装时 installRoot 会 mkdir -p）；此处仅校验非空。
- * opts.kind 区分 agent 变体 / 项目（仅 UI 分组与默认图标推荐用）；opts.icon 为品牌图标 key，空则首字母兜底。
+ * opts.kind 区分 agent 变体 / 项目（仅 UI 分组与默认图标推荐用）；
+ * opts.icon 为品牌图标 key，空则首字母兜底；opts.iconImage 为上传图片 data URI，设置后优先于 icon。
  */
 export function addCustomTool(
   label: string,
   skillsRoot: string,
-  opts?: { kind?: CustomToolKind; icon?: BuiltinTool | null },
+  opts?: { kind?: CustomToolKind; icon?: BuiltinTool | null; iconImage?: string | null },
 ): CustomTool {
   const trimmedLabel = label.trim();
   if (!trimmedLabel) throw new Error('名称不能为空');
@@ -319,6 +376,7 @@ export function addCustomTool(
     createdAt: Date.now(),
     kind: opts?.kind === 'project' ? 'project' : 'agent',
     icon: opts?.icon ?? null,
+    iconImage: opts?.iconImage ?? null,
   };
   insertCustomTool(tool);
   reloadCustomTools();
@@ -326,12 +384,12 @@ export function addCustomTool(
 }
 
 /**
- * 修改自定义 skill 源的展示元数据（名称 / 图标）。仅更新传入字段；改完刷新内存缓存。
- * 渲染层「点击换图」走这里。
+ * 修改自定义 skill 源的展示元数据（名称 / 图标 / 上传图片）。仅更新传入字段；改完刷新内存缓存。
+ * 渲染层「点击换图 / 上传图片」走这里。
  */
 export function updateCustomToolMeta(
   id: string,
-  patch: { label?: string; icon?: BuiltinTool | null },
+  patch: { label?: string; icon?: BuiltinTool | null; iconImage?: string | null },
 ): void {
   if (!id.startsWith(CUSTOM_TOOL_PREFIX)) throw new Error('只能修改自定义 skill 源');
   dbUpdateCustomToolMeta(id, patch);

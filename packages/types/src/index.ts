@@ -99,6 +99,8 @@ export interface CustomTool {
   kind: CustomToolKind;
   /** 选用的品牌图标（内置 BuiltinTool key）；null = 首字母生成图兜底。 */
   icon: BuiltinTool | null;
+  /** 用户上传的自定义图标（PNG data URI，渲染层 canvas 缩放到 128px 方形）；设置后优先于 icon/首字母。null = 未上传。 */
+  iconImage: string | null;
 }
 
 /** 自定义 skill 源的分类：agent 变体 vs 项目。 */
@@ -114,6 +116,13 @@ export interface InstalledSkill {
   mtime: number | null;
   source: string | null;
   installedAt: number | null;
+  /**
+   * 该 skill 实际所在的内置 agent（仅「项目」类型 custom tool 下的 skill 有值）。
+   * 项目 skill 的 `tool` 仍是项目 custom id（保持 DB UNIQUE + 项目隔离），
+   * 而 `agent` 标记它来自项目下哪个 agent 子目录（如 .claude/skills → 'claude'），
+   * 渲染层据此显示对应 agent 的 icon。内置/agent 变体的 skill 恒为 null。
+   */
+  agent?: BuiltinTool | null;
 }
 
 export interface MarketSkill {

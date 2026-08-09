@@ -941,6 +941,11 @@ export async function installFromZip(
 function findInstalledSkillDir(tool: Tool, name: string): string | null {
   const cfg = getToolConfig(tool);
   if (!cfg) return null;
+  // 优先按 DB 记录的 path 定位（项目类型 skill 的真实路径嵌在 projectRoot/.<agent>/skills 下，
+  // cfg.roots 偏高拼不出；agent 变体/内置也以 DB path 为准更稳）。命中且确为有效 skill 目录即返回。
+  const row = listInstalled({ tool }).find((s) => s.name === name);
+  if (row?.path && readSkillMd(row.path)) return row.path;
+  // 兜底：按 roots 扫描（name 直查 + frontmatter name 匹配），覆盖 DB 未命中的边缘情况。
   for (const root of cfg.roots) {
     if (!fs.existsSync(root)) continue;
     // (1) 把 name 当目录名直查（多数 skill 的 name == 目录名）
@@ -1036,9 +1041,13 @@ export function copyInstalledToTools(
 export function uninstall(tool: Tool, name: string): void {
   const cfg = getToolConfig(tool);
   if (!cfg) return;
-  // 先用 name 直查（多数 skill name == 目录名），再按 frontmatter name 兜底，
-  // 覆盖展示名 ≠ 目录名的情况；不动 builtinRoot。
   const matched = new Set<string>();
+  // 优先按 DB 记录的 path 删除：项目类型 skill 的真实路径嵌在 projectRoot/.<agent>/skills 下，
+  // cfg.roots 偏高拼不出；agent 变体/内置也以 DB path 为准更稳。builtin 一律不动。
+  const row = listInstalled({ tool }).find((s) => s.name === name);
+  if (row?.path && !row.isBuiltin && fs.existsSync(row.path)) matched.add(row.path);
+  // 兜底：再按 roots 扫描（name 直查 + frontmatter name 匹配），覆盖 DB 未命中但文件存在的边缘情况；
+  // 不动 builtinRoot。
   for (const root of cfg.roots) {
     if (cfg.builtinRoot && root === cfg.builtinRoot) continue;
     if (!fs.existsSync(root)) continue;

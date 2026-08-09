@@ -35,7 +35,8 @@ export function skillDetailFromGroup(g: SkillGroup): SkillDetail {
     sizeBytes: g.primary.sizeBytes,
     mtime: g.primary.mtime,
     source: g.primary.source,
-    tools: g.tools,
+    // 项目类型 skill 显示其所在内置 agent 的 icon（仅图标展示，不影响其它逻辑）
+    tools: Array.from(new Set(g.tools.map((t) => g.byTool[t]?.agent ?? t))),
     builtinTools: g.tools.filter((t) => g.byTool[t]?.isBuiltin),
   };
 }

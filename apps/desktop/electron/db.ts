@@ -76,6 +76,7 @@ function migrate(d: Database.Database) {
       mtime INTEGER,
       source TEXT,
       installed_at INTEGER,
+      agent TEXT,
       UNIQUE (tool, name)
     );
 
@@ -153,9 +154,13 @@ function migrate(d: Database.Database) {
   `);
   // install_records 是增量引入的表：早期构建可能缺 error 列，按需补上（已存在则跳过）。
   ensureColumn(d, 'install_records', 'error', 'TEXT');
-  // custom_tools 增量列：kind（agent/project 分类，老数据默认 'agent'）+ icon（品牌图标 key，null=首字母兜底）。
+  // custom_tools 增量列：kind（agent/project 分类，老数据默认 'agent'）+ icon（品牌图标 key，null=首字母兜底）
+  // + icon_image（用户上传的自定义图标 PNG data URI，null=未上传；优先级高于 icon）。
   ensureColumn(d, 'custom_tools', 'kind', "TEXT NOT NULL DEFAULT 'agent'");
   ensureColumn(d, 'custom_tools', 'icon', 'TEXT');
+  ensureColumn(d, 'custom_tools', 'icon_image', 'TEXT');
+  // installed_skills 增量列：agent（项目类型 skill 实际所在的内置 agent key；老数据 NULL）
+  ensureColumn(d, 'installed_skills', 'agent', 'TEXT');
 }
 
 /** 幂等加列：表已存在但缺某列时 ALTER 补上；列已存在则跳过。 */
@@ -192,14 +197,15 @@ function rowToInstalled(r: any): InstalledSkill {
     mtime: r.mtime ?? null,
     source: r.source ?? null,
     installedAt: r.installed_at ?? null,
+    agent: (r.agent as BuiltinTool | null) ?? null,
   };
 }
 
 export function upsertInstalled(s: InstalledSkill): void {
   getDb()
     .prepare(
-      `INSERT INTO installed_skills (tool, name, description, path, is_builtin, size_bytes, mtime, source, installed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO installed_skills (tool, name, description, path, is_builtin, size_bytes, mtime, source, installed_at, agent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(tool, name) DO UPDATE SET
          description=excluded.description,
          path=excluded.path,
@@ -207,7 +213,8 @@ export function upsertInstalled(s: InstalledSkill): void {
          size_bytes=excluded.size_bytes,
          mtime=excluded.mtime,
          source=COALESCE(excluded.source, installed_skills.source),
-         installed_at=COALESCE(installed_skills.installed_at, excluded.installed_at)`,
+         installed_at=COALESCE(installed_skills.installed_at, excluded.installed_at),
+         agent=excluded.agent`,
     )
     .run(
       s.tool,
@@ -219,6 +226,7 @@ export function upsertInstalled(s: InstalledSkill): void {
       s.mtime,
       s.source,
       s.installedAt,
+      s.agent ?? null,
     );
 }
 
@@ -550,6 +558,7 @@ function rowToCustom(r: any): CustomTool {
     createdAt: r.created_at,
     kind: r.kind === 'project' ? 'project' : 'agent',
     icon: (r.icon as BuiltinTool) ?? null,
+    iconImage: (r.icon_image as string) ?? null,
   };
 }
 
@@ -570,23 +579,24 @@ export function customToolIds(): Set<string> {
 export function insertCustomTool(c: CustomTool): void {
   getDb()
     .prepare(
-      `INSERT INTO custom_tools (id, label, skills_root, created_at, kind, icon) VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO custom_tools (id, label, skills_root, created_at, kind, icon, icon_image) VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          label=excluded.label,
          skills_root=excluded.skills_root,
          kind=excluded.kind,
-         icon=excluded.icon`,
+         icon=excluded.icon,
+         icon_image=excluded.icon_image`,
     )
-    .run(c.id, c.label, c.skillsRoot, c.createdAt, c.kind, c.icon);
+    .run(c.id, c.label, c.skillsRoot, c.createdAt, c.kind, c.icon, c.iconImage);
 }
 
 /**
- * 修改自定义 skill 源的展示元数据（名称 / 图标）。仅更新传入的字段；
+ * 修改自定义 skill 源的展示元数据（名称 / 图标 / 上传图片）。仅更新传入的字段；
  * 不传的字段保持原值。改完由 tools.ts 触发 reloadCustomTools() 刷新内存缓存。
  */
 export function updateCustomToolMeta(
   id: string,
-  patch: { label?: string; icon?: BuiltinTool | null },
+  patch: { label?: string; icon?: BuiltinTool | null; iconImage?: string | null },
 ): void {
   const sets: string[] = [];
   const params: any[] = [];
@@ -597,6 +607,10 @@ export function updateCustomToolMeta(
   if (patch.icon !== undefined) {
     sets.push('icon = ?');
     params.push(patch.icon);
+  }
+  if (patch.iconImage !== undefined) {
+    sets.push('icon_image = ?');
+    params.push(patch.iconImage);
   }
   if (sets.length === 0) return;
   params.push(id);

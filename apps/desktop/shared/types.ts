@@ -131,15 +131,17 @@ export interface SkillDoc {
 }
 
 // ===== 自定义 skill 源（agent 变体 / 项目）的新增/编辑参数 =====
-/** 新增时的可选项：分类 + 图标。 */
+/** 新增时的可选项：分类 + 图标（品牌 key 或上传图片 data URI）。 */
 export interface CustomToolAddOpts {
   kind?: CustomToolKind;
   icon?: BuiltinTool | null;
+  iconImage?: string | null;
 }
 /** 编辑已有条目时可改的字段（名称 / 图标）。 */
 export interface CustomToolPatch {
   label?: string;
   icon?: BuiltinTool | null;
+  iconImage?: string | null;
 }
 
 // ===== 自动更新(desktop 专用) =====
