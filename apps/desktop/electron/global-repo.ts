@@ -19,6 +19,40 @@ export function globalRepoRoot(): string {
   return path.join(os.homedir(), '.agents', 'skills');
 }
 
+/**
+ * 按规范副本目录定位某个全局 skill。
+ * 优先用目录名直查（`path.join(root, name)`，名称即路径，快路径）；
+ * 命中不到时回退扫描 root，按 SKILL.md frontmatter 的 `name` 字段匹配——
+ * 外部来源（如 `npx skills`）创建的 skill，其目录名与 frontmatter name 常不一致
+ * （frontmatter name 含空格/大小写/后缀，目录名被 sanitize），直查会落空，
+ * 需以 frontmatter name 反查真实目录。找不到返回 null。
+ */
+function resolveCanonicalByName(name: string): string | null {
+  const root = globalRepoRoot();
+  const direct = path.join(root, name);
+  if (safeExists(direct) && readSkillMd(direct)) return direct;
+
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const e of entries) {
+    if (!e.isDirectory() && !e.isSymbolicLink()) continue;
+    if (e.name.startsWith('.')) continue;
+    const p = path.join(root, e.name);
+    try {
+      if (!fs.statSync(p).isDirectory()) continue;
+    } catch {
+      continue;
+    }
+    const md = readSkillMd(p);
+    if (md?.name?.trim() === name) return p;
+  }
+  return null;
+}
+
 interface CanonicalWrite {
   ok: boolean;
   name?: string;
@@ -148,7 +182,7 @@ export function scanGlobalRepo(): GlobalRepoSkill[] {
  */
 export function removeFromGlobalRepo(name: string): GlobalRepoRemoveResult {
   const root = globalRepoRoot();
-  const canon = path.join(root, name);
+  const canon = resolveCanonicalByName(name) ?? path.join(root, name);
   if (safeExists(canon)) rmDir(canon);
 
   const removedLinks: Tool[] = [];
@@ -184,8 +218,8 @@ export function installGlobalToTools(
   targets: Tool[],
   method: 'symlink' | 'copy',
 ): InstallResult[] {
-  const canon = path.join(globalRepoRoot(), name);
-  if (!safeExists(canon) || !readSkillMd(canon)) {
+  const canon = resolveCanonicalByName(name);
+  if (!canon) {
     return targets.map((t) => ({ tool: t, ok: false, error: `全局仓库未找到 ${name}` }));
   }
   return targets.map((t) => linkOrCopyFromCanonical(canon, t, method, name));
