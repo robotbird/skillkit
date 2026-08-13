@@ -3,25 +3,109 @@ import fs from 'node:fs';
 import path from 'node:path';
 import https from 'node:https';
 import type { ClientRequest } from 'node:http';
-import { autoUpdater } from 'electron-updater';
+import { autoUpdater, type ProgressInfo } from 'electron-updater';
 import type { UpdateAvailableInfo, DownloadProgress } from '../shared/types.js';
 
 const OWNER = 'robotbird';
 const REPO = 'skillkit';
 const UA = 'skillkit-updater';
 
-// ===== 预留:electron-updater 全自动更新接口(签名后启用) =====
-// 当前 App 未签名,macOS 上 electron-updater 的下载/安装会卡在签名校验,
-// 故活跃路径走下方的「下载安装包并打开」。等配上 Apple 代码签名后,
-// 把 ipc.ts 里 update:apply 的实现从 downloadAndOpenInstaller 切到 performAutoUpdate()
-// 即可一键自动升级,UI / IPC 契约不用动。
-autoUpdater.autoDownload = false;
-autoUpdater.autoInstallOnAppQuit = false;
+// ===== electron-updater 静默增量更新(已接通,未签名亦可) =====
+// app 进程内下载新版本并退出安装:不经浏览器下载,替换出的新 app 不带 com.apple.quarantine,
+// 老用户升级全程免 xattr(正是「每次重装要 xattr」痛点的解法)。App 未签名也能跑——
+// electron-updater 的下载/替换不强制签名校验(仅 log 警告);任一环节失败则降级到
+// 下方的 downloadAndOpenInstaller(下载 dmg/exe 手动装,会撞 quarantine,但保底可用)。
+// feed(latest-mac.yml/latest.yml)由 CI 上传到 release,见 .github/workflows/build.yml。
+autoUpdater.autoDownload = false; // 手动触发 downloadUpdate,先广播进度再下载
+autoUpdater.autoInstallOnAppQuit = false; // 手动 quitAndInstall,留时间给 UI 显示完成态
 
-/** 预留:签名后调用 —— 下载 + 退出安装。 */
-export async function performAutoUpdate(): Promise<void> {
-  await autoUpdater.downloadUpdate();
-  autoUpdater.quitAndInstall();
+/**
+ * 静默增量更新:autoUpdater 走 feed 发现→下载→退出安装,进度转成 DownloadProgress 广播。
+ * 失败则 reject,由 applyUpdate 决定是否降级到手动安装。返回 'auto' 表示走了静默路径。
+ */
+export async function performAutoUpdate(): Promise<string> {
+  try {
+    await runAutoUpdater();
+    return 'auto';
+  } catch (e) {
+    // 静默更新失败(feed 缺失/网络/校验异常)→ 降级下载安装包打开,保底可用
+    console.warn('[updater] 静默更新失败,降级为下载安装包打开', e);
+    if (!lastInfo?.downloadUrl) throw e;
+    return downloadAndOpenInstaller(lastInfo.downloadUrl, lastInfo.downloadName);
+  }
+}
+
+/**
+ * 驱动 electron-updater 完成一次「检查→下载→退出安装」;autoDownload/autoInstall 关闭,手动控制每步。
+ * 进度与错误经事件转成 DownloadProgress 广播;任一阶段 error → reject。
+ */
+function runAutoUpdater(): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = (fn: () => void): void => {
+      if (settled) return;
+      settled = true;
+      autoUpdater.off('error', onError);
+      autoUpdater.off('update-downloaded', onDownloaded);
+      autoUpdater.off('download-progress', onProgress);
+      fn();
+    };
+    const onError = (e: unknown): void =>
+      finish(() => reject(e instanceof Error ? e : new Error(String(e))));
+    const onProgress = (p: ProgressInfo): void => {
+      broadcastProgress({
+        attempt: 1,
+        maxAttempts: 1,
+        transferred: p.transferred,
+        total: p.total,
+        percent: p.percent,
+        speedBps: p.bytesPerSecond,
+        phase: 'downloading',
+      });
+    };
+    const onDownloaded = (): void => {
+      // 终态补发 100%,让 UI 落到完成态
+      broadcastProgress({
+        attempt: 1,
+        maxAttempts: 1,
+        transferred: 0,
+        total: null,
+        percent: 100,
+        speedBps: 0,
+        phase: 'downloading',
+      });
+      finish(() => {
+        // 给 UI 一瞬显示「完成」再退出安装重启
+        setTimeout(() => {
+          try {
+            autoUpdater.quitAndInstall();
+          } catch {
+            /* noop */
+          }
+        }, 600);
+        resolve();
+      });
+    };
+
+    autoUpdater.on('error', onError);
+    autoUpdater.on('update-downloaded', onDownloaded);
+    autoUpdater.on('download-progress', onProgress);
+
+    autoUpdater
+      .checkForUpdates()
+      .then((r) => {
+        // autoDownload=false:checkForUpdates 只检查不下载;有更新则手动触发下载
+        if (!r?.updateInfo) {
+          finish(() =>
+            reject(new Error('electron-updater 未发现可更新版本(feed 缺失或已是最新)')),
+          );
+          return;
+        }
+        // 吞掉下载结果(string[]),后续由 update-downloaded/error 事件驱动
+        return autoUpdater.downloadUpdate().then(() => undefined);
+      })
+      .catch(onError);
+  });
 }
 
 interface GithubAsset {
@@ -146,7 +230,7 @@ export async function applyUpdate(): Promise<string> {
   if (isDownloading) throw new Error('正在下载更新,请稍候');
   isDownloading = true;
   try {
-    return await downloadAndOpenInstaller(lastInfo.downloadUrl, lastInfo.downloadName);
+    return await performAutoUpdate();
   } finally {
     isDownloading = false;
   }
