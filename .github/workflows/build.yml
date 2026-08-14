@@ -148,17 +148,22 @@ jobs:
             assets/**/latest.yml
             assets/**/*.blockmap
           body: |
-            Skillkit ${{ steps.ver.outputs.version }}
+            ## ✨ 本次更新
 
-            > ⚠️ macOS 版本当前**未签名**。
-            >
-            > **推荐：一键安装（自动清除 quarantine，免右键打开）：**
-            >
-            > ```bash
-            > curl -fsSL https://raw.githubusercontent.com/robotbird/skillkit/main/apps/desktop/scripts/install-macos.sh | bash
-            > ```
-            >
-            > 或手动：首次打开若提示「已损坏 / 无法验证开发者」，请右键 App →「打开」，或在终端执行 `xattr -dr com.apple.quarantine /Applications/Skillkit.app`。
+            - **应用更新免重装**：版本升级改为静默增量更新，app 内自动下载替换，不再每次手动下载 dmg 重装，也无需再执行 `xattr` 清除隔离标记。
+            - **macOS 一键安装**：新增安装脚本，一行命令完成下载/安装/清除隔离，无需右键「打开」绕过 Gatekeeper。
+
+            ## 📥 安装 / 升级
+
+            **首次安装（macOS，自动清除 quarantine）：**
+
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/robotbird/skillkit/main/apps/desktop/scripts/install-macos.sh | bash
+            ```
+
+            **已安装老版本**：打开 Skillkit 按提示更新即可自动升级（Windows 同理）；也可从下方 Assets 手动下载安装包。
+
+            > ⚠️ macOS 版本当前**未签名**。若手动下载 dmg 安装，首次打开提示「已损坏 / 无法验证开发者」时，右键 App →「打开」，或在终端执行 `xattr -dr com.apple.quarantine /Applications/Skillkit.app`。
           generate_release_notes: true
           make_latest: true
         env:
