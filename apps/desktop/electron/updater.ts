@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import https from 'node:https';
+import { spawn } from 'node:child_process';
 import type { ClientRequest } from 'node:http';
 import { autoUpdater, type ProgressInfo } from 'electron-updater';
 import type { UpdateAvailableInfo, DownloadProgress } from '../shared/types.js';
@@ -10,17 +11,25 @@ const OWNER = 'robotbird';
 const REPO = 'skillkit';
 const UA = 'skillkit-updater';
 
-// ===== electron-updater 静默增量更新(已接通,未签名亦可) =====
-// app 进程内下载新版本并退出安装:不经浏览器下载,替换出的新 app 不带 com.apple.quarantine,
-// 老用户升级全程免 xattr(正是「每次重装要 xattr」痛点的解法)。App 未签名也能跑——
-// electron-updater 的下载/替换不强制签名校验(仅 log 警告);任一环节失败则降级到
-// 下方的 downloadAndOpenInstaller(下载 dmg/exe 手动装,会撞 quarantine,但保底可用)。
+// ===== electron-updater 静默增量更新 =====
+// app 进程内下载新版本再安装:不经浏览器下载,替换出的新 app 不带 com.apple.quarantine,
+// 老用户升级全程免 xattr。下载/校验环节未签名也能跑(仅 log 警告);**安装环节分平台**:
+// - Windows(NSIS):quitAndInstall 静默装,未签名可用;配看门狗,卡住即降级。
+// - macOS:Squirrel.Mac 要求 app 有代码签名,未签名下 quitAndInstall 必失败且是静默失败
+//   (ShipIt 起来校验不过就退出,报错没人接)——所以 mac 绕开 Squirrel 走自替换脚本
+//   (installViaSelfReplace):detached 脚本等本进程退出后 ditto 解包、原子换 .app、重启。
+// 任一环节失败则降级到 downloadAndOpenInstaller(下载 dmg/exe 手动装,会撞 quarantine,但保底可用)。
 // feed(latest-mac.yml/latest.yml)由 CI 上传到 release,见 .github/workflows/build.yml。
+// 差分下载:mac/win 均默认开启 blockmap 差分,但要求缓存里有上一次更新的包
+// (~/Library/Caches/desktop-updater/update.zip);首次从安装包装起的更新必然全量。
 autoUpdater.autoDownload = false; // 手动触发 downloadUpdate,先广播进度再下载
-autoUpdater.autoInstallOnAppQuit = false; // 手动 quitAndInstall,留时间给 UI 显示完成态
+autoUpdater.autoInstallOnAppQuit = false; // 手动控制安装时机,留时间给 UI 显示完成态
+
+/** quitAndInstall 后 app 迟迟不退出 → 视为安装驱动失败,降级手动安装。 */
+const INSTALL_WATCHDOG_MS = 8_000;
 
 /**
- * 静默增量更新:autoUpdater 走 feed 发现→下载→退出安装,进度转成 DownloadProgress 广播。
+ * 静默增量更新:autoUpdater 走 feed 发现→下载→安装,进度转成 DownloadProgress 广播。
  * 失败则 reject,由 applyUpdate 决定是否降级到手动安装。返回 'auto' 表示走了静默路径。
  */
 export async function performAutoUpdate(): Promise<string> {
@@ -28,7 +37,7 @@ export async function performAutoUpdate(): Promise<string> {
     await runAutoUpdater();
     return 'auto';
   } catch (e) {
-    // 静默更新失败(feed 缺失/网络/校验异常)→ 降级下载安装包打开,保底可用
+    // 静默更新失败(feed 缺失/网络/校验/安装超时)→ 降级下载安装包打开,保底可用
     console.warn('[updater] 静默更新失败,降级为下载安装包打开', e);
     if (!lastInfo?.downloadUrl) throw e;
     return downloadAndOpenInstaller(lastInfo.downloadUrl, lastInfo.downloadName);
@@ -36,18 +45,23 @@ export async function performAutoUpdate(): Promise<string> {
 }
 
 /**
- * 驱动 electron-updater 完成一次「检查→下载→退出安装」;autoDownload/autoInstall 关闭,手动控制每步。
- * 进度与错误经事件转成 DownloadProgress 广播;任一阶段 error → reject。
+ * 驱动 electron-updater 完成一次「检查→下载→安装」;autoDownload/autoInstall 关闭,手动控制每步。
+ * 进度与错误经事件转成 DownloadProgress 广播;任一阶段 error → reject(含安装阶段:
+ * error 监听保持挂载到 Promise 落定,不再提前摘除——否则 quitAndInstall 的失败会被静默吞掉,
+ * UI 停在 100% 装死)。mac 走自替换,win 走 quitAndInstall + 看门狗。
  */
 function runAutoUpdater(): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     let settled = false;
+    let downloadedZip: string | null = null; // downloadUpdate() 落盘路径(mac 自替换要用)
+    let watchdog: NodeJS.Timeout | null = null;
     const finish = (fn: () => void): void => {
       if (settled) return;
       settled = true;
       autoUpdater.off('error', onError);
       autoUpdater.off('update-downloaded', onDownloaded);
       autoUpdater.off('download-progress', onProgress);
+      if (watchdog) clearTimeout(watchdog);
       fn();
     };
     const onError = (e: unknown): void =>
@@ -74,17 +88,27 @@ function runAutoUpdater(): Promise<void> {
         speedBps: 0,
         phase: 'downloading',
       });
-      finish(() => {
-        // 给 UI 一瞬显示「完成」再退出安装重启
-        setTimeout(() => {
-          try {
+      // 给 UI 一瞬显示「完成」再进入安装
+      setTimeout(() => {
+        try {
+          if (process.platform === 'darwin') {
+            // mac 未签名:Squirrel 装不了,自替换脚本接管;脚本拉起失败 → reject 降级
+            if (!downloadedZip) throw new Error('未拿到更新包落盘路径');
+            installViaSelfReplace(downloadedZip);
+            finish(() => resolve());
+            app.quit(); // 脚本在等本进程退出,退出后换包并重启
+          } else {
+            // Windows:quitAndInstall 静默装。error 监听仍挂载,安装报错 → reject 降级;
+            // 再加看门狗:8s 内 app 没退出说明安装根本没驱动起来(史上就是这种静默失败),同样降级。
+            watchdog = setTimeout(() => {
+              finish(() => reject(new Error(`退出安装未在 ${INSTALL_WATCHDOG_MS / 1000}s 内启动`)));
+            }, INSTALL_WATCHDOG_MS);
             autoUpdater.quitAndInstall();
-          } catch {
-            /* noop */
           }
-        }, 600);
-        resolve();
-      });
+        } catch (e) {
+          finish(() => reject(e instanceof Error ? e : new Error(String(e))));
+        }
+      }, 600);
     };
 
     autoUpdater.on('error', onError);
@@ -101,11 +125,82 @@ function runAutoUpdater(): Promise<void> {
           );
           return;
         }
-        // 吞掉下载结果(string[]),后续由 update-downloaded/error 事件驱动
-        return autoUpdater.downloadUpdate().then(() => undefined);
+        // 记下落盘路径(mac 自替换要用),后续由 update-downloaded/error 事件驱动
+        return autoUpdater.downloadUpdate().then((files: string[]) => {
+          downloadedZip = files?.[0] ?? null;
+        });
       })
       .catch(onError);
   });
+}
+
+/**
+ * mac 未签名自替换安装:拉起一个 detached shell 脚本后立刻返回(配合随后的 app.quit())。
+ * 脚本等本进程退干净 → ditto 解包下载好的 zip → 原子换掉当前 .app(先挪旧包再就位,失败回滚)
+ * → 清 quarantine → open 重启。日志落在 <userData>/self-update.log 便于排查。
+ * 目录不可写 / 脚本写不上 / 进程拉不起 → 抛错,由上层降级为下载 dmg 手动装。
+ */
+function installViaSelfReplace(zipPath: string): void {
+  // exe = .../Skillkit.app/Contents/MacOS/Skillkit → 向上三级即 .app 包
+  const exe = app.getPath('exe');
+  const bundle = path.dirname(path.dirname(path.dirname(exe)));
+  if (!bundle.endsWith('.app')) {
+    throw new Error(`无法定位 app 包路径(${bundle})`);
+  }
+  const installDir = path.dirname(bundle);
+  // 换包 = 对所在目录做 rename,必须可写(正常 dmg 拖装的 app 在 ~/Applications 或 /Applications
+  // 且属主是当前用户;只读位置如 /Volumes 挂载盘会在这里抛错降级)
+  fs.accessSync(installDir, fs.constants.W_OK);
+
+  const userData = app.getPath('userData');
+  const scriptPath = path.join(userData, 'self-update.sh');
+  const script = [
+    '#!/bin/bash',
+    '# Skillkit 自更新替换脚本(detached 运行,不依赖父进程存活)',
+    '# 用法: self-update.sh <app_pid> <zip> <dest_bundle> <log>',
+    'PID="$1"; ZIP="$2"; DEST="$3"; LOG="$4"',
+    'exec >>"$LOG" 2>&1',
+    `echo "=== self-update $(date '+%F %T') pid=$PID dest=$DEST ==="`,
+    '',
+    '# 1) 等老 app 退出(最多 30s;还活着就放弃,避免半死状态换包)',
+    'for _ in $(seq 1 150); do',
+    '  kill -0 "$PID" 2>/dev/null || break',
+    '  sleep 0.2',
+    'done',
+    'if kill -0 "$PID" 2>/dev/null; then',
+    '  echo "abort: app(pid=$PID) 30s 内未退出"',
+    '  exit 1',
+    'fi',
+    '',
+    '# 2) 解包(ditto 保留 symlink/权限,unzip 会破坏 Frameworks 里的链接)',
+    'TMP="$(mktemp -d "${TMPDIR:-/tmp}/skillkit-update.XXXXXX")"',
+    'ditto -x -k "$ZIP" "$TMP" || { echo "abort: ditto 解包失败"; rm -rf "$TMP"; exit 1; }',
+    'NEW="$(ls -d "$TMP"/*.app 2>/dev/null | head -n 1)"',
+    '[ -n "$NEW" ] || { echo "abort: zip 内未找到 .app"; rm -rf "$TMP"; exit 1; }',
+    '',
+    '# 3) 原子换包:旧包挪走 → 新包就位;新包就位失败则回滚旧包',
+    'OLD="$DEST.old.$$"',
+    'mv "$DEST" "$OLD" || { echo "abort: 无法挪走旧包(目录权限?)"; rm -rf "$TMP"; exit 1; }',
+    'if ! mv "$NEW" "$DEST"; then',
+    '  echo "rollback: 新包就位失败,恢复旧包"',
+    '  mv "$OLD" "$DEST"',
+    '  rm -rf "$TMP"',
+    '  exit 1',
+    'fi',
+    '',
+    '# 4) 清 quarantine、清理现场、重启新版本',
+    'xattr -dr com.apple.quarantine "$DEST" 2>/dev/null || true',
+    'rm -rf "$OLD" "$TMP"',
+    'open "$DEST" && echo "done: 已重启 $DEST"',
+  ].join('\n');
+  fs.writeFileSync(scriptPath, script, { mode: 0o755 });
+
+  const child = spawn('/bin/bash', [scriptPath, String(process.pid), zipPath, bundle, path.join(userData, 'self-update.log')], {
+    detached: true,
+    stdio: 'ignore',
+  });
+  child.unref();
+  console.log(`[updater] 自替换脚本已拉起: pid=${child.pid} zip=${zipPath} dest=${bundle}`);
 }
 
 interface GithubAsset {
