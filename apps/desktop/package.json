@@ -105,7 +105,8 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Skillkit-Setup-${version}.${ext}"
     },
     "publish": {
       "provider": "github",
