@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { type Tool, type InstallOpts } from '@shared/types';
+import { GLOBAL_TOOL, type Tool, type InstallOpts } from '@shared/types';
 import { useInstalledTools } from '../lib/useInstalledTools';
 import { useToolCatalog, useCustomTools } from '../lib/toolCatalog';
 import ToolCheckRow from './ToolCheckRow';
@@ -36,6 +36,12 @@ interface Props {
    * 并显示「接入方式（软链/拷贝）」选择。省略则不显示接入方式（卸载/复制/打开目录等场景）。
    */
   lockedScope?: 'global';
+  /**
+   * 配合 lockedScope='global'：列表首位展示「全局仓库」伪目标并默认勾选
+   * （默认仅装到 ~/.agents/skills，另勾工具后再接入）。仅用于「从来源安装」的弹窗；
+   * 「全局仓库 → 安装到工具」（skill 已在全局仓）不传，避免无意义的自指目标。
+   */
+  globalOption?: boolean;
   busy?: boolean;
   confirmLabel?: string;
   busyLabel?: string;
@@ -57,6 +63,7 @@ export default function ToolPicker({
   allTools,
   fixedTargets,
   lockedScope,
+  globalOption,
   busy,
   confirmLabel,
   busyLabel,
@@ -105,7 +112,14 @@ export default function ToolPicker({
       }),
     [defaultSelected, excludeTools, disabledSet, availableSet, allTools, projectIds],
   );
-  const [picked, setPicked] = useState<Tool[]>(initial);
+  // 安装场景（lockedScope='global' + globalOption）：列表首位固定「全局仓库」伪目标并默认勾选——
+  // 默认只装到 ~/.agents/skills，用户另勾具体工具后再接入对应工具目录。
+  const showGlobal = lockedScope === 'global' && globalOption === true;
+  const initialWithGlobal = useMemo(
+    () => (showGlobal ? [GLOBAL_TOOL, ...initial.filter((t) => t !== GLOBAL_TOOL)] : initial),
+    [showGlobal, initial],
+  );
+  const [picked, setPicked] = useState<Tool[]>(initialWithGlobal);
   const [method, setMethod] = useState<'symlink' | 'copy'>('symlink');
 
   // 打开 / 切换源工具时重置已选项与接入方式
@@ -113,7 +127,7 @@ export default function ToolPicker({
   const disableKey = (disableTools ?? []).join(',');
   useEffect(() => {
     if (open) {
-      setPicked(initial);
+      setPicked(initialWithGlobal);
       setMethod('symlink');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,6 +172,7 @@ export default function ToolPicker({
         <div className="modal">
           <h3>{titleText}</h3>
           <p className="modal-sub">{subtitleText}</p>
+          {showGlobal && <p className="modal-sub">{t('toolpicker.globalHint')}</p>}
 
           {showMethod && (
             <div className="opts opts-method">
@@ -188,7 +203,7 @@ export default function ToolPicker({
 
           {!hideTools && (
             <div className="opts opts-tools">
-              {visibleTools.map((tool) => {
+              {(showGlobal ? [GLOBAL_TOOL, ...visibleTools] : visibleTools).map((tool) => {
                 const rowDisabled = disabledSet.has(tool);
                 return (
                   <ToolCheckRow

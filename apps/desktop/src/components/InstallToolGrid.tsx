@@ -1,4 +1,4 @@
-import { type Tool } from '@skillkit/types';
+import { GLOBAL_TOOL, type Tool } from '@shared/types';
 import { useLocalTools } from '../lib/useLocalTools';
 import { useToolCatalog } from '../lib/toolCatalog';
 
@@ -9,15 +9,16 @@ interface Props {
 }
 
 /**
- * 安装页页级工具多选网格：默认只展示本机真身探测命中的工具（含自定义 agent）；
+ * 安装页页级工具多选网格：首位固定「全局仓库」伪目标（默认安装路径 ~/.agents/skills），
+ * 其后默认只展示本机真身探测命中的工具（含自定义 agent）；
  * 一个都没探测到时回退展示全部（避免空白网格）。
  */
 export default function InstallToolGrid({ selected, onChange, disabled = false }: Props) {
   const { tools: local, ready } = useLocalTools();
   const { allTools, label, icon } = useToolCatalog();
   const selectedSet = new Set(selected);
-  // 默认只列本机已检测工具；探测为空时回退全部（含自定义）
-  const visible = ready ? (local.length ? local : allTools) : [];
+  // 全局仓库恒在首位；其余默认列本机已检测工具，探测为空时回退全部（含自定义）
+  const visible = [GLOBAL_TOOL, ...(ready ? (local.length ? local : allTools) : [])];
 
   function toggle(tool: Tool) {
     if (disabled) return;

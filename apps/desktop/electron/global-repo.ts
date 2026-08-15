@@ -4,6 +4,7 @@ import os from 'node:os';
 import { getToolConfig, allToolIds } from './tools.js';
 import { readSkillMd } from './skill-md.js';
 import { copyDir, rmDir, dirSize, safeExists, isWindowsSymlinkError } from './fs-util.js';
+import { GLOBAL_TOOL } from '../shared/types.js';
 import type { Tool, InstallResult, GlobalRepoSkill, GlobalRepoRemoveResult } from '../shared/types.js';
 
 /**
@@ -218,9 +219,11 @@ export function installGlobalToTools(
   targets: Tool[],
   method: 'symlink' | 'copy',
 ): InstallResult[] {
+  // 防御：GLOBAL_TOOL 伪目标在此场景自指（skill 已在全局仓），静默忽略
+  const realTargets = targets.filter((t) => t !== GLOBAL_TOOL);
   const canon = resolveCanonicalByName(name);
   if (!canon) {
-    return targets.map((t) => ({ tool: t, ok: false, error: `全局仓库未找到 ${name}` }));
+    return realTargets.map((t) => ({ tool: t, ok: false, error: `全局仓库未找到 ${name}` }));
   }
-  return targets.map((t) => linkOrCopyFromCanonical(canon, t, method, name));
+  return realTargets.map((t) => linkOrCopyFromCanonical(canon, t, method, name));
 }

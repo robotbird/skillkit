@@ -891,6 +891,8 @@ html, body, #root {
   color: var(--ink-mute);
   margin-bottom: 10px;
 }
+/* 「默认安装到全局目录」提示：借 .install-hint 的字体/颜色，仅收紧与网格的间距 */
+.install-global-hint { margin: -2px 0 10px; }
 .install-tool-grid {
   /* flex + 固定宽度 item：间距只由 gap 决定，与工具数量无关（避免工具少时被撑开） */
   display: flex;

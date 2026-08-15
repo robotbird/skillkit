@@ -19,6 +19,7 @@ import openclawIcon from '../assets/agents/openclaw.svg';
 import clineIcon from '../assets/agents/cline.svg';
 import warpIcon from '../assets/agents/warp.svg';
 import kimiIcon from '../assets/agents/kimi.svg';
+import globalIcon from '../assets/agents/global.svg';
 
 /** 内置工具 → 图标；自定义 agent 的图标由 toolCatalog 用首字母兜底合成。 */
 export const TOOL_ICON: Record<BuiltinTool, string> = {
@@ -43,6 +44,9 @@ export const TOOL_ICON: Record<BuiltinTool, string> = {
   warp: warpIcon,
   kimi: kimiIcon,
 };
+
+/** 「全局仓库 ~/.agents/skills」伪目标的地球图标（不入 ICON_CHOICES，仅供安装目标展示）。 */
+export const GLOBAL_ICON = globalIcon;
 
 /**
  * 图标选择器数据源：复用系统现有 21 个品牌 SVG（按 ALL_TOOLS 顺序）。

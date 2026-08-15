@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import {
+  GLOBAL_TOOL,
   type Tool,
   type InstallResult,
   type InstallOpts,
@@ -89,7 +90,9 @@ export default function InstallView({
   const { t } = useI18n();
   const [mode, setMode] = useState<InstallMode>('link');
   const [linkUrl, setLinkUrl] = useState('');
-  const [selectedTools, setSelectedTools] = useState<Tool[]>([]);
+  // 默认安装目标 = 全局仓库 ~/.agents/skills（伪工具 GLOBAL_TOOL，仅写规范副本不接入工具目录）；
+  // 用户可再勾选具体工具，勾选后规范副本之外还会按软链接入所选工具。
+  const [selectedTools, setSelectedTools] = useState<Tool[]>([GLOBAL_TOOL]);
   // 本机已检测工具：空选安装时弹确认，确认后按「全部已检测工具」安装
   const { tools: localTools } = useLocalTools();
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
@@ -352,6 +355,7 @@ export default function InstallView({
 
       <div className="install-tools-block">
         <div className="install-tools-title">{t('inst.intro')}</div>
+        <div className="install-hint install-global-hint">{t('inst.hint.globalDefault')}</div>
         <InstallToolGrid
           selected={selectedTools}
           onChange={setSelectedTools}

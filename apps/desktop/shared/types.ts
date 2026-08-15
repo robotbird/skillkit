@@ -109,6 +109,14 @@ export interface InstallOpts {
   method?: 'symlink' | 'copy'; // 仅 scope==='global' 有意义；默认 'symlink'
 }
 
+/**
+ * 「全局」伪工具 id：代表全局仓库 ~/.agents/skills 本身，可混入安装 targets。
+ * 只在安装链路（渲染层选择器 → IPC → installer.dispatchInstall）出现：
+ * 不入 ALL_TOOLS / TOOLS 映射，扫描/卸载/复制等按真工具遍历的路径永远见不到它。
+ * 勾了它 = 仅写规范副本到全局仓库，不接入任何工具目录。
+ */
+export const GLOBAL_TOOL = 'global' satisfies Tool as Tool;
+
 /** 全局仓库 ~/.agents/skills/<name> 下的一条记录。文件系统即真相，不写 DB。 */
 export interface GlobalRepoSkill {
   name: string;

@@ -11,6 +11,7 @@ import { upsertInstalled, listInstalled } from './db.js';
 import { copyDir, rmDir, safeExists } from './fs-util.js';
 import { writeToCanonical, linkOrCopyFromCanonical } from './global-repo.js';
 import { githubFetch, githubStreamFetch, pipelineWithStall, GH_NET_TIMEOUT_MS } from './github-net.js';
+import { GLOBAL_TOOL } from '../shared/types.js';
 import type {
   InstallResult,
   InstallOpts,
@@ -304,6 +305,8 @@ function installSourceToTool(
 /**
  * 安装分发：根据 opts.scope 决定走「按工具拷贝」（installSourceToTool，当前行为）
  * 还是「全局规范副本 + 按方式接入各工具」（writeToCanonical 一次 + linkOrCopyFromCanonical）。
+ * targets 里的 GLOBAL_TOOL 伪目标 = 仅写规范副本到 ~/.agents/skills，不接入任何工具目录；
+ * 它出现时强制走全局路径（即使 opts.scope 为 'tools'），避免误报「未知工具」。
  */
 function dispatchInstall(
   srcDir: string,
@@ -311,8 +314,10 @@ function dispatchInstall(
   sourceTag: string,
   opts?: InstallOpts,
 ): InstallResult[] {
-  if (opts?.scope === 'global') {
-    const method = opts.method ?? 'symlink';
+  const wantsGlobal = targets.includes(GLOBAL_TOOL);
+  const realTargets = targets.filter((t) => t !== GLOBAL_TOOL);
+  if (opts?.scope === 'global' || wantsGlobal) {
+    const method = opts?.method ?? 'symlink';
     const canon = writeToCanonical(srcDir, sourceTag);
     if (!canon.ok || !canon.path || !canon.name) {
       return targets.map((t) => ({ tool: t, ok: false, error: canon.error }));
@@ -322,7 +327,12 @@ function dispatchInstall(
     // 后续 scanAll 靠 upsertInstalled 的 COALESCE 保留 source。
     const canonMd = readSkillMd(canon.path);
     const name = canonMd?.name?.trim() || canon.name;
-    return targets.map((t) => {
+    const results: InstallResult[] = [];
+    if (wantsGlobal) {
+      // 「全局」目标：规范副本即安装结果，不写 installed_skills（全局仓库 scan-only 约定）
+      results.push({ tool: GLOBAL_TOOL, ok: true, path: canon.path });
+    }
+    for (const t of realTargets) {
       const r = linkOrCopyFromCanonical(canon.path!, t, method, canon.name!);
       if (r.ok && r.path) {
         upsertInstalled({
@@ -337,10 +347,11 @@ function dispatchInstall(
           installedAt: Date.now(),
         });
       }
-      return r;
-    });
+      results.push(r);
+    }
+    return results;
   }
-  return targets.map((t) => installSourceToTool(srcDir, t, sourceTag));
+  return realTargets.map((t) => installSourceToTool(srcDir, t, sourceTag));
 }
 
 export async function installFromMarket(

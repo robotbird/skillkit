@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ALL_TOOLS,
   CUSTOM_TOOL_PREFIX,
+  GLOBAL_TOOL,
   TOOL_LABELS,
   type Tool,
   type BuiltinTool,
   type CustomTool,
 } from '@shared/types';
-import { TOOL_ICON } from './toolIcons';
+import { TOOL_ICON, GLOBAL_ICON } from './toolIcons';
 
 /**
  * 自定义 agent 运行期目录：把 DB 里的自定义 agent 合并进内置 ALL_TOOLS / TOOL_LABELS / TOOL_ICON，
@@ -127,6 +128,7 @@ export function recommendIcon(label: string): BuiltinTool | null {
 
 /** 工具展示名：自定义 agent 取用户起的 label，否则内置 TOOL_LABELS，再兜底原 id。 */
 export function toolLabel(tool: Tool): string {
+  if (tool === GLOBAL_TOOL) return '全局仓库';
   if (typeof tool === 'string' && tool.startsWith(CUSTOM_TOOL_PREFIX)) {
     return customs.find((c) => c.id === tool)?.label ?? tool;
   }
@@ -135,6 +137,7 @@ export function toolLabel(tool: Tool): string {
 
 /** 工具图标：自定义 agent/项目优先用上传图片，其次品牌图标，最后首字母兜底；内置用 TOOL_ICON。 */
 export function toolIcon(tool: Tool): string {
+  if (tool === GLOBAL_TOOL) return GLOBAL_ICON;
   if (typeof tool === 'string' && tool.startsWith(CUSTOM_TOOL_PREFIX)) {
     const c = customs.find((x) => x.id === tool);
     if (c?.iconImage) return c.iconImage;
