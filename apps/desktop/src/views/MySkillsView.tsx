@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { type InstalledSkill, type Tool, type GlobalRepoSkill, type SkillUpdateState, type SkillUpdateSummary } from '@shared/types';
+import { type InstalledSkill, type Tool, type GlobalRepoSkill, type SkillUpdateState, type SkillUpdateSummary, GLOBAL_TOOL } from '@shared/types';
 import SkillCard from '../components/SkillCard';
 import GlobalRepoCard from '../components/GlobalRepoCard';
 import ShareDialog from '../components/ShareDialog';
@@ -14,6 +14,7 @@ import { useToolbarSlot } from '../components/ToolbarSlot';
 import type { ToastState } from '../components/Toast';
 import { groupBySkill, type SkillGroup } from '../lib/groupSkills';
 import { useInstalledTools } from '../lib/useInstalledTools';
+import { useLocalTools } from '../lib/useLocalTools';
 import { useToolCatalog } from '../lib/toolCatalog';
 import { useI18n } from '../i18n';
 
@@ -49,6 +50,8 @@ export default function MySkillsView({
 
   // 只展示「有 skill 的已装工具」chip；未装或 skill 数为 0 的不出现
   const { tools: installed, refresh: refreshInstalledTools } = useInstalledTools();
+  // 复制/安装目标的候选：真身探测命中的本机工具（与安装页同一口径）
+  const { tools: localTools } = useLocalTools();
 
   // 工具 chip 单行横向滚动
   const chipsRef = useRef<HTMLDivElement>(null);
@@ -284,7 +287,7 @@ export default function MySkillsView({
     }
   }
 
-  // ===== 全局仓库：安装到工具… =====
+  // ===== 全局仓库：复制到其他工具（软链接入，文案与 skill 卡复制弹窗一致）=====
   async function handleInstallGlobalTo(targets: Tool[], method: 'symlink' | 'copy') {
     if (!globalTarget) return;
     setInstallingGlobal(true);
@@ -293,9 +296,9 @@ export default function MySkillsView({
       const ok = results.filter((r) => r.ok).map((r) => label(r.tool));
       const fail = results.filter((r) => !r.ok);
       if (ok.length && !fail.length) {
-        toast.show(t('my.toast.linkedTo', { tools: ok.join(', ') }));
+        toast.show(t('my.toast.copiedTo', { tools: ok.join(', ') }));
       } else if (fail.length) {
-        const okPart = ok.length ? t('my.toast.linkedTo', { tools: ok.join(', ') }) : '';
+        const okPart = ok.length ? t('my.toast.copiedTo', { tools: ok.join(', ') }) : '';
         const failPart = fail
           .map((r) => t('my.toast.failedDetail', { tool: label(r.tool), error: r.error ?? t('my.toast.failFallback') }))
           .join('; ');
@@ -305,7 +308,7 @@ export default function MySkillsView({
       onChanged();
       setGlobalTarget(null);
     } catch (e: any) {
-      toast.show(t('my.toast.linkFail', { error: e?.message ?? e }), 'error');
+      toast.show(t('my.toast.copyFail', { error: e?.message ?? e }), 'error');
     } finally {
       setInstallingGlobal(false);
     }
@@ -342,7 +345,21 @@ export default function MySkillsView({
           void doRemoveGlobal(s);
         }
       }}
-      onInstallTo={setGlobalTarget}
+      onCopyTo={setGlobalTarget}
+      // 分享按 InstalledSkill 形状传给 ShareDialog（tool=global → 走 share:createGlobal 管线）
+      onShare={(s) =>
+        setShareSkill({
+          tool: GLOBAL_TOOL,
+          name: s.name,
+          description: s.description,
+          path: s.path,
+          isBuiltin: false,
+          sizeBytes: s.sizeBytes,
+          mtime: s.mtime,
+          source: null,
+          installedAt: null,
+        })
+      }
       onOpenDetail={(s) => setDetail(skillDetailFromGlobalRepo(s))}
     />
   );
@@ -535,7 +552,7 @@ export default function MySkillsView({
 
       <ToolPicker
         open={!!copyGroup}
-        allTools
+        installTargets
         title={copyGroup ? t('my.picker.copyTitle', { name: copyGroup.name }) : undefined}
         subtitle={
           copyGroup
@@ -544,7 +561,7 @@ export default function MySkillsView({
         }
         defaultSelected={
           copyGroup
-            ? (installed.filter((tool) => !copyGroup.tools.includes(tool)).slice(0, 1) as Tool[])
+            ? (localTools.filter((tool) => !copyGroup.tools.includes(tool)).slice(0, 1) as Tool[])
             : []
         }
         excludeTools={copyGroup ? copyGroup.tools : []}
@@ -577,15 +594,16 @@ export default function MySkillsView({
         }}
       />
 
-      {/* 全局仓库 -> 安装到工具（锁定全局范围，仅选接入方式）*/}
+      {/* 全局仓库 -> 复制到其他工具（与 skill 卡复制弹窗同一套文案；锁定全局范围；默认软链；目标筛选同口径）*/}
       <ToolPicker
         open={!!globalTarget}
         lockedScope="global"
-        title={globalTarget ? t('my.picker.globalTitle', { name: globalTarget.name }) : undefined}
-        subtitle={t('my.picker.globalSubtitle')}
+        installTargets
+        title={globalTarget ? t('my.picker.copyTitle', { name: globalTarget.name }) : undefined}
+        subtitle={t('my.picker.copySubtitle', { tool: t('space.globalRepo') })}
         busy={installingGlobal}
-        confirmLabel={t('my.picker.globalConfirm')}
-        busyLabel={t('my.picker.globalBusy')}
+        confirmLabel={t('my.picker.copyConfirm')}
+        busyLabel={t('my.picker.copyBusy')}
         onCancel={() => !installingGlobal && setGlobalTarget(null)}
         onConfirm={(targets, opts) => {
           void handleInstallGlobalTo(targets, opts.method ?? 'symlink');

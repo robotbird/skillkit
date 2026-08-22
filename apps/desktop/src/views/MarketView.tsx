@@ -189,6 +189,7 @@ export default function MarketView({
         subtitle={picker ? t('market.pickerSubtitle', { slug: picker.slug }) : ''}
         lockedScope="global"
         globalOption
+        installTargets
         busy={installing}
         onCancel={() => !installing && setPicker(null)}
         onConfirm={handleInstall}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { InstalledSkill, ShareCreateResult } from '@shared/types';
+import { GLOBAL_TOOL } from '@shared/types';
 import ModalPortal from './ModalPortal';
 import { GitHubIcon } from './oauth-icons';
 import { useI18n } from '../i18n';
@@ -62,13 +63,21 @@ export default function ShareDialog({ open, skill, onClose }: Props) {
     }
   }
 
+  // 打包上传：全局仓规范副本走 share:global，工具内安装的走常规 share
+  function createZipShare(): Promise<ShareCreateResult> {
+    if (!skill) throw new Error('no skill');
+    return skill.tool === GLOBAL_TOOL
+      ? window.skillkit.shareGlobalRepoSkill(skill.name)
+      : window.skillkit.shareSkill(skill.tool, skill.name);
+  }
+
   // 非 GitHub 分支：打包上传到 skillkit.net
   async function generateUpload() {
     if (!skill) return;
     setBusy(true);
     setError(null);
     try {
-      const r = await window.skillkit.shareSkill(skill.tool, skill.name);
+      const r = await createZipShare();
       setResult(r);
     } catch (e: any) {
       setError(e?.message ?? String(e));
@@ -83,7 +92,7 @@ export default function ShareDialog({ open, skill, onClose }: Props) {
     setSyncBusy(true);
     setSyncError(null);
     try {
-      const r = await window.skillkit.shareSkill(skill.tool, skill.name);
+      const r = await createZipShare();
       setSyncResult(r);
     } catch (e: any) {
       setSyncError(e?.message ?? String(e));

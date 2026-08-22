@@ -309,6 +309,8 @@ export interface SkillkitApi {
   getDroppedFilePath(file: File): string;
 
   shareSkill(tool: Tool, name: string): Promise<ShareCreateResult>;
+  /** 全局仓库（~/.agents/skills）规范副本的分享（sourceTool=global）。 */
+  shareGlobalRepoSkill(name: string): Promise<ShareCreateResult>;
   /** GitHub 来源 skill 的链接型分享：不上传包，生成跳转到 GitHub 仓库的短链。 */
   shareGithubLink(tool: Tool, name: string): Promise<ShareCreateResult>;
   inspectShare(input: string): Promise<ShareSourceInfo>;

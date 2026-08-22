@@ -13,7 +13,7 @@ import {
   listGithubSkills,
   installGithubSkillsAt,
 } from './installer.js';
-import { shareSkill, shareGithubLink, inspectShare, installFromShare } from './share.js';
+import { shareSkill, shareGlobalRepoSkill, shareGithubLink, inspectShare, installFromShare } from './share.js';
 import {
   scanGlobalRepo,
   removeFromGlobalRepo,
@@ -208,6 +208,10 @@ export function registerIpc() {
   // 分享
   ipcMain.handle('share:create', async (_e, tool: Tool, name: string) =>
     shareSkill(tool, name),
+  );
+  // 全局仓库（~/.agents/skills）规范副本的分享，sourceTool=global
+  ipcMain.handle('share:createGlobal', async (_e, name: string) =>
+    shareGlobalRepoSkill(name),
   );
   ipcMain.handle('share:githubLink', async (_e, tool: Tool, name: string) =>
     shareGithubLink(tool, name),

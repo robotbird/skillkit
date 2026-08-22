@@ -18,7 +18,9 @@ import {
   type ShareMeta,
   type ShareSourceInfo,
   type Tool,
+  GLOBAL_TOOL,
 } from '../shared/types.js';
+import { scanGlobalRepo } from './global-repo.js';
 
 /**
  * 同一 (tool, name) 的 skill 是否与缓存时内容一致：mtime + 体积都对得上才算未变。
@@ -40,7 +42,32 @@ export async function shareSkill(tool: Tool, name: string): Promise<ShareCreateR
   const list = listInstalled({ tool });
   const skill = list.find((s) => s.name === name);
   if (!skill) throw new Error(`未找到 ${name}（${tool}）`);
+  return createZipShare(skill);
+}
 
+/**
+ * 分享全局仓库（~/.agents/skills）里的 skill：打包规范副本上传，sourceTool 记为 global。
+ * 与工具内分享共用同一条上传/缓存管线（缓存键 (global, name)，不与真实工具冲突）。
+ */
+export async function shareGlobalRepoSkill(name: string): Promise<ShareCreateResult> {
+  const g = scanGlobalRepo().find((s) => s.name === name);
+  if (!g) throw new Error(`全局仓库未找到 ${name}`);
+  return createZipShare({
+    tool: GLOBAL_TOOL,
+    name: g.name,
+    description: g.description,
+    path: g.path,
+    isBuiltin: false,
+    sizeBytes: g.sizeBytes,
+    mtime: g.mtime,
+    source: null,
+    installedAt: null,
+  });
+}
+
+/** 打包 + 上传 + 登记短链的公共管线（工具内安装的 skill 与全局仓规范副本共用）。 */
+async function createZipShare(skill: InstalledSkill): Promise<ShareCreateResult> {
+  const { tool, name } = skill;
   const now = Date.now();
 
   // 命中缓存：同一 (tool, name) 已有未过期且内容未变的分享，直接复用

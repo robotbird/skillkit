@@ -1185,29 +1185,6 @@ html, body, #root {
 }
 /* 工具名单行不换行（避免 "Claude Code" 等带空格的名字在窄列里断行） */
 .modal .opts .tool-name { white-space: nowrap; }
-.opts-section-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-mute);
-  margin: 18px 0 10px;
-}
-/* 接入方式（软链/拷贝，ToolPicker/RepoSkillPicker）：两个选项横向一排，仅标题（说明走 title）；选中态去背景框，靠单选圆点 + 文字加粗提亮 */
-.modal .opts.opts-method {
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.modal .opts.opts-method label {
-  flex: 1 1 120px;
-  justify-content: center;
-}
-.modal .opts.opts-method label,
-.modal .opts.opts-method label.checked {
-  background: transparent;
-  border-color: var(--line);
-}
-.modal .opts.opts-method label strong { font-weight: 500; color: var(--ink-mute); }
-.modal .opts.opts-method label.checked strong { font-weight: 600; color: var(--ink); }
 
 /* recent / 最近安装 */
 .recent {

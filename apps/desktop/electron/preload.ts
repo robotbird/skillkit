@@ -58,6 +58,8 @@ const api: SkillkitApi = {
   getDroppedFilePath: (file: File) => webUtils.getPathForFile(file),
 
   shareSkill: (tool: Tool, name: string) => ipcRenderer.invoke('share:create', tool, name),
+  /** 全局仓库（~/.agents/skills）规范副本的分享（sourceTool=global）。 */
+  shareGlobalRepoSkill: (name: string) => ipcRenderer.invoke('share:createGlobal', name),
   shareGithubLink: (tool: Tool, name: string) =>
     ipcRenderer.invoke('share:githubLink', tool, name),
   inspectShare: (input: string) => ipcRenderer.invoke('share:inspect', input),
