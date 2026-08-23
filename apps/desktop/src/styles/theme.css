@@ -1598,6 +1598,20 @@ html, body, #root {
   margin-top: 4px;
   flex-wrap: wrap;
 }
+/* 同步 PAT 字段默认收起时的展开入口：低调文字按钮（认证失败会自动展开） */
+.sync-token-toggle {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink-mute);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.sync-token-toggle:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
 
 /* Skill 空间内的两个区块（全局仓库 / 自定义 Agent 与项目）：相邻区块之间加分隔线 */
 .settings-subblock {

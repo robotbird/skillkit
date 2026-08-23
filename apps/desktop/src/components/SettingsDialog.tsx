@@ -553,9 +553,16 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
   const [repoUrl, setRepoUrl] = useState('');
   // PAT 输入框只在用户键入时非空；保存时非空才传（undefined = 保留已存，见 SyncConfigureInput）
   const [token, setToken] = useState('');
+  // PAT 字段默认收起（系统 git 凭据链可用时无需填）；已存 PAT 或认证失败时展开
+  const [tokenOpen, setTokenOpen] = useState(false);
   const [auto, setAuto] = useState(true);
   const [busy, setBusy] = useState<null | 'test' | 'save' | 'now' | 'restore'>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  /** 认证类失败（主进程 classifyGitError 单点生成，前缀固定「认证失败」）→ 展开 PAT 输入兜底。 */
+  function isAuthError(e?: string | null): boolean {
+    return !!e && e.startsWith('认证失败');
+  }
 
   async function refresh() {
     try {
@@ -563,6 +570,8 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
       setStatus(s);
       setRepoUrl(s.config.repoUrl);
       setAuto(s.config.auto);
+      // 已存 PAT（需可见可清除），或上次自动同步就是认证失败 → 展开；只扩不收，别收走用户手动展开的输入
+      setTokenOpen((open) => open || s.config.hasToken || (s.lastOk === false && isAuthError(s.lastError)));
     } catch {
       /* ignore */
     }
@@ -581,6 +590,7 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
       setMessage(
         r.ok ? { ok: true, text: t('sync.testOk') } : { ok: false, text: t('sync.testFail', { error: r.error || '' }) },
       );
+      if (!r.ok && isAuthError(r.error)) setTokenOpen(true);
     } catch (err: any) {
       setMessage({ ok: false, text: t('sync.testFail', { error: err?.message ?? String(err) }) });
     } finally {
@@ -602,6 +612,7 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
           ? { ok: true, text: r.pushed ? `${t('sync.ok')}${r.summary ? ` · ${r.summary}` : ''}` : t('sync.noChange') }
           : { ok: false, text: r.error || '' },
       );
+      if (!r.ok && isAuthError(r.error)) setTokenOpen(true); // 保存触发的首同步认证失败 → 展开 PAT
       setToken(''); // 保存后清空候选输入，回到「已保存」占位态
       await refresh();
     } catch (err: any) {
@@ -636,6 +647,7 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
           ? { ok: true, text: r.pushed ? `${t('sync.ok')}${r.summary ? ` · ${r.summary}` : ''}` : t('sync.noChange') }
           : { ok: false, text: r.error || '' },
       );
+      if (!r.ok && isAuthError(r.error)) setTokenOpen(true);
       await refresh();
     } catch (err: any) {
       setMessage({ ok: false, text: err?.message ?? String(err) });
@@ -651,6 +663,7 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
     try {
       const r = await window.skillkit.restoreFromSyncRemote();
       setMessage(r.ok ? { ok: true, text: t('sync.restoreDone') } : { ok: false, text: r.error || '' });
+      if (!r.ok && isAuthError(r.error)) setTokenOpen(true);
       await refresh();
       if (r.ok) onChanged?.(); // 恢复改变了全局仓内容，让「我的 Skill」重扫
     } catch (err: any) {
@@ -681,25 +694,31 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
             spellCheck={false}
           />
         </Field>
-        <Field>
-          <FieldLabel htmlFor="sync-token">{t('sync.tokenLabel')}</FieldLabel>
-          <div className="flex items-center gap-2">
-            <Input
-              id="sync-token"
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder={hasToken ? t('sync.tokenSaved') : t('sync.tokenPlaceholder')}
-              className="flex-1"
-              autoComplete="off"
-            />
-            {hasToken && !token && (
-              <Button type="button" variant="outline" onClick={onClearToken} disabled={actionBusy}>
-                {t('sync.tokenClear')}
-              </Button>
-            )}
-          </div>
-        </Field>
+        {tokenOpen ? (
+          <Field>
+            <FieldLabel htmlFor="sync-token">{t('sync.tokenLabel')}</FieldLabel>
+            <div className="flex items-center gap-2">
+              <Input
+                id="sync-token"
+                type="password"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder={hasToken ? t('sync.tokenSaved') : t('sync.tokenPlaceholder')}
+                className="flex-1"
+                autoComplete="off"
+              />
+              {hasToken && !token && (
+                <Button type="button" variant="outline" onClick={onClearToken} disabled={actionBusy}>
+                  {t('sync.tokenClear')}
+                </Button>
+              )}
+            </div>
+          </Field>
+        ) : (
+          <button type="button" className="sync-token-toggle" onClick={() => setTokenOpen(true)}>
+            {t('sync.tokenToggle')}
+          </button>
+        )}
         <Field>
           <FieldLabel>{t('sync.autoLabel')}</FieldLabel>
           <ToggleGroup
