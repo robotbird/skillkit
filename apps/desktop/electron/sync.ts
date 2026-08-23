@@ -289,11 +289,11 @@ async function pushWithRebase(root: string, repoUrl: string, token: string | nul
     } catch {
       /* ignore */
     }
-    // 两台机器各自产生过首个提交（历史分叉）时最常见：指路「从远程恢复」整量覆盖，避免用户卡在原始冲突输出上
+    // 两台机器各自产生过首个提交（历史分叉）时最常见：指路「拉取最新」整量覆盖，避免用户卡在原始冲突输出上
     const raw = e instanceof GitError ? e.raw : String(e);
     if (/conflict/i.test(raw)) {
       throw new GitError(
-        '远程与本地历史冲突：可点「从远程恢复」以远程内容覆盖本地后重新同步（本地未备份的变更会丢失），或手动在仓库中处理冲突',
+        '远程与本地历史冲突：可点「拉取最新」以远程内容覆盖本地后重新推送（本地未备份的变更会丢失），或手动在仓库中处理冲突',
         raw,
       );
     }
