@@ -56,6 +56,12 @@ const api: SkillkitApi = {
     ipcRenderer.invoke('install:fromZip', zipPath, targets, opts),
   getInstallRecords: () => ipcRenderer.invoke('install:records:list'),
   clearInstallRecords: () => ipcRenderer.invoke('install:records:clear'),
+  // 主进程每落一条安装记录后推送（含顶栏「更新全部」等非本页动作），列表据此实时刷新
+  onInstallRecordsChanged: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on('install:records:changed', listener);
+    return () => ipcRenderer.removeListener('install:records:changed', listener);
+  },
 
   // 拖拽上传：从 drop 事件的 File 取系统绝对路径（Electron webUtils.getPathForFile）
   getDroppedFilePath: (file: File) => webUtils.getPathForFile(file),

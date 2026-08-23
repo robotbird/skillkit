@@ -76,8 +76,8 @@ export interface RepoBatchResult {
 // ===== 安装记录（持久化于 desktop 主进程 install_records 表；desktop 专用）=====
 /** 安装动作的整体状态。partial = 部分目标工具成功、部分失败。 */
 export type InstallRecordStatus = 'success' | 'partial' | 'failed';
-/** 安装入口渠道。区分一条记录来自哪种安装方式。 */
-export type InstallRecordChannel = 'market' | 'github' | 'zip' | 'share' | 'copy' | 'global';
+/** 安装入口渠道。区分一条记录来自哪种安装方式（update = skill 版本更新重装）。 */
+export type InstallRecordChannel = 'market' | 'github' | 'zip' | 'share' | 'copy' | 'global' | 'update';
 /** 报错分类（读时由 classifyInstallError 对失败项派生）。 */
 export type InstallErrorType = 'network' | 'not_found' | 'filesystem' | 'unknown';
 
@@ -345,6 +345,8 @@ export interface SkillkitApi {
   getInstallRecords(): Promise<InstallRecord[]>;
   /** 清空全部安装记录。 */
   clearInstallRecords(): Promise<void>;
+  /** 监听主进程「落了一条新安装记录」推送（含 skill 更新等非安装页触发的动作）。返回取消订阅。 */
+  onInstallRecordsChanged(cb: () => void): () => void;
 
   /** 从拖拽事件的 File 取系统绝对路径（Electron webUtils.getPathForFile）。 */
   getDroppedFilePath(file: File): string;

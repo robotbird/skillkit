@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import UpdateButton from './UpdateButton';
 import SkillUpdateButton from './SkillUpdateButton';
 import SettingsDialog from './SettingsDialog';
+import type { ToastState } from './Toast';
 import { useI18n } from '../i18n';
 import { isWindows } from '../lib/os';
 import { useToolbarSlotHost } from './ToolbarSlot';
@@ -12,11 +13,14 @@ export default function TopBar({
   tab,
   onTab,
   onChanged,
+  toast,
 }: {
   tab: TabKey;
   onTab: (t: TabKey) => void;
   /** 设置内发生需刷新主页的数据变更（如增删自定义 agent）时回调。 */
   onChanged?: () => void;
+  /** 顶栏按钮（如「更新全部」）复用全局 Toast 反馈结果。 */
+  toast: ToastState;
 }) {
   const { t } = useI18n();
   const slotRef = useToolbarSlotHost();
@@ -55,7 +59,7 @@ export default function TopBar({
         <div className="toolbar-trail">
           {/* 当前激活视图通过 portal 把搜索/视图切换/重新扫描 等控件注入此处 */}
           <div className="toolbar-slot" ref={slotRef} />
-          <SkillUpdateButton />
+          <SkillUpdateButton toast={toast} onChanged={onChanged} />
           <UpdateButton />
           <button
             className="settings-btn"

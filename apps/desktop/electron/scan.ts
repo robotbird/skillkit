@@ -10,7 +10,12 @@ import {
   PROJECT_AGENT_DIRS,
 } from './tools.js';
 import { readSkillMd } from './skill-md.js';
-import { upsertInstalled, listInstalled as dbListInstalled, deleteStaleInstalled } from './db.js';
+import {
+  upsertInstalled,
+  listInstalled as dbListInstalled,
+  deleteStaleInstalled,
+  deleteStaleSkillUpdateState,
+} from './db.js';
 import { dirSize } from './fs-util.js';
 import type { InstalledSkill, Tool, BuiltinTool, InstalledFilter } from '../shared/types.js';
 
@@ -139,7 +144,11 @@ export function scanAll(): InstalledSkill[] {
   // 这两个是「安装来源元数据」，不可从文件系统重建，故跨扫描保留），再删除扫描集之外的旧行
   // （已卸载 / frontmatter name 变更）。其余字段以扫描值为准。文件系统仍是 skill 内容的真相。
   for (const s of all) upsertInstalled(s);
-  deleteStaleInstalled(new Set(all.map((s) => `${s.tool}|${s.name}`)));
+  const activeKeys = new Set(all.map((s) => `${s.tool}|${s.name}`));
+  deleteStaleInstalled(activeKeys);
+  // 更新状态表同步清孤儿：skill 已删但状态行残留，会一直挂着「可更新」徽章，
+  // 点「更新全部」时对不存在的 skill 报「未找到该 skill」
+  deleteStaleSkillUpdateState(activeKeys);
   // 返回 DB 合并后的视图，而非扫描构建的 all：scanTool 把 source 写死成 null/builtin，
   // 直接返回 all 会让渲染层永远拿不到 GitHub 来源。DB 里的 source/installed_at 已被 COALESCE 保留。
   return dbListInstalled();

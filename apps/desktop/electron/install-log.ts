@@ -75,11 +75,13 @@ function isBatch(r: readonly unknown[]): r is RepoBatchResult[] {
 /**
  * 把安装结果归一为一条记录输入。同时接受单批 {@link InstallResult[]} 与多 skill
  * {@link RepoBatchResult[]}（批量安装）。无任何目标被处理时返回 null（不落库）。
+ * skillNameOverride：调用方已知 skill 名时显式传入（如 skill 更新），失败时列表也能显示名字。
  */
 export function buildInstallRecord(
   channel: InstallRecordChannel,
   label: string,
   results: InstallResult[] | RepoBatchResult[],
+  skillNameOverride?: string,
 ): InstallRecordInput | null {
   if (!Array.isArray(results) || results.length === 0) return null;
 
@@ -112,7 +114,7 @@ export function buildInstallRecord(
           .join('; ')
           .slice(0, 500) || null;
 
-  return { channel, label, skillName, status, error, targets };
+  return { channel, label, skillName: skillNameOverride ?? skillName, status, error, targets };
 }
 
 /**

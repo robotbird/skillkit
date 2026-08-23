@@ -549,6 +549,23 @@ export function deleteSkillUpdateState(tool: Tool, name: string): void {
   getDb().prepare('DELETE FROM skill_update_state WHERE tool = ? AND name = ?').run(tool, name);
 }
 
+/**
+ * 删除已不在扫描集里的更新状态行（skill 已卸载/从磁盘删除）。孤儿行会永远挂着
+ * 「可更新」徽章，点「更新全部」时报「未找到该 skill」——scanAll 与 deleteStaleInstalled
+ * 同步调用本函数自愈。键口径与 deleteStaleInstalled 一致：`${tool}|${name}`。
+ */
+export function deleteStaleSkillUpdateState(activeKeys: Set<string>): void {
+  if (activeKeys.size === 0) {
+    getDb().exec('DELETE FROM skill_update_state');
+    return;
+  }
+  const keys = Array.from(activeKeys);
+  const placeholders = keys.map(() => '?').join(',');
+  getDb()
+    .prepare(`DELETE FROM skill_update_state WHERE (tool || '|' || name) NOT IN (${placeholders})`)
+    .run(...keys);
+}
+
 // ===== custom_tools（自定义 skill 源：agent 变体 / 项目）=====
 function rowToCustom(r: any): CustomTool {
   return {

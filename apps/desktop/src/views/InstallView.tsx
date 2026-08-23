@@ -41,6 +41,7 @@ const RECORD_CHANNEL_KEY: Record<InstallRecordChannel, MessageKey> = {
   share: 'inst.records.channel.share',
   copy: 'inst.records.channel.copy',
   global: 'inst.records.channel.global',
+  update: 'inst.records.channel.update',
 };
 
 type T = (key: MessageKey, vars?: Record<string, string | number>) => string;
@@ -157,6 +158,8 @@ export default function InstallView({
 
   useEffect(() => {
     void loadRecords();
+    // 其他入口（如顶栏「更新全部」、卡片单个更新）也会落记录：监听变更事件保持列表实时
+    return window.skillkit.onInstallRecordsChanged(() => void loadRecords());
   }, []);
 
   async function doClearRecords() {

@@ -397,7 +397,7 @@ export default function MySkillsView({
       </div>
       <button
         className="rescan-btn"
-        title={t('my.rescan')}
+        data-tip={scanning ? '' : t('my.rescanTip')}
         aria-label={t('my.rescan')}
         disabled={scanning}
         onClick={refresh}

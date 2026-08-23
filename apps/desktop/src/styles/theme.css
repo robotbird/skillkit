@@ -264,14 +264,15 @@ html, body, #root {
   100% { box-shadow: 0 0 0 0 rgba(255, 178, 77, 0); }
 }
 
-/* 顶部「检查 Skill 更新」按钮（UpdateButton 的兄弟；绿色，区别于橙色应用更新） */
+/* 顶部「Skill 更新」按钮（UpdateButton 的兄弟；绿色，区别于橙色应用更新）。
+   检测到可更新时 hover 由圆形展开为「更新全部」胶囊（同 .rescan-btn 的 label 展开范式） */
 .skill-update-btn {
   position: relative;
   -webkit-app-region: no-drag;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
+  min-width: 36px; /* 不固定 width：hover 展开文字时随内容变宽，收缩时保持圆形 */
   height: 36px;
   padding: 0;
   border: 1px solid var(--line);
@@ -279,7 +280,7 @@ html, body, #root {
   background: var(--pill-bg);
   color: var(--ink-soft);
   cursor: pointer;
-  transition: background 0.18s, border-color 0.18s, color 0.18s;
+  transition: background 0.18s, border-color 0.18s, color 0.18s, padding 0.18s;
 }
 .skill-update-btn:hover {
   background: rgba(74, 222, 128, 0.1);
@@ -288,7 +289,36 @@ html, body, #root {
 }
 .skill-update-btn:disabled { cursor: default; opacity: 0.9; }
 .skill-update-btn .spinner { width: 14px; height: 14px; }
+/* 图标盒（同 .rescan-ico）：34px 定宽居中，展开成胶囊时图标距左圆弧 ≈9px，不贴边 */
+.skill-update-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+}
 .skill-update-btn.has-badge { color: var(--green, #4ade80); }
+.skill-update-label {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-left: 0;
+  padding-right: 0;
+  transition: max-width 0.2s ease, opacity 0.15s ease, margin-left 0.2s ease, padding-right 0.2s ease;
+}
+.skill-update-btn:hover:not(:disabled) .skill-update-label,
+.skill-update-btn:focus-visible .skill-update-label {
+  max-width: 96px;
+  opacity: 1;
+  /* 图标盒右半侧自带 ~9px 空白，负 margin 抵掉一部分，让文字距图标 ≈5px */
+  margin-left: -4px;
+  /* 右侧留出角标空间，避免文字压到徽章 */
+  padding-right: 14px;
+}
 .skill-update-badge {
   position: absolute;
   top: -4px;
@@ -304,6 +334,33 @@ html, body, #root {
   line-height: 16px;
   text-align: center;
   box-shadow: 0 0 0 2px var(--bg-0);
+}
+/* ===== 即时 tip：原生 title 有 ~1s 系统延迟且不可调；换 data-tip + ::after 悬停立即显示 ===== */
+[data-tip] { position: relative; }
+[data-tip]:not([data-tip=''])::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-1);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 50;
+}
+[data-tip]:not([data-tip='']):hover::after,
+[data-tip]:not([data-tip='']):focus-visible::after {
+  opacity: 1;
+  visibility: visible; /* 无 transition：hover / 聚焦立即出现 */
 }
 .tab:hover { color: var(--ink); background: rgba(255, 255, 255, 0.04); }
 .tab.is-active {
@@ -660,7 +717,7 @@ html, body, #root {
   background: var(--pill-bg);
   color: var(--ink-soft);
   cursor: pointer;
-  overflow: hidden;
+  /* 不设 overflow：会裁掉 [data-tip]::after 浮层；文字收展的裁剪由 .rescan-label 自身完成 */
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .rescan-btn:hover:not(:disabled) {

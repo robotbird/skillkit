@@ -29,6 +29,7 @@ import {
   listInstallRecords,
   clearInstallRecords,
   getSkillUpdateStateMap,
+  deleteSkillUpdateState,
 } from './db.js';
 import { buildInstallRecord, buildScanFailureRecord } from './install-log.js';
 import { readSkillMdFull } from './skill-md.js';
@@ -57,19 +58,31 @@ import type {
   SyncConfigureInput,
 } from '../shared/types.js';
 
-/** 把一次安装结果落库为一条安装记录（无任何目标被处理时跳过）。 */
+/** 把一次安装结果落库为一条安装记录（无任何目标被处理时跳过），并通知渲染层刷新记录列表。 */
 function logInstall(
   channel: InstallRecordChannel,
   label: string,
   results: InstallResult[] | RepoBatchResult[],
+  skillName?: string,
 ): void {
-  const rec = buildInstallRecord(channel, label, results);
-  if (rec) insertInstallRecord(rec);
+  const rec = buildInstallRecord(channel, label, results, skillName);
+  if (rec) {
+    insertInstallRecord(rec);
+    notifyRecordsChanged();
+  }
 }
 
 /** 把一次「扫描阶段失败」（列举/识别 skill 前就失败，无 per-tool 明细）落库。 */
 function logScanFailure(channel: InstallRecordChannel, label: string, error: string): void {
   insertInstallRecord(buildScanFailureRecord(channel, label, error));
+  notifyRecordsChanged();
+}
+
+/** 记录落库后通知渲染层（安装页「安装记录」列表实时刷新，含本页之外的更新等动作）。 */
+function notifyRecordsChanged(): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send('install:records:changed');
+  }
 }
 
 /** 罕见逃逸 throw 时：合成全失败的 InstallResult[]，保持 results 类 handler 的返回形状。 */
@@ -106,6 +119,8 @@ export function registerIpc() {
     const target = list.find((s) => s.name === name);
     if (target?.isBuiltin) throw new Error('内置 skill 无法卸载');
     uninstall(tool, name);
+    // 卸载即清更新状态，徽章立刻消失（scanAll 的孤儿清理兜底磁盘直删的场景）
+    deleteSkillUpdateState(tool, name);
     scanAllAndSync();
   });
   ipcMain.handle('installed:reveal', async (_e, p: string) => {
@@ -292,12 +307,15 @@ export function registerIpc() {
   );
   ipcMain.handle('skillUpdate:statusMap', () => Object.fromEntries(getSkillUpdateStateMap()));
   ipcMain.handle('skillUpdate:apply', async (_e, tool: Tool, name: string) => {
+    // 更新同走安装记录（channel=update）：label 用原来源（GitHub url / 市场 slug），无来源回退 tool/name
+    const src = listInstalled().find((s) => s.tool === tool && s.name === name)?.source;
     let r: InstallResult[];
     try {
       r = await applySkillUpdate(tool, name);
     } catch (err: any) {
       r = [{ tool, ok: false, error: err?.message || String(err) }];
     }
+    logInstall('update', src ?? `${tool}/${name}`, r, name);
     scanAllAndSync();
     return r;
   });
