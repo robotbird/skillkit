@@ -547,8 +547,13 @@ function SkillSpaceSection({ onChanged }: { onChanged?: () => void }) {
 }
 
 // ===== Git 同步（全局仓库 → 用户远程仓库）=====
+/** GitHub PAT 官方教程；非中文界面去掉 /zh/ 前缀回落默认（英文）版 */
+const GH_PAT_DOC =
+  'https://docs.github.com/zh/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens';
+
 function SyncSection({ onChanged }: { onChanged?: () => void }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const patDocUrl = locale === 'zh' ? GH_PAT_DOC : GH_PAT_DOC.replace('/zh/', '/');
   const [status, setStatus] = useState<SyncStatusInfo | null>(null);
   const [repoUrl, setRepoUrl] = useState('');
   // PAT 输入框只在用户键入时非空；保存时非空才传（undefined = 保留已存，见 SyncConfigureInput）
@@ -731,6 +736,18 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
                 </Button>
               )}
             </div>
+            <p className="settings-hint">
+              {t('sync.tokenHowto')}{' '}
+              <a
+                href={patDocUrl}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void window.skillkit.openExternal(patDocUrl); // 系统浏览器打开，不在应用内导航
+                }}
+              >
+                {t('sync.tokenDoc')}
+              </a>
+            </p>
           </Field>
         ) : (
           <button type="button" className="sync-token-toggle" onClick={() => setTokenOpen(true)}>

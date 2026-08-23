@@ -1598,6 +1598,11 @@ html, body, #root {
   margin-top: 4px;
   flex-wrap: wrap;
 }
+/* 设置页提示行里的外链（PAT 教程等）：accent 色，点击走系统浏览器 */
+.settings-hint a {
+  color: var(--accent);
+}
+
 /* 同步 PAT 字段默认收起时的展开入口：低调文字按钮（认证失败会自动展开） */
 .sync-token-toggle {
   align-self: flex-start;
