@@ -243,26 +243,22 @@ function summarizePorcelain(out: string): string | null {
   return parts.join(' ') || null;
 }
 
+/** 无 git 身份的机器（新装常见）缺哪个补哪个（Skillkit 兜底，命令级 -c 不落盘不污染全局配置）。
+ *  commit 与 rebase 都需要身份（rebase 重建提交同样以本机为 committer），故两处统一走本辅助。 */
+async function identityFallbackArgs(cwd: string): Promise<string[]> {
+  const has = (key: string) => runGit(['config', key], { cwd }).then(() => true).catch(() => false);
+  const args: string[] = [];
+  if (!(await has('user.name'))) args.push('-c', 'user.name=Skillkit');
+  if (!(await has('user.email'))) args.push('-c', 'user.email=skillkit@local');
+  return args;
+}
+
 async function commitAll(root: string, summary: string): Promise<void> {
   const stamp = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   const date = `${stamp.getFullYear()}-${pad(stamp.getMonth() + 1)}-${pad(stamp.getDate())} ${pad(stamp.getHours())}:${pad(stamp.getMinutes())}`;
   const msg = `sync: ${summary} skills · ${date}`;
-  const args = ['commit', '-m', msg];
-  try {
-    await runGit(args, { cwd: root });
-  } catch (e) {
-    // 无全局 git identity（新机器常见）：以 Skillkit 兜底身份重试，不污染用户全局配置
-    const raw = e instanceof GitError ? e.raw : String(e);
-    if (/identity|user\.name|tell me who you are/i.test(raw)) {
-      await runGit(
-        ['-c', 'user.name=Skillkit', '-c', 'user.email=skillkit@local', ...args],
-        { cwd: root },
-      );
-    } else {
-      throw e;
-    }
-  }
+  await runGit([...(await identityFallbackArgs(root)), 'commit', '-m', msg], { cwd: root });
 }
 
 async function pushWithRebase(root: string, repoUrl: string, token: string | null): Promise<void> {
@@ -278,13 +274,22 @@ async function pushWithRebase(root: string, repoUrl: string, token: string | nul
   const branch = (await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: root })).trim();
   if (!branch || branch === 'HEAD') throw new GitError('无法确定当前分支，请手动同步', '');
   try {
-    await runGit(['pull', '--rebase', 'origin', branch], opts);
+    // rebase 重建提交同样需要 committer 身份：新机器无 git 身份时与 commit 一致补 Skillkit 兜底
+    await runGit([...(await identityFallbackArgs(root)), 'pull', '--rebase', 'origin', branch], opts);
     await runGit(['push', '-u', 'origin', 'HEAD'], opts);
   } catch (e) {
     try {
       await runGit(['rebase', '--abort'], { cwd: root });
     } catch {
       /* ignore */
+    }
+    // 两台机器各自产生过首个提交（历史分叉）时最常见：指路「从远程恢复」整量覆盖，避免用户卡在原始冲突输出上
+    const raw = e instanceof GitError ? e.raw : String(e);
+    if (/conflict/i.test(raw)) {
+      throw new GitError(
+        '远程与本地历史冲突：可点「从远程恢复」以远程内容覆盖本地后重新同步（本地未备份的变更会丢失），或手动在仓库中处理冲突',
+        raw,
+      );
     }
     throw e;
   }
@@ -310,19 +315,13 @@ export async function syncNow(trigger: 'manual' | 'auto' = 'manual'): Promise<Sy
     const status = await runGit(['status', '--porcelain'], { cwd: root });
     const summary = summarizePorcelain(status);
     if (!summary) {
-      // 空跑也要确认远端可达（首次配置后的启动空跑可及早暴露 404/认证问题）；
-      // 但仓库还没有任何提交时 ls-remote 空输出是正常态，跳过。
+      // 空跑也要走一次推送链路而非仅探测可达：既及早暴露 404/认证问题，
+      // 也把上次失败（如 push 被拒后 rebase 中断）遗留在本地的提交补推上去；up-to-date 时空推代价与 ls-remote 相同。
+      // 仓库还没有任何提交时无 HEAD 可推，跳过（首次变更提交后才进推送链路）。
       const hasHead = await runGit(['rev-parse', '--verify', '-q', 'HEAD'], { cwd: root })
         .then(() => true)
         .catch(() => false);
-      if (hasHead) {
-        await runGit(['ls-remote', 'origin', 'HEAD'], {
-          cwd: root,
-          token,
-          url: repoUrl,
-          timeoutMs: GIT_NETWORK_TIMEOUT_MS,
-        });
-      }
+      if (hasHead) await pushWithRebase(root, repoUrl, token);
       recordStatus(true, undefined, undefined);
       return { ok: true, pushed: false };
     }
