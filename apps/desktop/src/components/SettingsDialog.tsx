@@ -555,6 +555,11 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
   const [token, setToken] = useState('');
   // PAT 字段默认收起（系统 git 凭据链可用时无需填）；已存 PAT 或认证失败时展开
   const [tokenOpen, setTokenOpen] = useState(false);
+  // 提交身份（commit 署名，非登录凭证）：默认收起；本机无 git 身份且设置里也没存时自动展开提示
+  const [idName, setIdName] = useState('');
+  const [idEmail, setIdEmail] = useState('');
+  const [idOpen, setIdOpen] = useState(false);
+  const [idError, setIdError] = useState(false);
   const [auto, setAuto] = useState(true);
   const [busy, setBusy] = useState<null | 'test' | 'save' | 'now' | 'restore'>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -572,6 +577,10 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
       setAuto(s.config.auto);
       // 已存 PAT（需可见可清除），或上次自动同步就是认证失败 → 展开；只扩不收，别收走用户手动展开的输入
       setTokenOpen((open) => open || s.config.hasToken || (s.lastOk === false && isAuthError(s.lastError)));
+      setIdName(s.config.identityName ?? '');
+      setIdEmail(s.config.identityEmail ?? '');
+      // 已存提交身份（可见可改），或系统 git 无身份且设置里也没存（否则提交只能走 Skillkit 兜底署名）→ 展开；只扩不收
+      setIdOpen((open) => open || !!s.config.identityName || !s.hasGitIdentity);
     } catch {
       /* ignore */
     }
@@ -599,6 +608,12 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
   }
 
   async function onSave() {
+    // 提交身份须成对（半个身份对 git 无意义）：不成对就地报错，不出网络请求
+    if (idOpen && !!idName.trim() !== !!idEmail.trim()) {
+      setIdError(true);
+      return;
+    }
+    setIdError(false);
     setBusy('save');
     setMessage(null);
     try {
@@ -606,6 +621,9 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
         repoUrl: repoUrl.trim(),
         auto,
         token: token.trim() || undefined,
+        // 提交身份三态：没展开过 = 保留已存；展开后当前输入即最终值（都留空 = 清除，回落系统身份/兜底）
+        name: idOpen ? idName : undefined,
+        email: idOpen ? idEmail : undefined,
       });
       setMessage(
         r.ok
@@ -717,6 +735,37 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
         ) : (
           <button type="button" className="sync-token-toggle" onClick={() => setTokenOpen(true)}>
             {t('sync.tokenToggle')}
+          </button>
+        )}
+        {idOpen ? (
+          <Field>
+            <FieldLabel>{t('sync.identityLabel')}</FieldLabel>
+            <div className="flex items-center gap-2">
+              <Input
+                aria-label={t('sync.identityNamePh')}
+                value={idName}
+                onChange={(e) => setIdName(e.target.value)}
+                placeholder={t('sync.identityNamePh')}
+                className="flex-1"
+                spellCheck={false}
+                autoComplete="off"
+              />
+              <Input
+                aria-label={t('sync.identityEmailPh')}
+                type="email"
+                value={idEmail}
+                onChange={(e) => setIdEmail(e.target.value)}
+                placeholder={t('sync.identityEmailPh')}
+                className="flex-1"
+                autoComplete="off"
+              />
+            </div>
+            {idError && <FieldError>{t('sync.identityInvalid')}</FieldError>}
+            <p className="settings-hint">{t('sync.identityHint')}</p>
+          </Field>
+        ) : (
+          <button type="button" className="sync-token-toggle" onClick={() => setIdOpen(true)}>
+            {t('sync.identityToggle')}
           </button>
         )}
         <Field>

@@ -51,6 +51,11 @@
 - 命令级注入:`git -c http.<repo-base>.extraheader="AUTHORIZATION: basic <b64(x-access-token:PAT)>" …`,凭据不进 `.git/config`、不进 argv 明文。
 - SSH URL 或无 PAT → 直接走系统 git 凭据链。
 
+### 提交身份(user.name/email,署名而非认证)
+- 优先级:设置里存的「提交身份」(用户名+邮箱成对) → 系统 git 配置 → Skillkit 兜底(`Skillkit <skillkit@local>`);统一 `identityFallbackArgs()` 命令级 `-c` 注入,不落盘不污染全局配置。
+- commit 与 rebase(重建提交)都需要身份,两处统一走该辅助;无身份机器不再报 Committer identity unknown。
+- 设置页该字段默认收起;系统 git 无身份且设置里也没存时自动展开提示(邮箱与 GitHub 账号一致可计入贡献图)。
+
 ### 从远程恢复(Q9)
 - 仅手动:设置页按钮 → 二次确认(明示覆盖语义)→ fetch + reset --hard + clean -fd → scanAll() 刷新各视图。
 - 恢复后软链不受影响(工具目录软链指向全局仓内路径,内容原地更新)。

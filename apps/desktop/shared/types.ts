@@ -218,6 +218,8 @@ export const SETTING_KEYS = {
   skillUpdateLastRun: 'skill_update_last_run', // 上次自动检测完成时间戳（ms）
   syncRepoUrl: 'sync_repo_url', // Git 同步远程地址（HTTPS/SSH），空 = 未启用
   syncAuthToken: 'sync_auth_token', // GitHub PAT（safeStorage 加密，同 auth_token 模式）
+  syncGitName: 'sync_git_name', // 提交身份-用户名（命令级 -c 注入，不写 git 配置；须与邮箱成对）
+  syncGitEmail: 'sync_git_email', // 提交身份-邮箱
   syncAuto: 'sync_auto', // '1'/'0'，变更后自动同步开关
   syncLastTime: 'sync_last_time', // 上次同步完成时间戳（ms）
   syncLastStatus: 'sync_last_status', // JSON：{ ok, error, summary }
@@ -239,13 +241,17 @@ export interface SyncConfig {
   repoUrl: string; // 远程地址（HTTPS / SSH 均可）
   auto: boolean; // 变更后自动同步（含启动时一次）
   hasToken: boolean; // 是否已存 PAT（safeStorage）
+  identityName: string | null; // 设置里存的提交身份（用户名）；null = 未设置
+  identityEmail: string | null; // 同上（邮箱）；须与用户名成对使用
 }
 
-/** 配置入参。token 三态：undefined=保留已存 / ''=清除 / 非空=覆盖保存。 */
+/** 配置入参。token 与提交身份字段均为三态：undefined=保留已存 / ''=清除 / 非空=覆盖保存。 */
 export interface SyncConfigureInput {
   repoUrl: string; // '' = 停用同步（保留 .git 与数据）
   auto: boolean;
   token?: string;
+  name?: string; // 提交身份用户名（须与 email 成对）
+  email?: string; // 提交身份邮箱
 }
 
 /** 一次同步 / 连接测试 / 恢复的结果。 */
@@ -266,6 +272,7 @@ export interface SyncStatusInfo {
   lastError: string | null;
   lastSummary: string | null;
   gitAvailable: boolean; // 系统 git 是否可用
+  hasGitIdentity: boolean; // 系统 git 是否已配 user.name+email；未配且设置里也没存身份时，提交用 Skillkit 兜底署名
   syncing: boolean; // 是否正在同步中
 }
 

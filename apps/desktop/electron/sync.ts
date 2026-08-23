@@ -160,6 +160,8 @@ function loadConfig(): SyncConfig & { token: string | null } {
     auto: metaGet(SETTING_KEYS.syncAuto) === '1',
     hasToken: !!loadSecret(SETTING_KEYS.syncAuthToken),
     token: loadSecret(SETTING_KEYS.syncAuthToken),
+    identityName: metaGet(SETTING_KEYS.syncGitName) || null,
+    identityEmail: metaGet(SETTING_KEYS.syncGitEmail) || null,
   };
 }
 
@@ -243,9 +245,13 @@ function summarizePorcelain(out: string): string | null {
   return parts.join(' ') || null;
 }
 
-/** 无 git 身份的机器（新装常见）缺哪个补哪个（Skillkit 兜底，命令级 -c 不落盘不污染全局配置）。
- *  commit 与 rebase 都需要身份（rebase 重建提交同样以本机为 committer），故两处统一走本辅助。 */
+/** git 提交身份注入：commit 与 rebase（重建提交）都需要身份。优先设置里存的提交身份（成对生效），
+ *  否则探测系统 git 配置，缺哪个用 Skillkit 兜底补哪个（命令级 -c，不落盘不污染全局配置）。 */
 async function identityFallbackArgs(cwd: string): Promise<string[]> {
+  const { identityName, identityEmail } = loadConfig();
+  if (identityName && identityEmail) {
+    return ['-c', `user.name=${identityName}`, '-c', `user.email=${identityEmail}`];
+  }
   const has = (key: string) => runGit(['config', key], { cwd }).then(() => true).catch(() => false);
   const args: string[] = [];
   if (!(await has('user.name'))) args.push('-c', 'user.name=Skillkit');
@@ -403,6 +409,9 @@ export async function configureSync(input: SyncConfigureInput): Promise<SyncActi
   }
   metaSet(SETTING_KEYS.syncRepoUrl, url);
   metaSet(SETTING_KEYS.syncAuto, input.auto ? '1' : '0');
+  // 提交身份三态同 token：undefined=保留 / ''=清除 / 非空=覆盖；渲染层保证 name/email 成对传
+  if (input.name !== undefined) metaSet(SETTING_KEYS.syncGitName, input.name.trim());
+  if (input.email !== undefined) metaSet(SETTING_KEYS.syncGitEmail, input.email.trim());
   if (input.token !== undefined) {
     if (input.token === '') metaSet(SETTING_KEYS.syncAuthToken, '');
     else storeSecret(SETTING_KEYS.syncAuthToken, input.token);
@@ -415,16 +424,19 @@ export async function configureSync(input: SyncConfigureInput): Promise<SyncActi
 }
 
 export async function getSyncStatus(): Promise<SyncStatusInfo> {
-  const { repoUrl, auto, hasToken } = loadConfig();
+  const { repoUrl, auto, hasToken, identityName, identityEmail } = loadConfig();
   const last = loadLastStatus();
+  // 系统 git 身份探测（system+global，无仓库上下文）：无身份机器上设置页据此展开「提交身份」输入
+  const has = (k: string) => runGit(['config', k]).then(() => true).catch(() => false);
   return {
     configured: !!repoUrl,
-    config: { repoUrl, auto, hasToken },
+    config: { repoUrl, auto, hasToken, identityName, identityEmail },
     lastTime: last.time,
     lastOk: last.ok,
     lastError: last.error,
     lastSummary: last.summary,
     gitAvailable: await gitAvailable(),
+    hasGitIdentity: (await has('user.name')) && (await has('user.email')),
     syncing,
   };
 }
