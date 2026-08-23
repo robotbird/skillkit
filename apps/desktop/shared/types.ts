@@ -216,6 +216,11 @@ export const SETTING_KEYS = {
   authToken: 'auth_token',
   skillUpdateInterval: 'skill_update_interval', // SkillUpdateInterval，默认 '8h'
   skillUpdateLastRun: 'skill_update_last_run', // 上次自动检测完成时间戳（ms）
+  syncRepoUrl: 'sync_repo_url', // Git 同步远程地址（HTTPS/SSH），空 = 未启用
+  syncAuthToken: 'sync_auth_token', // GitHub PAT（safeStorage 加密，同 auth_token 模式）
+  syncAuto: 'sync_auto', // '1'/'0'，变更后自动同步开关
+  syncLastTime: 'sync_last_time', // 上次同步完成时间戳（ms）
+  syncLastStatus: 'sync_last_status', // JSON：{ ok, error, summary }
 } as const;
 
 /** 主进程解析后的有效主题（system 已解析为 dark/light）。 */
@@ -226,6 +231,42 @@ export interface AccountLoginResult {
   ok: boolean;
   user?: PublicUser;
   error?: string;
+}
+
+// ===== 全局仓库 Git 同步(desktop 专用) =====
+/** 同步配置（渲染层视角：PAT 永不回传，只回传 hasToken 布尔）。 */
+export interface SyncConfig {
+  repoUrl: string; // 远程地址（HTTPS / SSH 均可）
+  auto: boolean; // 变更后自动同步（含启动时一次）
+  hasToken: boolean; // 是否已存 PAT（safeStorage）
+}
+
+/** 配置入参。token 三态：undefined=保留已存 / ''=清除 / 非空=覆盖保存。 */
+export interface SyncConfigureInput {
+  repoUrl: string; // '' = 停用同步（保留 .git 与数据）
+  auto: boolean;
+  token?: string;
+}
+
+/** 一次同步 / 连接测试 / 恢复的结果。 */
+export interface SyncActionResult {
+  ok: boolean;
+  error?: string; // 失败摘要（git 输出截断 / 归类后的中文提示）
+  pushed?: boolean; // 本次是否产生了新提交并推送（false = 无变更空跑）
+  summary?: string; // 变更统计，如 "+2 -1"
+  commit?: string; // 推送后的短 commit hash
+}
+
+/** 设置页展示的同步状态快照。 */
+export interface SyncStatusInfo {
+  configured: boolean; // 已配置 repoUrl
+  config: SyncConfig;
+  lastTime: number | null; // 上次同步完成时间（ms），null = 从未
+  lastOk: boolean | null; // 上次结果；null = 从未同步
+  lastError: string | null;
+  lastSummary: string | null;
+  gitAvailable: boolean; // 系统 git 是否可用
+  syncing: boolean; // 是否正在同步中
 }
 
 // ===== 真身探测结果(desktop 专用) =====
@@ -348,6 +389,18 @@ export interface SkillkitApi {
   removeCustomTool(id: string): Promise<void>;
   /** 系统文件夹选择框，取消返回 null（选 skill 目录用）。 */
   pickDirectory(title?: string): Promise<string | null>;
+
+  // ===== 全局仓库 Git 同步 =====
+  /** 读同步状态快照（配置 + 上次结果 + git 可用性；PAT 不回传）。 */
+  getSyncStatus(): Promise<SyncStatusInfo>;
+  /** 保存配置并立即跑一次同步（首次配置即验证可达性）。token 三态见 SyncConfigureInput。 */
+  configureSync(input: SyncConfigureInput): Promise<SyncActionResult>;
+  /** 测试远程可达性（git ls-remote，不落任何配置）。token 传候选值或省略用已存的。 */
+  testSyncRemote(url: string, token?: string): Promise<SyncActionResult>;
+  /** 手动立即同步（无论自动开关）。未配置时返回 { ok:false }。 */
+  syncNow(): Promise<SyncActionResult>;
+  /** 从远程整量恢复（fetch + reset --hard + clean，覆盖本地全局仓；调用方须先确认）。 */
+  restoreFromSyncRemote(): Promise<SyncActionResult>;
 
   // ===== 外观 / 语言 / 版本 / 外链 / 全局仓库路径 =====
   /** 取当前主题设置 + 已解析的有效主题（system→dark/light）。 */

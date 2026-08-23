@@ -34,6 +34,14 @@ import { buildInstallRecord, buildScanFailureRecord } from './install-log.js';
 import { readSkillMdFull } from './skill-md.js';
 import { applyTheme, getThemeState } from './theme.js';
 import { loginAccount, getAccountInfo, logoutAccount, openAccountPage, startOAuth } from './account.js';
+import {
+  getSyncStatus,
+  configureSync,
+  testRemote,
+  syncNow,
+  restoreFromRemote,
+  scheduleSkillSync,
+} from './sync.js';
 import type {
   Tool,
   InstalledFilter,
@@ -46,6 +54,7 @@ import type {
   InstallRecordChannel,
   CustomToolAddOpts,
   CustomToolPatch,
+  SyncConfigureInput,
 } from '../shared/types.js';
 
 /** 把一次安装结果落库为一条安装记录（无任何目标被处理时跳过）。 */
@@ -79,6 +88,12 @@ function failBatch(subpaths: string[], targets: Tool[], err: any): RepoBatchResu
   }));
 }
 
+/** 变更类 handler 收口：重扫已装列表 +（已配置且开着自动时）防抖触发全局仓 git 同步。 */
+function scanAllAndSync(): void {
+  scanAll();
+  scheduleSkillSync();
+}
+
 export function registerIpc() {
   ipcMain.handle('scan:all', async () => scanAll());
   ipcMain.handle('installed:list', async (_e, filter: InstalledFilter | undefined) =>
@@ -91,7 +106,7 @@ export function registerIpc() {
     const target = list.find((s) => s.name === name);
     if (target?.isBuiltin) throw new Error('内置 skill 无法卸载');
     uninstall(tool, name);
-    scanAll();
+    scanAllAndSync();
   });
   ipcMain.handle('installed:reveal', async (_e, p: string) => {
     shell.showItemInFolder(p);
@@ -113,7 +128,7 @@ export function registerIpc() {
         r = failAll(targets, err);
       }
       logInstall('copy', `${sourceTool}/${name}`, r);
-      scanAll();
+      scanAllAndSync();
       return r;
     },
   );
@@ -134,7 +149,7 @@ export function registerIpc() {
         r = failAll(targets, err);
       }
       logInstall('market', slug, r);
-      scanAll();
+      scanAllAndSync();
       return r;
     },
   );
@@ -148,7 +163,7 @@ export function registerIpc() {
         r = failAll(targets, err);
       }
       logInstall('github', url, r);
-      scanAll();
+      scanAllAndSync();
       return r;
     },
   );
@@ -176,7 +191,7 @@ export function registerIpc() {
         r = failBatch(subpaths, targets, err);
       }
       logInstall('github', url, r);
-      scanAll();
+      scanAllAndSync();
       return r;
     },
   );
@@ -200,7 +215,7 @@ export function registerIpc() {
         r = failAll(targets, err);
       }
       logInstall('zip', path.basename(zipPath), r);
-      scanAll();
+      scanAllAndSync();
       return r;
     },
   );
@@ -227,7 +242,7 @@ export function registerIpc() {
         r = failAll(targets, err);
       }
       logInstall('share', input, r);
-      scanAll();
+      scanAllAndSync();
       return r;
     },
   );
@@ -236,7 +251,7 @@ export function registerIpc() {
   ipcMain.handle('globalRepo:scan', async () => scanGlobalRepo());
   ipcMain.handle('globalRepo:remove', async (_e, name: string) => {
     const r = removeFromGlobalRepo(name);
-    scanAll();
+    scanAllAndSync();
     return r;
   });
   ipcMain.handle(
@@ -249,10 +264,22 @@ export function registerIpc() {
         r = failAll(targets, err);
       }
       logInstall('global', name, r);
-      scanAll();
+      scanAllAndSync();
       return r;
     },
   );
+
+  // ===== 全局仓库 Git 同步 =====
+  ipcMain.handle('sync:status', () => getSyncStatus());
+  ipcMain.handle('sync:configure', (_e, input: SyncConfigureInput) => configureSync(input));
+  ipcMain.handle('sync:test', (_e, url: string, token?: string) => testRemote(url, token));
+  ipcMain.handle('sync:now', () => syncNow('manual'));
+  // 恢复会整量覆盖本地全局仓 → handler 侧已由渲染层弹过确认；完成后重扫刷新各视图
+  ipcMain.handle('sync:restore', async () => {
+    const r = await restoreFromRemote();
+    if (r.ok) scanAll();
+    return r;
+  });
 
   // 自动更新
   ipcMain.handle('update:status', async () => getUpdateStatus());
@@ -271,7 +298,7 @@ export function registerIpc() {
     } catch (err: any) {
       r = [{ tool, ok: false, error: err?.message || String(err) }];
     }
-    scanAll();
+    scanAllAndSync();
     return r;
   });
 

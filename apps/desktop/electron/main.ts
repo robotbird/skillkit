@@ -9,6 +9,7 @@ import { parseShareId } from './share.js';
 import { completeOAuth } from './account.js';
 import { checkForUpdate } from './updater.js';
 import { startSkillUpdateScheduler } from './skill-update.js';
+import { scheduleSkillSync } from './sync.js';
 import { disposeGithubCache, cleanStaleTmpDirs } from './installer.js';
 import { initTheme, effectiveTheme, windowBg } from './theme.js';
 import type { UpdateAvailableInfo, AccountLoginResult } from '../shared/types.js';
@@ -223,6 +224,8 @@ function bootstrap() {
     // 启动时后台预热：先扫一次本地，再在后台抓 sitemap（24h 内会跳过）
     setImmediate(() => {
       try { scanAll(); } catch (e) { console.error('startup scan failed', e); }
+      // 全局仓 git 同步（docs/git-sync.md Q3A）：已配置且开着自动时，防抖后启动同步一次
+      scheduleSkillSync();
     });
     setTimeout(() => {
       refreshMarket(false).catch((e) => console.error('market warmup failed', e));

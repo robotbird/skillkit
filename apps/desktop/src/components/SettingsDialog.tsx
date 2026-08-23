@@ -14,6 +14,7 @@ import {
   type CustomTool,
   type CustomToolKind,
   type BuiltinTool,
+  type SyncStatusInfo,
 } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,7 +34,7 @@ import { fileToIconDataUri } from '../lib/iconImage';
 import { invalidateInstalledTools } from '../lib/useInstalledTools';
 import { invalidateLocalTools } from '../lib/useLocalTools';
 
-type Section = 'account' | 'appearance' | 'language' | 'space' | 'updates' | 'about';
+type Section = 'account' | 'appearance' | 'language' | 'space' | 'sync' | 'updates' | 'about';
 
 /** 把绝对路径的 home 前缀缩写为 ~（跨平台：/Users/x/.agents/… → ~/.agents/… ； C:\Users\x\.agents\… → ~\.agents\…）。 */
 function abbreviateHome(p: string): string {
@@ -71,6 +72,7 @@ export default function SettingsDialog({
     { key: 'appearance', label: t('settings.nav.appearance') },
     { key: 'language', label: t('settings.nav.language') },
     { key: 'space', label: t('settings.nav.space') },
+    { key: 'sync', label: t('settings.nav.sync') },
     { key: 'updates', label: t('settings.nav.updates') },
     { key: 'about', label: t('settings.nav.about') },
   ];
@@ -101,6 +103,7 @@ export default function SettingsDialog({
             {section === 'appearance' && <AppearanceSection />}
             {section === 'language' && <LanguageSection />}
             {section === 'space' && <SkillSpaceSection onChanged={onChanged} />}
+            {section === 'sync' && <SyncSection onChanged={onChanged} />}
             {section === 'updates' && <UpdatesSection />}
             {section === 'about' && <AboutSection />}
           </div>
@@ -537,6 +540,214 @@ function SkillSpaceSection({ onChanged }: { onChanged?: () => void }) {
               {t('agents.add')}
             </Button>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ===== Git 同步（全局仓库 → 用户远程仓库）=====
+function SyncSection({ onChanged }: { onChanged?: () => void }) {
+  const { t } = useI18n();
+  const [status, setStatus] = useState<SyncStatusInfo | null>(null);
+  const [repoUrl, setRepoUrl] = useState('');
+  // PAT 输入框只在用户键入时非空；保存时非空才传（undefined = 保留已存，见 SyncConfigureInput）
+  const [token, setToken] = useState('');
+  const [auto, setAuto] = useState(true);
+  const [busy, setBusy] = useState<null | 'test' | 'save' | 'now' | 'restore'>(null);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function refresh() {
+    try {
+      const s = await window.skillkit.getSyncStatus();
+      setStatus(s);
+      setRepoUrl(s.config.repoUrl);
+      setAuto(s.config.auto);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  async function onTest() {
+    if (!repoUrl.trim()) return;
+    setBusy('test');
+    setMessage(null);
+    try {
+      const r = await window.skillkit.testSyncRemote(repoUrl.trim(), token.trim() || undefined);
+      setMessage(
+        r.ok ? { ok: true, text: t('sync.testOk') } : { ok: false, text: t('sync.testFail', { error: r.error || '' }) },
+      );
+    } catch (err: any) {
+      setMessage({ ok: false, text: t('sync.testFail', { error: err?.message ?? String(err) }) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onSave() {
+    setBusy('save');
+    setMessage(null);
+    try {
+      const r = await window.skillkit.configureSync({
+        repoUrl: repoUrl.trim(),
+        auto,
+        token: token.trim() || undefined,
+      });
+      setMessage(
+        r.ok
+          ? { ok: true, text: r.pushed ? `${t('sync.ok')}${r.summary ? ` · ${r.summary}` : ''}` : t('sync.noChange') }
+          : { ok: false, text: r.error || '' },
+      );
+      setToken(''); // 保存后清空候选输入，回到「已保存」占位态
+      await refresh();
+    } catch (err: any) {
+      setMessage({ ok: false, text: err?.message ?? String(err) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** 清除已存 PAT（token:''）。configureSync 会顺带同步一次，结果刷进状态卡。 */
+  async function onClearToken() {
+    setBusy('save');
+    setMessage(null);
+    try {
+      await window.skillkit.configureSync({ repoUrl: repoUrl.trim(), auto, token: '' });
+      setToken('');
+      await refresh();
+    } catch (err: any) {
+      setMessage({ ok: false, text: err?.message ?? String(err) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onSyncNow() {
+    setBusy('now');
+    setMessage(null);
+    try {
+      const r = await window.skillkit.syncNow();
+      setMessage(
+        r.ok
+          ? { ok: true, text: r.pushed ? `${t('sync.ok')}${r.summary ? ` · ${r.summary}` : ''}` : t('sync.noChange') }
+          : { ok: false, text: r.error || '' },
+      );
+      await refresh();
+    } catch (err: any) {
+      setMessage({ ok: false, text: err?.message ?? String(err) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onRestore() {
+    if (!confirm(t('sync.confirmRestore'))) return;
+    setBusy('restore');
+    setMessage(null);
+    try {
+      const r = await window.skillkit.restoreFromSyncRemote();
+      setMessage(r.ok ? { ok: true, text: t('sync.restoreDone') } : { ok: false, text: r.error || '' });
+      await refresh();
+      if (r.ok) onChanged?.(); // 恢复改变了全局仓内容，让「我的 Skill」重扫
+    } catch (err: any) {
+      setMessage({ ok: false, text: err?.message ?? String(err) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const hasToken = status?.config.hasToken ?? false;
+  // 主进程自动同步进行中（打开设置页时可能撞上）也按 busy 处理，避免双跑
+  const actionBusy = busy !== null || !!status?.syncing;
+
+  return (
+    <div className="settings-section">
+      <h3>{t('sync.label')}</h3>
+      <p className="settings-hint">{t('sync.repoHint')}</p>
+      {status && !status.gitAvailable && <FieldError>{t('sync.gitMissing')}</FieldError>}
+
+      <FieldGroup className="gap-4">
+        <Field>
+          <FieldLabel htmlFor="sync-repo">{t('sync.repoLabel')}</FieldLabel>
+          <Input
+            id="sync-repo"
+            value={repoUrl}
+            onChange={(e) => setRepoUrl(e.target.value)}
+            placeholder={t('sync.repoPlaceholder')}
+            spellCheck={false}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="sync-token">{t('sync.tokenLabel')}</FieldLabel>
+          <div className="flex items-center gap-2">
+            <Input
+              id="sync-token"
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder={hasToken ? t('sync.tokenSaved') : t('sync.tokenPlaceholder')}
+              className="flex-1"
+              autoComplete="off"
+            />
+            {hasToken && !token && (
+              <Button type="button" variant="outline" onClick={onClearToken} disabled={actionBusy}>
+                {t('sync.tokenClear')}
+              </Button>
+            )}
+          </div>
+        </Field>
+        <Field>
+          <FieldLabel>{t('sync.autoLabel')}</FieldLabel>
+          <ToggleGroup
+            type="single"
+            value={auto ? 'on' : 'off'}
+            onValueChange={(v) => {
+              if (v) setAuto(v === 'on');
+            }}
+            variant="outline"
+          >
+            <ToggleGroupItem value="on">{t('sync.autoOn')}</ToggleGroupItem>
+            <ToggleGroupItem value="off">{t('sync.autoOff')}</ToggleGroupItem>
+          </ToggleGroup>
+          <p className="settings-hint">{t('sync.autoHint')}</p>
+        </Field>
+      </FieldGroup>
+
+      <div className="settings-actions">
+        <Button onClick={onSave} disabled={actionBusy || !repoUrl.trim()}>
+          {busy === 'save' ? t('sync.saving') : t('sync.save')}
+        </Button>
+        <Button variant="outline" onClick={onTest} disabled={actionBusy || !repoUrl.trim()}>
+          {busy === 'test' ? t('sync.testing') : t('sync.test')}
+        </Button>
+        <Button variant="outline" onClick={onSyncNow} disabled={actionBusy || !status?.configured}>
+          {busy === 'now' ? t('sync.syncing') : t('sync.now')}
+        </Button>
+        <Button variant="outline" onClick={onRestore} disabled={actionBusy || !status?.configured}>
+          {busy === 'restore' ? t('sync.restoring') : t('sync.restore')}
+        </Button>
+      </div>
+
+      {message &&
+        (message.ok ? (
+          <p className="settings-hint">{message.text}</p>
+        ) : (
+          <FieldError>{message.text}</FieldError>
+        ))}
+
+      <div className="kv-card">
+        <div className="kv-label">{t('sync.lastSync')}</div>
+        <div className="kv-value">
+          {status?.lastTime ? formatTime(status.lastTime) : t('sync.never')}
+          {status?.lastOk === true && status.lastSummary ? ` · ${status.lastSummary}` : ''}
+          {status?.lastOk === false ? ` · ${t('sync.failed')}` : ''}
+        </div>
+        {status?.lastOk === false && status.lastError && (
+          <div className="kv-value is-error">{status.lastError}</div>
         )}
       </div>
     </div>

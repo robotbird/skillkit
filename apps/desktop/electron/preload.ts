@@ -18,6 +18,9 @@ import type {
   OAuthProvider,
   SkillUpdateState,
   SkillUpdateSummary,
+  SyncStatusInfo,
+  SyncConfigureInput,
+  SyncActionResult,
 } from '../shared/types.js';
 
 const api: SkillkitApi = {
@@ -109,6 +112,15 @@ const api: SkillkitApi = {
 
   // 设置（meta KV）
   getSetting: (key: string) => ipcRenderer.invoke('setting:get', key),
+
+  // 全局仓库 Git 同步
+  getSyncStatus: () => ipcRenderer.invoke('sync:status') as Promise<SyncStatusInfo>,
+  configureSync: (input: SyncConfigureInput) =>
+    ipcRenderer.invoke('sync:configure', input) as Promise<SyncActionResult>,
+  testSyncRemote: (url: string, token?: string) =>
+    ipcRenderer.invoke('sync:test', url, token) as Promise<SyncActionResult>,
+  syncNow: () => ipcRenderer.invoke('sync:now') as Promise<SyncActionResult>,
+  restoreFromSyncRemote: () => ipcRenderer.invoke('sync:restore') as Promise<SyncActionResult>,
   setSetting: (key: string, value: string) => ipcRenderer.invoke('setting:set', key, value),
 
   // 自定义 skill 源（路径非内置默认目录的 agent 变体 / 项目）
