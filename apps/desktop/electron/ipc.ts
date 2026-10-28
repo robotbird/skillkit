@@ -292,7 +292,7 @@ export function registerIpc() {
   // 恢复会整量覆盖本地全局仓 → handler 侧已由渲染层弹过确认；完成后重扫刷新各视图
   ipcMain.handle('sync:restore', async () => {
     const r = await restoreFromRemote();
-    if (r.ok) scanAll();
+    scanAll(); // 即使分发失败，拉取也可能已改变全局仓库
     return r;
   });
 

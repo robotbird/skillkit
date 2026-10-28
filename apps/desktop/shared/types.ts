@@ -258,6 +258,8 @@ export interface SyncConfigureInput {
 export interface SyncActionResult {
   ok: boolean;
   error?: string; // 失败摘要（git 输出截断 / 归类后的中文提示）
+  restored?: number;
+  warnings?: string[]; // 未分发的 Skill 或旧版备份提示
   pushed?: boolean; // 本次是否产生了新提交并推送（false = 无变更空跑）
   summary?: string; // 变更统计，如 "+2 -1"
   commit?: string; // 推送后的短 commit hash
@@ -402,7 +404,7 @@ export interface SkillkitApi {
   // ===== 全局仓库 Git 同步 =====
   /** 读同步状态快照（配置 + 上次结果 + git 可用性；PAT 不回传）。 */
   getSyncStatus(): Promise<SyncStatusInfo>;
-  /** 保存配置并立即跑一次同步（首次配置即验证可达性）。token 三态见 SyncConfigureInput。 */
+  /** 保存配置（不推送；新电脑可先拉取恢复）。token 三态见 SyncConfigureInput。 */
   configureSync(input: SyncConfigureInput): Promise<SyncActionResult>;
   /** 测试远程可达性（git ls-remote，不落任何配置）。token 传候选值或省略用已存的。 */
   testSyncRemote(url: string, token?: string): Promise<SyncActionResult>;

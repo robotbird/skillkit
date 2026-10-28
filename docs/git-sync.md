@@ -1,70 +1,43 @@
-# 全局仓库 Git 同步(需求定稿)
+# GitHub / Git 跨电脑同步
 
-> 状态:**已实现**(Round 1 用户确认 1A/2B/3A/4A+C/5A/6A;Round 2 按下表默认值实现,可推翻调整)。
-> 目标:设置里配置 git 远程地址后,已安装 skills 自动同步到用户的 GitHub 仓库。
+已实现。入口：设置 → GitHub / Git 同步。需安装系统 Git，并提前创建远程仓库。
 
-## Round 1 决策(用户已确认)
+## 使用
 
-| # | 决策 | 选择 |
-|---|------|------|
-| Q1 | 同步范围 | **A** — 只同步全局仓库 `~/.agents/skills`(规范副本库;仅装到单工具、未提升全局仓的 skill 不在范围内,产品出口是"装为全局") |
-| Q2 | 方向 | **B** — 单向推送(备份,按钮「推送到仓库」)+ 手动「拉取最新」(全量覆盖式,不做逐 skill 合并) |
-| Q3 | 触发 | **A** — 安装/卸载/复制等变更后自动同步(防抖合并)+ 应用启动时一次;设置里有「自动同步」开关,手动「立即同步」按钮常驻 |
-| Q4 | 认证 | **A+C,兼容 B** — git 地址支持 HTTPS/SSH;HTTPS 时提供可选 PAT 输入(存 safeStorage),未填 PAT 回落系统 git 凭据(osxkeychain / gh);不做 OAuth |
-| Q5 | 实现 | **A** — 调系统 `git` 子进程(execFile),不引 isomorphic-git;检测不到 git 时设置页提示 |
-| Q6 | 远程仓库 | **A** — 用户自建(可为空仓库),填 URL;不自动创建仓库 |
+1. 原电脑填写 HTTPS 或 SSH 仓库地址，按需填写 PAT，点击「保存配置」。保存本身不上传文件。
+2. 点击「推送到仓库」，上传全局仓库和各工具下的用户 Skill 完整文件。
+3. 新电脑安装 Skillkit 和 Git，填写同一地址、配置认证，点击「保存配置」。
+4. 点击「拉取并分发」，确认覆盖提示，下载文件并恢复到本机对应 agent 的目录。
+5. 需要时开启并保存「自动同步」：安装、卸载、复制等变更后防抖 5 秒，以及启动时推送一次。接收另一台电脑的变更仍需手动拉取。
 
-## Round 2 推导决策(默认值,待确认)
+新配置默认不开启自动同步。未保存的配置会禁用推送/拉取按钮；清空地址后保存可停用同步。连接测试仅验证远程可读，写权限由推送验证。
 
-| # | 决策 | 默认值 | 理由 |
-|---|------|--------|------|
-| Q7 | 仓库形态 | `~/.agents/skills` **原地 `git init`**(目录即仓库,skills 在根,写 `.gitignore` 忽略 `.DS_Store` / `.bak-*` / `.skill-lock.json`) | 文件系统即真相的既有哲学;镜像目录需双向搬运,违背单一数据源。`.git` 点前缀,scanGlobalRepo 天然跳过 |
-| Q8 | push 冲突 | 正常 push → 被拒则 `pull --rebase` 后重试 → 仍失败把错误显示在设置页,**不自动强推**,不提供强推按钮 | 备份语义下强推丢数据风险大;真正的分叉应提示用户手动处理 |
-| Q9 | 恢复语义 | 「拉取最新」(原「从远程恢复」) = `fetch` + `reset --hard origin/<branch>` + `clean -fd`,**整量覆盖**(本地全局仓中未同步内容会丢),UI 二次确认弹窗明示 | Q2B 的直接推论;确认弹窗兜底误操作 |
-| Q10 | commit 信息 | `sync: +N/-M skills <YYYY-MM-DD HH:mm>`(变更统计来自 `git status --porcelain` 前后差) | 人可读,远程仓库浏览友好 |
-| Q11 | 分支 | 不暴露设置。init 用 `-b main`;远程已有内容时以远端 HEAD 为准(`push -u origin HEAD`) | 减少配置面 |
-| Q12 | 首次同步 | 配置 URL 保存后立即跑一次完整同步(init + 首次 commit + push),让错误尽早暴露 | 「设置后可以自动同步」的直接兑现 |
-| Q13 | UI 位置 | 设置弹窗新增「同步」section(位于「Skill 空间」与「更新」之间);不做 TopBar 常驻图标 | v1 聚焦设置页;自动同步失败仅在该 section 显示状态 |
+## 同步范围与分发
 
-## 行为规格
+- 全局仓库 `~/.agents/skills`，以及已支持 agent 和自定义 Skill 空间扫描到的用户 Skill；跳过工具内置 Skill、隐藏目录和 `.git` 元数据。
+- 包括 Skill 文档、脚本、模板、资源和其他附属文件；软链导出为实际文件，不依赖旧电脑的绝对路径。循环或无法读取的软链会阻止生成不完整备份。
+- 各工具同名 Skill 独立备份，保留不同内容；多个来源落到同一工具恢复路径时停止推送并报告冲突。
+- 内置工具按本机平台安装目录分发，无需目标工具已被检测为安装。标准目录下保留相对布局；辅助扫描目录中的 Skill 恢复到工具标准安装目录。
+- 自定义空间按「名称 + 类型」匹配本机配置，不同步旧电脑的绝对路径。新电脑需先添加对应空间；未匹配时保留仓库备份，并提示未分发项目。
+- 恢复采用独立文件副本，覆盖同路径 Skill；不会删除工具目录中其他 Skill。单个 Skill 写入失败会回滚该 Skill，报告未完成的分发，可修复原因后重新拉取。
+- 全局仓库仍是覆盖式拉取，未推送内容可能丢失，界面会确认。这不是逐文件双向自动合并。
+- 老版仓库可拉取全局内容，但缺少分发清单，会提示手动「安装到工具」。在原电脑用新版推送一次即可生成清单。
 
-### 配置(设置 → 同步)
-- 字段:git 远程地址(必填,HTTPS/SSH 均可)、PAT(可选,密码框)、自动同步开关(配置成功后默认开)。
-- 「测试连接」:对远程 `git ls-remote`,即时反馈可达性/权限。
-- 保存即触发首次同步(Q12)。清空地址 = 停用同步(保留 `.git`,不删数据)。
+## 仓库格式与实现
 
-### 自动同步(Q3)
-- 触发点:主进程所有引起全局仓/已装 skill 变化的 IPC handler(安装/卸载/复制/全局仓增删/更新应用,即 ipc.ts 中 scanAll() 的调用点)之后。
-- 防抖 5s:连续变更合并为一次 push。
-- 启动时(main.ts 启动扫描后)若已配置且自动开关开 → 同步一次。
-- 同步进行中收到新触发 → 完成后补跑一次(不丢变更)。
+保留全局仓库根目录布局，并增加 `.skillkit-sync/manifest.json`（version 1）及按稳定摘要命名的 Skill 文件副本。清单只保存工具 ID、自定义空间名称/类型、相对路径和副本 ID，不保存本机绝对路径或凭据。副本强制纳入 Git，避免 Skill 自带 `.gitignore` 导致文件漏传。
 
-### 单次同步流程(sync.ts)
-1. `~/.agents/skills` 无 `.git` → `git init -b main` + 写 `.gitignore` + `remote add origin <url>`。
-2. `git add -A` → 无变更则跳过 commit(仅启动触发的空跑)。
-3. `git commit -m "sync: …"`。
-4. `git push`;被拒(fetch head 落后)→ `pull --rebase` → 再 push;仍失败 → 状态记错误(Q8)。
-5. 结果写 meta KV:时间、状态(ok/error+摘要)、上次 commit hash;渲染层打开设置页时读取展示。
+恢复前验证清单版本、相对路径、副本内容及软链。先在临时目录准备全部已匹配的副本，再写入工具目录，避免非法清单造成目录穿越。
 
-### PAT 注入(不落盘)
-- PAT 仅存 safeStorage(同 auth_token 模式,`enc:`/`plain:` 前缀)。
-- 命令级注入:`git -c http.<repo-base>.extraheader="AUTHORIZATION: basic <b64(x-access-token:PAT)>" …`,凭据不进 `.git/config`、不进 argv 明文。
-- SSH URL 或无 PAT → 直接走系统 git 凭据链。
+推送使用正常 Git push；被拒后尝试 rebase，冲突会中止并报告，不强制推送。推送和拉取采用远端默认分支，恢复后本地分支也对齐远端，避免新电脑误建 main/master 分支。
 
-### 提交身份(user.name/email,署名而非认证)
-- 优先级:设置里存的「提交身份」(用户名+邮箱成对) → 系统 git 配置 → Skillkit 兜底(`Skillkit <skillkit@local>`);统一 `identityFallbackArgs()` 命令级 `-c` 注入,不落盘不污染全局配置。
-- commit 与 rebase(重建提交)都需要身份,两处统一走该辅助;无身份机器不再报 Committer identity unknown。
-- 设置页该字段默认收起;系统 git 无身份且设置里也没存时自动展开提示(邮箱与 GitHub 账号一致可计入贡献图)。
+HTTPS PAT 使用 Electron safeStorage 保存（不可用时沿用明文存储降级），通过 Git 命令环境变量注入，不写入仓库配置或命令参数；不填 PAT 或使用 SSH 时沿用系统凭据。提交身份优先使用设置，其次系统 Git 身份，最后使用 Skillkit 本地署名。
 
-### 拉取最新(原「从远程恢复」,Q9)
-- 仅手动:设置页按钮 → 二次确认(明示覆盖语义)→ fetch + reset --hard + clean -fd → scanAll() 刷新各视图。
-- 恢复后软链不受影响(工具目录软链指向全局仓内路径,内容原地更新)。
+## 验证
 
-## 涉及改动面(实现清单)
+`node --test apps/desktop/tests/sync.test.mjs`（或 `pnpm --filter desktop test:sync`）使用临时目录，不访问真实用户 Skill 或 GitHub：
 
-- `shared/types.ts`:`SyncConfig` / `SyncStatusInfo` 类型、`SETTING_KEYS` 增 `sync_repo_url` / `sync_auth_token` / `sync_auto` / `sync_last_time` / `sync_last_status`、`SkillkitApi` 增 5 个方法。
-- `electron/sync.ts`(新):git execFile 封装、ensureRepo、syncNow、restoreFromRemote、testRemote、scheduleSkillSync(防抖)。
-- `electron/ipc.ts`:`sync:status/configure/test/now/restore` handler;变更 handler 后挂 `scheduleSkillSync()`。
-- `electron/preload.ts`:暴露对应方法。
-- `src/components/SettingsDialog.tsx` + `src/i18n/messages.ts`:「同步」section(zh/en)。
-- `electron/main.ts`:启动后自动同步一次。
+- 同名 Skill 隔离、完整资源、软链实体化和自定义项目目录。
+- 拒绝目录穿越、备份软链、循环链接；失败保留已有快照。
+- 未配置自定义空间的明确提示。
+- 真实本地 Git 裸仓库：A 推送 → B 拉取并分发 → B 再推送；远端默认分支和仅保存配置行为。

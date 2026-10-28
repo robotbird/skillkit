@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.node.json && tsc -p tsconfig.json && vite build",
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.json",
+    "test:sync": "node --test tests/sync.test.mjs",
     "preview": "vite preview",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "pack": "npm run build && electron-builder --dir",

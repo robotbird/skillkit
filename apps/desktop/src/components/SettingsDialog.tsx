@@ -565,7 +565,7 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
   const [idEmail, setIdEmail] = useState('');
   const [idOpen, setIdOpen] = useState(false);
   const [idError, setIdError] = useState(false);
-  const [auto, setAuto] = useState(true);
+  const [auto, setAuto] = useState(false);
   const [busy, setBusy] = useState<null | 'test' | 'save' | 'now' | 'restore'>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -594,6 +594,14 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
   useEffect(() => {
     void refresh();
   }, []);
+
+  useEffect(() => {
+    if (!status?.syncing) return;
+    const timer = setInterval(() => {
+      void window.skillkit.getSyncStatus().then(setStatus).catch(() => {});
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [status?.syncing]);
 
   async function onTest() {
     if (!repoUrl.trim()) return;
@@ -632,10 +640,9 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
       });
       setMessage(
         r.ok
-          ? { ok: true, text: r.pushed ? `${t('sync.ok')}${r.summary ? ` · ${r.summary}` : ''}` : t('sync.noChange') }
+          ? { ok: true, text: t('sync.saved') }
           : { ok: false, text: r.error || '' },
       );
-      if (!r.ok && isAuthError(r.error)) setTokenOpen(true); // 保存触发的首同步认证失败 → 展开 PAT
       setToken(''); // 保存后清空候选输入，回到「已保存」占位态
       await refresh();
     } catch (err: any) {
@@ -645,12 +652,15 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
     }
   }
 
-  /** 清除已存 PAT（token:''）。configureSync 会顺带同步一次，结果刷进状态卡。 */
+  /** 清除已存 PAT（token:''），不触发推送。 */
   async function onClearToken() {
     setBusy('save');
     setMessage(null);
     try {
-      await window.skillkit.configureSync({ repoUrl: repoUrl.trim(), auto, token: '' });
+      const r = await window.skillkit.configureSync({
+        repoUrl: status?.config.repoUrl || '', auto: status?.config.auto || false, token: '',
+      });
+      if (!r.ok) setMessage({ ok: false, text: r.error || '' });
       setToken('');
       await refresh();
     } catch (err: any) {
@@ -685,10 +695,12 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
     setMessage(null);
     try {
       const r = await window.skillkit.restoreFromSyncRemote();
-      setMessage(r.ok ? { ok: true, text: t('sync.restoreDone') } : { ok: false, text: r.error || '' });
+      setMessage(r.ok
+        ? { ok: !r.warnings?.length, text: [t('sync.restoreDone'), ...(r.warnings || [])].join('\n') }
+        : { ok: false, text: r.error || '' });
       if (!r.ok && isAuthError(r.error)) setTokenOpen(true);
       await refresh();
-      if (r.ok) onChanged?.(); // 恢复改变了全局仓内容，让「我的 Skill」重扫
+      onChanged?.(); // 恢复改变了全局仓内容，让「我的 Skill」重扫
     } catch (err: any) {
       setMessage({ ok: false, text: err?.message ?? String(err) });
     } finally {
@@ -699,6 +711,8 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
   const hasToken = status?.config.hasToken ?? false;
   // 主进程自动同步进行中（打开设置页时可能撞上）也按 busy 处理，避免双跑
   const actionBusy = busy !== null || !!status?.syncing;
+  const unsaved = repoUrl.trim() !== status?.config.repoUrl || !!token.trim() || auto !== status?.config.auto ||
+    idName.trim() !== (status?.config.identityName || '') || idEmail.trim() !== (status?.config.identityEmail || '');
 
   return (
     <div className="settings-section">
@@ -803,16 +817,16 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
       </FieldGroup>
 
       <div className="settings-actions">
-        <Button onClick={onSave} disabled={actionBusy || !repoUrl.trim()}>
+        <Button onClick={onSave} disabled={actionBusy || (!repoUrl.trim() && !status?.configured)}>
           {busy === 'save' ? t('sync.saving') : t('sync.save')}
         </Button>
         <Button variant="outline" onClick={onTest} disabled={actionBusy || !repoUrl.trim()}>
           {busy === 'test' ? t('sync.testing') : t('sync.test')}
         </Button>
-        <Button variant="outline" onClick={onSyncNow} disabled={actionBusy || !status?.configured}>
+        <Button variant="outline" onClick={onSyncNow} disabled={actionBusy || !status?.configured || unsaved}>
           {busy === 'now' ? t('sync.syncing') : t('sync.now')}
         </Button>
-        <Button variant="outline" onClick={onRestore} disabled={actionBusy || !status?.configured}>
+        <Button variant="outline" onClick={onRestore} disabled={actionBusy || !status?.configured || unsaved}>
           {busy === 'restore' ? t('sync.restoring') : t('sync.restore')}
         </Button>
       </div>
