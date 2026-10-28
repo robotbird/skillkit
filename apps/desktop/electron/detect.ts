@@ -2,17 +2,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
-import { TOOLS, ALL_TOOLS, getToolConfig, listCustomToolsMeta, isGlobalAgentsOnlyTool } from './tools.js';
+import { TOOLS, ALL_TOOLS, getToolConfig, listCustomToolsMeta, isGlobalAgentsOnlyTool, appDataDir } from './tools.js';
 import type { Tool, ToolDetection } from '../shared/types.js';
 
 /**
  * 真身探测：判断某 AI 工具是否「真的」装在本机（应用包或 CLI 可执行文件），
  * 而非仅凭配置目录存在（后者会被卸载残留 / 嵌套工具父目录 / 装技能时顺带建出的目录误报）。
- * macOS 为主：.app 包查 /Applications 等；CLI 查常见目录 + nvm + 用户登录 PATH。
+ * - macOS：.app 包查 /Applications 等；CLI 查常见目录 + nvm + 用户登录 PATH。
+ * - Windows：CLI 查 %APPDATA%\npm（npm 全局 bin）、~/.local/bin（claude 原生安装器）
+ *   及进程 PATH（GUI 启动通常继承用户 PATH，含 scoop shims 等），按 PATHEXT 扩展名匹配。
  */
 
 const home = os.homedir();
 const isMac = process.platform === 'darwin';
+const isWin = process.platform === 'win32';
 
 /** macOS 应用搜索根（系统级 + 用户级 + 用户个人）。 */
 const MAC_APP_ROOTS = isMac
@@ -23,20 +26,28 @@ const MAC_APP_ROOTS = isMac
  * CLI 常见安装目录（快速直查，不依赖 shell）。
  * GUI 启动的 Electron 进程 PATH 通常很精简（不含 homebrew/nvm/各工具自带 bin），
  * 所以先在这些目录里 fs.existsSync 直查；命中不了再用登录 shell 兜底。
+ * Windows 下额外查 %APPDATA%\npm（npm 全局 bin，claude/codex/gemini 等 CLI 最常见安装位）。
  */
 const CLI_DIRS = [
   '/opt/homebrew/bin', // Apple Silicon homebrew
   '/usr/local/bin', // Intel homebrew + npm 全局
   '/usr/bin',
   '/bin',
-  path.join(home, '.local/bin'),
+  path.join(home, '.local/bin'), // claude 原生安装器（win 下为 %USERPROFILE%\.local\bin\claude.exe）
   path.join(home, '.npm-global/bin'),
   path.join(home, '.bun/bin'),
   path.join(home, '.deno/bin'),
   path.join(home, '.volta/bin'),
   path.join(home, '.cargo/bin'),
   path.join(home, 'Library/pnpm'), // pnpm 全局
+  ...(isWin ? [path.join(appDataDir(), 'npm')] : []),
 ];
+
+/** Windows 可执行按 PATHEXT 扩展名匹配（'' 覆盖 npm 生成的无扩展 sh 垫片）；unix 仅原名。 */
+const CLI_EXTS: string[] = isWin ? ['', '.exe', '.cmd', '.bat', '.ps1'] : [''];
+
+/** 进程 PATH 目录（去重）。Windows GUI 启动通常继承完整用户 PATH（scoop shims 等）；mac 作补充。 */
+const PATH_DIRS = [...new Set((process.env.PATH ?? '').split(path.delimiter).filter(Boolean))];
 
 const exists = (p?: string): boolean => !!p && fs.existsSync(p);
 
@@ -88,12 +99,15 @@ function findInNvm(bin: string): string | null {
   return null;
 }
 
-/** 快速路径：候选目录 + nvm 直查（同步、不阻塞）。 */
+/** 快速路径：候选目录 + PATH 目录（按 CLI_EXTS 展开扩展名）+ nvm 直查（同步、不阻塞）。 */
 function findCliBinaryFast(bins: string[]): string | null {
+  const dirs = [...CLI_DIRS, ...PATH_DIRS];
   for (const bin of bins) {
-    for (const dir of CLI_DIRS) {
-      const p = path.join(dir, bin);
-      if (exists(p)) return p;
+    for (const dir of dirs) {
+      for (const ext of CLI_EXTS) {
+        const p = path.join(dir, bin + ext);
+        if (exists(p)) return p;
+      }
     }
     const nvmHit = findInNvm(bin);
     if (nvmHit) return nvmHit;

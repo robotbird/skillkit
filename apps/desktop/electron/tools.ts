@@ -20,7 +20,7 @@ const skillRoot = (...seg: string[]) => path.join(home, ...seg);
  * - Windows: %APPDATA%(回退 ~/AppData/Roaming)
  * - Linux: $XDG_CONFIG_HOME(回退 ~/.config)
  */
-const appDataDir = (): string => {
+export const appDataDir = (): string => {
   if (process.platform === 'win32') return process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
   if (process.platform === 'darwin') return path.join(home, 'Library', 'Application Support');
   return process.env.XDG_CONFIG_HOME || path.join(home, '.config');
