@@ -72,9 +72,9 @@ export function writeSnapshot(root: string, sources: SyncSource[]): void {
 export function restoreSnapshot(
   root: string,
   resolveRoot: (entry: Omit<SyncSource, 'source'>) => string | undefined,
-): { restored: number; warnings: string[] } {
+): { restored: number; warnings: string[]; skippedProjects: number } {
   const snapshot = path.join(root, SNAPSHOT_DIR);
-  if (!fs.existsSync(snapshot)) return { restored: 0, warnings: ['旧版备份没有工具分发清单，请在全局仓库中选择“安装到工具”。'] };
+  if (!fs.existsSync(snapshot)) return { restored: 0, warnings: ['旧版备份没有工具分发清单，请在全局仓库中选择“安装到工具”。'], skippedProjects: 0 };
   if (fs.lstatSync(snapshot).isSymbolicLink()) throw new Error('同步清单目录不能是软链');
   const manifestPath = path.join(snapshot, 'manifest.json');
   if (fs.lstatSync(manifestPath).isSymbolicLink()) throw new Error('同步清单不能是软链');
@@ -85,6 +85,7 @@ export function restoreSnapshot(
   const operations: { source: string; destination: string; base: string }[] = [];
   const destinations = new Set<string>();
   let restored = 0;
+  let skippedProjects = 0;
   try {
     for (const entry of manifest.entries) {
       if (!entry || typeof entry.tool !== 'string' || !relativePath(entry.relative) ||
@@ -94,6 +95,10 @@ export function restoreSnapshot(
       const source = path.join(temp, String(operations.length));
       const base = resolveRoot(entry);
       if (!base) {
+        if (entry.tool.startsWith('custom:') && entry.kind === 'project') {
+          skippedProjects++;
+          continue;
+        }
         warnings.push(`未分发 ${entry.label || entry.tool}/${entry.relative}：请先在本机添加同名、同类型的 Skill 空间后重新拉取。`);
         continue;
       }
@@ -132,7 +137,7 @@ export function restoreSnapshot(
         warnings.push(`${destination}：${error instanceof Error ? error.message : String(error)}`);
       }
     }
-    return { restored, warnings };
+    return { restored, warnings, skippedProjects };
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }

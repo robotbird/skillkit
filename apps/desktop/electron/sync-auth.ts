@@ -53,3 +53,26 @@ export function credentialErrorMessage(raw: string, url: string | undefined, has
     ? `认证失败：请检查本机保存的 PAT 是否过期、是否已选择该仓库（${permission}）`
     : `认证失败：这台电脑没有可用的仓库访问凭据。请填写 PAT 后保存配置，或先运行 gh auth login（${permission}）；另一台电脑的凭据不会随 Skill 同步`;
 }
+
+
+/** execFile reports a timeout as a killed process, often without stderr. Keep that cause visible. */
+export function gitFailureDetails(error: unknown, timeoutMs: number, token?: string | null): string {
+  const failure = error as { stderr?: string; stdout?: string; message?: string; killed?: boolean; signal?: string; code?: string | number } | null;
+  const output = [failure?.stderr, failure?.stdout, failure?.message].filter(Boolean).join('\n');
+  let details: string;
+  if (failure?.killed && failure.signal === 'SIGTERM') {
+    details = `Git 操作超时（已等待 ${Math.ceil(timeoutMs / 1000)} 秒）：下载或上传未能在时限内完成，请检查网络或代理后重试。\n${output}`;
+  } else if (failure?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+    details = `Git 输出超过缓冲区限制，请重试或检查 Git 调试输出配置。\n${output}`;
+  } else if (failure?.signal) {
+    details = `Git 进程被信号 ${failure.signal} 终止。\n${output}`;
+  } else {
+    details = output || `Git 执行失败${failure?.code ? `（退出码 ${failure.code}）` : ''}`;
+  }
+  if (token) {
+    for (const secret of [token, Buffer.from(`x-access-token:${token}`).toString('base64')]) {
+      details = details.split(secret).join('[REDACTED]');
+    }
+  }
+  return details;
+}

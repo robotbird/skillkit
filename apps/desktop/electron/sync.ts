@@ -7,7 +7,7 @@ import { metaGet, metaSet } from './db.js';
 import { scanGlobalRepo, globalRepoRoot } from './global-repo.js';
 import { scanTool } from './scan.js';
 import { allToolIds, getToolConfig, isGlobalAgentsOnlyTool, listCustomToolsMeta } from './tools.js';
-import { credentialErrorMessage, githubCredentialFallback } from './sync-auth.js';
+import { credentialErrorMessage, githubCredentialFallback, gitFailureDetails } from './sync-auth.js';
 import { writeSnapshot, restoreSnapshot, type SyncSource } from './sync-files.js';
 import { SETTING_KEYS } from '../shared/types.js';
 import type { SyncActionResult, SyncConfigureInput, SyncConfig, SyncStatusInfo } from '../shared/types.js';
@@ -28,7 +28,7 @@ const execFileAsync = promisify(execFile);
 /** 变更后自动同步的防抖窗口：连续安装/卸载合并为一次 push。 */
 const DEBOUNCE_MS = 5000;
 const GIT_TIMEOUT_MS = 30_000;
-const GIT_NETWORK_TIMEOUT_MS = 180_000; // push/fetch 可能走大仓库
+const GIT_NETWORK_TIMEOUT_MS = 15 * 60_000; // 完整 Skill 资源可能有数百 MB，传输与连接探测分开限时
 const MAX_BUFFER = 10 * 1024 * 1024;
 
 // ===== PAT 安全存储（与 account.ts 的 auth_token 同模式：safeStorage 优先，降级明文加前缀）=====
@@ -70,6 +70,7 @@ class GitError extends Error {
 
 /** 常见 git 网络类错误 → 中文摘要；未命中返回 null（调用方回落截断的原始输出）。 */
 function classifyGitError(raw: string, opts: GitOpts, args: string[]): string | null {
+  if (/^Git (操作超时|输出超过|进程被信号)/.test(raw)) return truncate(raw);
   const authError = credentialErrorMessage(raw, opts.url, !!opts.token, args.includes('push'));
   if (authError) return authError;
   if (/does not exist/i.test(raw)) return '仓库不存在：请核对地址';
@@ -138,7 +139,7 @@ async function runGit(args: string[], opts: GitOpts = {}): Promise<string> {
     });
     return stdout;
   };
-  const errorOutput = (err: any) => `${err?.stderr || ''}\n${err?.stdout || ''}\n${err?.message || ''}`;
+  const errorOutput = (err: unknown) => gitFailureDetails(err, opts.timeoutMs ?? GIT_TIMEOUT_MS, opts.token);
   try {
     return await execute(finalArgs);
   } catch (err) {
@@ -183,7 +184,7 @@ function loadConfig(): SyncConfig & { token: string | null } {
 }
 
 /** 上次同步状态（sync_last_status 存 JSON：{ ok, error, summary }）。 */
-function loadLastStatus(): { time: number | null; ok: boolean | null; error: string | null; summary: string | null } {
+function loadLastStatus(): { time: number | null; ok: boolean | null; error: string | null; summary: string | null; warnings: string[]; skippedProjects: number } {
   const t = Number(metaGet(SETTING_KEYS.syncLastTime));
   const raw = metaGet(SETTING_KEYS.syncLastStatus);
   let parsed: any = null;
@@ -192,19 +193,32 @@ function loadLastStatus(): { time: number | null; ok: boolean | null; error: str
   } catch {
     parsed = null;
   }
+  // v0.7.1 stored completed restores with skipped targets as failures. Read them as partial success.
+  const legacyPartial = parsed?.ok === false && typeof parsed.summary === 'string' &&
+    /^已恢复 \d+ 个 Skill$/.test(parsed.summary) && typeof parsed.error === 'string';
+  const warnings = Array.isArray(parsed?.warnings)
+    ? parsed.warnings.filter((value: unknown): value is string => typeof value === 'string')
+    : legacyPartial ? parsed.error.split('\n').filter(Boolean) : [];
+  // Old versions included missing project spaces in warning strings; collapse those into a light notice.
+  const legacyProjectPattern = /^未分发 .+\/\.(?:claude|codex|cursor|gemini|grok|qoder|augment|trae|windsurf)\/skills\/.+：请先在本机添加同名、同类型的 Skill 空间后重新拉取。$/;
+  const legacyProjectCount = legacyPartial ? warnings.filter((value: string) => legacyProjectPattern.test(value)).length : 0;
+  const skippedProjects = Number.isSafeInteger(parsed?.skippedProjects) && parsed.skippedProjects >= 0
+    ? parsed.skippedProjects : legacyProjectCount;
   return {
     time: t > 0 ? t : null,
-    ok: parsed ? !!parsed.ok : null,
-    error: parsed?.error ?? null,
+    ok: legacyPartial ? true : parsed ? !!parsed.ok : null,
+    error: legacyPartial ? null : parsed?.error ?? null,
     summary: parsed?.summary ?? null,
+    warnings: legacyPartial ? warnings.filter((value: string) => !legacyProjectPattern.test(value)) : warnings,
+    skippedProjects,
   };
 }
 
-function recordStatus(ok: boolean, error?: string, summary?: string, commit?: string): void {
+function recordStatus(ok: boolean, error?: string, summary?: string, commit?: string, warnings: string[] = [], skippedProjects = 0): void {
   metaSet(SETTING_KEYS.syncLastTime, String(Date.now()));
   metaSet(
     SETTING_KEYS.syncLastStatus,
-    JSON.stringify({ ok, error: ok ? null : error ?? null, summary: summary ?? null, commit: commit ?? null }),
+    JSON.stringify({ ok, error: ok ? null : error ?? null, summary: summary ?? null, commit: commit ?? null, warnings, skippedProjects }),
   );
 }
 
@@ -262,7 +276,7 @@ function snapshotSkills(root: string): void {
   writeSnapshot(root, sources);
 }
 
-function distributeSnapshot(root: string): { restored: number; warnings: string[] } {
+function distributeSnapshot(root: string): { restored: number; warnings: string[]; skippedProjects: number } {
   const custom = listCustomToolsMeta();
   return restoreSnapshot(root, (entry) => {
     if (entry.tool === 'global') return root;
@@ -322,7 +336,7 @@ async function commitAll(root: string, summary: string): Promise<void> {
 
 async function pushWithRebase(root: string, repoUrl: string, token: string | null): Promise<void> {
   const opts: GitOpts = { cwd: root, token, url: repoUrl, timeoutMs: GIT_NETWORK_TIMEOUT_MS };
-  const sym = await runGit(['ls-remote', '--symref', 'origin', 'HEAD'], opts);
+  const sym = await runGit(['ls-remote', '--symref', 'origin', 'HEAD'], { ...opts, timeoutMs: GIT_TIMEOUT_MS });
   const localBranch = (await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: root })).trim();
   const branch = sym.match(/^ref:\s*refs\/heads\/(\S+)/m)?.[1] || localBranch;
   if (!branch || branch === 'HEAD') throw new GitError('无法确定当前分支，请手动同步', '');
@@ -424,17 +438,20 @@ export async function restoreFromRemote(): Promise<SyncActionResult> {
       cwd: root,
       token,
       url: repoUrl,
-      timeoutMs: GIT_NETWORK_TIMEOUT_MS,
+      timeoutMs: GIT_TIMEOUT_MS,
     });
     const m = sym.match(/^ref:\s*refs\/heads\/(\S+)/m);
     if (!m) throw new Error('远程仓库为空，没有可恢复的内容');
     const branch = m[1];
     const net: GitOpts = { cwd: root, token, url: repoUrl, timeoutMs: GIT_NETWORK_TIMEOUT_MS };
-    await runGit(['fetch', 'origin', branch], net);
+    const hasHead = await runGit(['rev-parse', '--verify', '-q', 'HEAD'], { cwd: root })
+      .then(() => true).catch(() => false);
+    // 新电脑仅需当前快照，不下载历史版本；已有仓库保留其历史边界。
+    await runGit(['fetch', ...(hasHead ? [] : ['--depth=1']), '--no-tags', 'origin', branch], net);
     await runGit(['checkout', '-B', branch, 'FETCH_HEAD', '--force'], net);
     await runGit(['clean', '-fd'], net); // 清未跟踪；.gitignore 忽略项（.DS_Store 等）不动
     const result = distributeSnapshot(root);
-    recordStatus(result.warnings.length === 0, result.warnings.join('\n'), `已恢复 ${result.restored} 个 Skill`);
+    recordStatus(true, undefined, `已恢复 ${result.restored} 个 Skill`, undefined, result.warnings, result.skippedProjects);
     return { ok: true, ...result };
   } catch (e: any) {
     const error = e?.message || String(e);
@@ -456,7 +473,7 @@ export async function testRemote(url: string, token?: string): Promise<SyncActio
   const useToken = token?.trim() || (httpScopeOf(url) === httpScopeOf(saved.repoUrl) ? saved.token : null);
   try {
     // ls-remote 直接带 URL（不依赖 origin），在任何目录下可执行
-    await runGit(['ls-remote', url, 'HEAD'], { token: useToken, url, timeoutMs: GIT_NETWORK_TIMEOUT_MS });
+    await runGit(['ls-remote', url, 'HEAD'], { token: useToken, url, timeoutMs: GIT_TIMEOUT_MS });
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message || String(e) };
@@ -499,6 +516,8 @@ export async function getSyncStatus(): Promise<SyncStatusInfo> {
     lastOk: last.ok,
     lastError: last.error,
     lastSummary: last.summary,
+    lastWarnings: last.warnings,
+    lastSkippedProjects: last.skippedProjects,
     gitAvailable: await gitAvailable(),
     hasGitIdentity: (await has('user.name')) && (await has('user.email')),
     syncing,

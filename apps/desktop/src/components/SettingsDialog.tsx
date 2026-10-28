@@ -570,12 +570,16 @@ function SyncSection({ onChanged, toast }: { onChanged?: () => void; toast: Toas
   const [idError, setIdError] = useState(false);
   const [auto, setAuto] = useState(false);
   const [busy, setBusy] = useState<null | 'test' | 'save' | 'now' | 'restore'>(null);
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [message, setMessage] = useState<{ ok: boolean; text: string; warning?: boolean } | null>(null);
 
-  function report(result: { ok: boolean; text: string } | null) {
+  function report(result: { ok: boolean; text: string; warning?: boolean; toastText?: string } | null) {
     const feedback = result ? { ...result, text: result.text || t('sync.failed') } : null;
     setMessage(feedback);
-    if (feedback) toast.show(feedback.text, feedback.ok ? 'success' : 'error', feedback.ok ? 4000 : 6000);
+    if (feedback) toast.show(
+      result?.toastText || feedback.text,
+      !feedback.ok ? 'error' : feedback.warning ? 'info' : 'success',
+      feedback.ok && !feedback.warning ? 4000 : 6000,
+    );
   }
 
   /** 认证类失败（主进程 classifyGitError 单点生成，前缀固定「认证失败」）→ 展开 PAT 输入兜底。 */
@@ -707,7 +711,13 @@ function SyncSection({ onChanged, toast }: { onChanged?: () => void; toast: Toas
     try {
       const r = await window.skillkit.restoreFromSyncRemote();
       report(r.ok
-        ? { ok: !r.warnings?.length, text: [t('sync.restoreDone', { count: r.restored ?? 0 }), ...(r.warnings || [])].join('\n') }
+        ? {
+          ok: true, warning: !!r.warnings?.length,
+          text: [t('sync.restoreDone', { count: r.restored ?? 0 }), ...(r.warnings || [])].join('\n'),
+          toastText: r.warnings?.length
+            ? t('sync.restorePartial', { restored: r.restored ?? 0, skipped: r.warnings.length })
+            : undefined,
+        }
         : { ok: false, text: r.error || '' });
       if (!r.ok && isAuthError(r.error)) setTokenOpen(true);
       await refresh();
@@ -844,7 +854,7 @@ function SyncSection({ onChanged, toast }: { onChanged?: () => void; toast: Toas
 
       {message &&
         (message.ok ? (
-          <p role="status" className="whitespace-pre-wrap font-medium" style={{ color: 'var(--success-ink)' }}>{message.text}</p>
+          <p role="status" className="whitespace-pre-wrap font-medium" style={{ color: message.warning ? 'var(--ink-soft)' : 'var(--success-ink)' }}>{message.text}</p>
         ) : (
           <FieldError>{message.text}</FieldError>
         ))}
@@ -853,9 +863,15 @@ function SyncSection({ onChanged, toast }: { onChanged?: () => void; toast: Toas
         <div className="kv-label">{t('sync.lastSync')}</div>
         <div className="kv-value">
           {status?.lastTime ? formatTime(status.lastTime) : t('sync.never')}
-          {status?.lastOk === true ? ` · ${t('sync.ok')}${status.lastSummary ? ` · ${status.lastSummary}` : ''}` : ''}
+          {status?.lastOk === true ? ` · ${t(status.lastWarnings?.length ? 'sync.partial' : 'sync.ok')}${status.lastSummary ? ` · ${status.lastSummary}` : ''}` : ''}
           {status?.lastOk === false ? ` · ${t('sync.failed')}` : ''}
         </div>
+        {!!status?.lastSkippedProjects && (
+          <p className="settings-hint">{t('sync.projectSkipped', { count: status.lastSkippedProjects })}</p>
+        )}
+        {!!status?.lastWarnings?.length && (
+          <div className="kv-value whitespace-pre-wrap" role="status">{status.lastWarnings.join('\n')}</div>
+        )}
         {status?.lastOk === false && status.lastError && (
           <div className="kv-value is-error">{status.lastError}</div>
         )}

@@ -259,6 +259,7 @@ export interface SyncActionResult {
   ok: boolean;
   error?: string; // 失败摘要（git 输出截断 / 归类后的中文提示）
   restored?: number;
+  skippedProjects?: number; // 未配置的项目空间：仅提示，不视为失败
   warnings?: string[]; // 未分发的 Skill 或旧版备份提示
   pushed?: boolean; // 本次是否产生了新提交并推送（false = 无变更空跑）
   summary?: string; // 变更统计，如 "+2 -1"
@@ -273,6 +274,8 @@ export interface SyncStatusInfo {
   lastOk: boolean | null; // 上次结果；null = 从未同步
   lastError: string | null;
   lastSummary: string | null;
+  lastSkippedProjects: number; // 忽略未配置项目的条目数
+  lastWarnings: string[]; // 已完成拉取但未分发的项目；与失败错误分开显示
   gitAvailable: boolean; // 系统 git 是否可用
   hasGitIdentity: boolean; // 系统 git 是否已配 user.name+email；未配且设置里也没存身份时，提交用 Skillkit 兜底署名
   syncing: boolean; // 是否正在同步中

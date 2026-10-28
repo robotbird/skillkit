@@ -74,11 +74,11 @@ jobs:
         # 我们在 release job 里用 softprops/action-gh-release 自己发版，这里只打包。
         run: npx electron-builder --${{ matrix.arch }} --publish never
         env:
-          # 关闭 macOS 自动签名身份发现：CI 上没有证书时让它干净地跳过签名。
+          # 关闭 macOS 开发者证书发现；沿用 package.json 的 ad-hoc 签名。
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
       # ---------------------------------------------------------------
-      # macOS 代码签名 / 公证开关（当前：关闭）
+      # macOS 开发者证书签名 / 公证开关（当前：关闭，使用 ad-hoc 签名）
       # 想启用时，在 repo Settings → Secrets and variables → Actions 配置：
       #   MAC_CERTS            — 导出的 .p12，base64 编码（macOS: base64 -i cert.p12）
       #   MAC_CERTS_PASSWORD   — 该 .p12 的密码
@@ -153,11 +153,10 @@ jobs:
           body: |
             ## ✨ 本次更新
 
-            - **修复 PAT 认证同步失败**：修正 Git Authorization 配置键，解决保存令牌后出现 `invalid key`、无法测试连接或拉取的问题。
-            - **跨电脑完整同步**：备份 Skill 文档、脚本与资源，新电脑拉取后按对应 agent 目录恢复；软链导出为实际文件。
-            - **明确的同步反馈**：推送成功、无变更、拉取分发数量和失败原因均有弹出提示，设置页保留结果详情。
-            - **私有仓库认证引导**：区分读取与写入权限；系统凭据失败时支持复用本机已登录的 GitHub CLI，PAT 不随 Skill 备份同步。
-            - **macOS 安装体验**：DMG 新增中英文拖拽安装说明及 Retina 背景。
+            - **改善大仓库下载**：推送与拉取时限从 3 分钟延长为 15 分钟；新电脑首次恢复只拉取当前快照，减少历史数据下载。
+            - **明确失败原因**：超时、进程终止等情况显示具体原因，避免只出现 `Command failed: git fetch origin main`；诊断信息自动隐藏令牌。
+            - **项目空间轻量提醒**：未配置的项目空间自动跳过，只提示跳过数量，不再标红或将整次同步显示为失败。
+            - **兼容历史状态**：旧版记录中“已恢复、部分项目未分发”的状态会正确显示为成功及轻量提醒。
 
             ## 📥 安装 / 升级
 
@@ -169,7 +168,7 @@ jobs:
 
             **已安装老版本**：打开 Skillkit 按提示更新即可自动升级（Windows 同理）；也可从下方 Assets 手动下载安装包。
 
-            > ⚠️ macOS 版本当前**未签名**。若手动下载 dmg 安装，首次打开提示「已损坏 / 无法验证开发者」时，右键 App →「打开」，或在终端执行 `xattr -dr com.apple.quarantine /Applications/Skillkit.app`。
+            > ⚠️ macOS 版本使用 **ad-hoc 本地签名，尚未经过 Apple 开发者证书签名和公证**。若手动下载 dmg 安装，首次打开提示「已损坏 / 无法验证开发者」时，右键 App →「打开」，或在终端执行 `xattr -dr com.apple.quarantine /Applications/Skillkit.app`。
           generate_release_notes: true
           make_latest: true
         env:

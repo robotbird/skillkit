@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, execFile, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
+import { promisify } from 'node:util';
 import ts from 'typescript';
 
 const moduleUrl = (source) => 'data:text/javascript;base64,' + Buffer.from(ts.transpileModule(source, {
@@ -12,7 +13,7 @@ const moduleUrl = (source) => 'data:text/javascript;base64,' + Buffer.from(ts.tr
 }).outputText).toString('base64');
 const filesUrl = moduleUrl(fs.readFileSync(new URL('../electron/sync-files.ts', import.meta.url), 'utf8'));
 const authUrl = moduleUrl(fs.readFileSync(new URL('../electron/sync-auth.ts', import.meta.url), 'utf8'));
-const { credentialErrorMessage, githubCredentialFallback } = await import(authUrl);
+const { credentialErrorMessage, githubCredentialFallback, gitFailureDetails } = await import(authUrl);
 const { writeSnapshot, restoreSnapshot } = await import(filesUrl);
 const directoryLinkType = process.platform === 'win32' ? 'junction' : 'dir';
 const temp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'skillkit-sync-test-'));
@@ -111,11 +112,25 @@ test('real Git: push on computer A, restore and distribute on B, then push to re
     assert.equal(manifest.entries[0].relative, 'only-codex');
     assert.equal(git(remote, 'show', `main:.skillkit-sync/${manifest.entries[0].payload}/scripts/run.sh`), 'first');
     assert.equal((await api.syncNow()).pushed, false);
+    const manifestPath = path.join(state.root, '.skillkit-sync/manifest.json');
+    const withProject = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    withProject.entries.push({ ...withProject.entries[0], tool: 'custom:skillkit', label: 'skillkit', kind: 'project', relative: '.claude/skills/release' });
+    fs.writeFileSync(manifestPath, JSON.stringify(withProject));
+    git(state.root, '-c', 'user.name=Test', '-c', 'user.email=test@local', 'commit', '-am', 'test: include unmapped project');
+    git(state.root, 'push', 'origin', 'HEAD:main');
     state.root = path.join(dir, 'B'); state.tools = path.join(dir, 'toolsB'); state.scans = [];
     const restored = await api.restoreFromRemote();
     assert.equal(restored.ok, true, JSON.stringify(restored)); assert.equal(restored.restored, 1);
+    assert.equal(restored.warnings.length, 0);
+    assert.equal(restored.skippedProjects, 1);
+    const partialStatus = await api.getSyncStatus();
+    assert.equal(partialStatus.lastOk, true);
+    assert.equal(partialStatus.lastError, null);
+    assert.equal(partialStatus.lastWarnings.length, 0);
+    assert.equal(partialStatus.lastSkippedProjects, 1);
     assert.equal(fs.readFileSync(path.join(state.tools, 'only-codex/scripts/run.sh'), 'utf8'), 'first');
     assert.equal(git(state.root, 'branch', '--show-current'), 'main');
+    assert.equal(git(state.root, 'rev-parse', '--is-shallow-repository'), 'true');
     state.scans = [{ path: path.join(state.tools, 'only-codex'), isBuiltin: false }];
     git(state.root, 'branch', '-m', 'different-local-name');
     fs.writeFileSync(path.join(state.tools, 'only-codex/scripts/run.sh'), 'second');
@@ -249,4 +264,43 @@ test('real authenticated HTTP Git: candidate and saved PAT support test, push, f
     delete globalThis.__syncTest;
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+
+test('real process timeouts retain their cause even when Git produces no stderr', async () => {
+  let failure;
+  try {
+    await promisify(execFile)(process.execPath, ['-e', 'setTimeout(() => {}, 5000)'], { timeout: 100 });
+  } catch (error) { failure = error; }
+  assert.ok(failure);
+  assert.match(gitFailureDetails(failure, 100), /Git 操作超时/);
+  assert.match(gitFailureDetails({ message: 'Command failed: git fetch origin main', signal: 'SIGKILL' }, 30000), /SIGKILL/);
+  const token = 'test-secret-token';
+  const output = gitFailureDetails({ stderr: token + ' ' + Buffer.from('x-access-token:' + token).toString('base64') }, 30000, token);
+  assert.equal(output.includes(token), false);
+  assert.equal(output.includes(Buffer.from('x-access-token:' + token).toString('base64')), false);
+});
+
+
+test('legacy partial restore status stays distinguishable from authentication failures', async () => {
+  const state = { meta: new Map(), scans: [] };
+  globalThis.__syncTest = state;
+  try {
+    const api = await loadSync();
+    state.meta.set('syncLastStatus', JSON.stringify({ ok: false, error: '未分发 skillkit/release：请添加空间', summary: '已恢复 112 个 Skill' }));
+    const partial = await api.getSyncStatus();
+    assert.equal(partial.lastOk, true);
+    assert.equal(partial.lastError, null);
+    assert.deepEqual(partial.lastWarnings, ['未分发 skillkit/release：请添加空间']);
+    state.meta.set('syncLastStatus', JSON.stringify({ ok: false, error: '未分发 skillkit/.claude/skills/release：请先在本机添加同名、同类型的 Skill 空间后重新拉取。', summary: '已恢复 112 个 Skill' }));
+    const legacyProject = await api.getSyncStatus();
+    assert.equal(legacyProject.lastOk, true);
+    assert.equal(legacyProject.lastSkippedProjects, 1);
+    assert.deepEqual(legacyProject.lastWarnings, []);
+    state.meta.set('syncLastStatus', JSON.stringify({ ok: false, error: '认证失败', summary: null }));
+    const failed = await api.getSyncStatus();
+    assert.equal(failed.lastOk, false);
+    assert.equal(failed.lastError, '认证失败');
+    assert.deepEqual(failed.lastWarnings, []);
+  } finally { delete globalThis.__syncTest; }
 });
