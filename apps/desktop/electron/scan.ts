@@ -104,7 +104,7 @@ export function scanTool(tool: Tool): InstalledSkill[] {
 /**
  * 本机是否存在该 agent 的配置/数据目录（`TOOLS[tool].detectRoots`）。
  * 纯全局仓工具（skill 路径完全等同 ~/.agents/skills）恒为 false。
- * 用于扫描范围；UI 展示另见 installedTools()（还需 skill 数 > 0）。
+ * 用于扫描范围；UI 展示另见 installedTools()（还需 skill 根目录存在）。
  */
 export function isToolInstalled(tool: Tool): boolean {
   // 完全沿用 ~/.agents/skills → 不单独显示/扫描为独立工具
@@ -120,17 +120,20 @@ export function isToolInstalled(tool: Tool): boolean {
   return false;
 }
 
-/** 该工具 skill 目录下是否至少有一个有效 skill（含 SKILL.md）。 */
-export function toolHasSkills(tool: Tool): boolean {
-  return scanTool(tool).length > 0;
+/** 该工具是否已有 skill 根目录（roots 任一存在即可，不要求目录里有 skill）。 */
+function skillRootsExist(tool: Tool): boolean {
+  const cfg = getToolConfig(tool);
+  if (!cfg) return false;
+  return cfg.roots.some((r) => fs.existsSync(r));
 }
 
 /**
- * UI 可展示的工具：本机有 agent 配置，且至少有 1 个 skill。
- * skill 数为 0 的不出现在 chip / 安装选择器（避免空壳工具占位）。
+ * UI 可展示的工具：本机有 agent 配置，且 skill 根目录已存在。
+ * 不要求 ≥1 个 skill——目录在（哪怕暂时为空 / 没有合法 SKILL.md）也要能识别出来，
+ * 否则「装了工具但 skills 还是空目录」的机器（如 Windows 新装 Claude Code）整个识别不到。
  */
 export function installedTools(): Tool[] {
-  return allToolIds().filter((tool) => isToolInstalled(tool) && toolHasSkills(tool));
+  return allToolIds().filter((tool) => isToolInstalled(tool) && skillRootsExist(tool));
 }
 
 export function scanAll(): InstalledSkill[] {

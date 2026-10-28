@@ -30,7 +30,7 @@ export interface InstalledToolsState {
   refresh: () => Promise<void>;
 }
 
-/** 可展示工具：本机有 agent 配置且至少有 1 个 skill。用于 chip / 安装选择器。 */
+/** 可展示工具：本机有 agent 配置且 skill 根目录已存在（不要求有 skill）。用于 chip / 选择器。 */
 export function useInstalledTools(): InstalledToolsState {
   const [tools, setTools] = useState<Tool[]>([]);
   const [ready, setReady] = useState(false);

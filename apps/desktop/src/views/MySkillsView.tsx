@@ -48,7 +48,7 @@ export default function MySkillsView({
   const [globalTarget, setGlobalTarget] = useState<GlobalRepoSkill | null>(null);
   const [installingGlobal, setInstallingGlobal] = useState(false);
 
-  // 只展示「有 skill 的已装工具」chip；未装或 skill 数为 0 的不出现
+  // 展示「skill 根目录已存在」的已装工具 chip；skill 数可为 0（目录在就要能识别，不要求已有 skill）
   const { tools: installed, refresh: refreshInstalledTools } = useInstalledTools();
   // 复制/安装目标的候选：真身探测命中的本机工具（与安装页同一口径）
   const { tools: localTools } = useLocalTools();

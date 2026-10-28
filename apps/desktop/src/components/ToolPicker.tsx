@@ -84,7 +84,7 @@ export default function ToolPicker({
   // 工具可见性两套口径（全局一致的约定）：
   // - installTargets（安装/复制/接入目标）：真身探测（useLocalTools，app 包/CLI 命中 + 自定义
   //   agent），与安装页 InstallToolGrid 完全同一规则，包括「一个都没探测到 → 回退全部」；未装工具不可选。
-  // - 默认（卸载/打开目录等本组操作）：本机有配置且有 skill（useInstalledTools），
+  // - 默认（卸载/打开目录等本组操作）：本机有配置且 skill 根目录存在（useInstalledTools），
   //   已卸载工具的残留 skill 也要能操作，故不用真身口径。
   // fixedTargets 场景不需要本机探测列表。
   const { tools: installed } = useInstalledTools();
