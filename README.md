@@ -54,6 +54,8 @@ Grab the latest build for your platform from **[GitHub Releases](https://github.
 | **macOS** (Intel) | `.dmg` / `.zip` |
 | **Windows** | `.exe` (NSIS installer) |
 
+To install on macOS, open the `.dmg` and drag **Skillkit** into the **Applications** folder along the arrow. Open Skillkit from Applications, then eject the installer disk.
+
 > ⚠️ **macOS only — the app is unsigned.** After dragging **Skillkit** to `/Applications`, if macOS reports it as "damaged" or "can't be opened / can't be verified," open **Terminal** and run these two commands:
 >
 > ```bash

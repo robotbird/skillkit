@@ -110,7 +110,7 @@ export default function TopBar({
           </div>
         )}
       </header>
-      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} onChanged={onChanged} />
+      <SettingsDialog toast={toast} open={settingsOpen} onClose={() => setSettingsOpen(false)} onChanged={onChanged} />
     </>
   );
 }

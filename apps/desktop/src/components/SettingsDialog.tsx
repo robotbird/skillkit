@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import ModalPortal from './ModalPortal';
+import type { ToastState } from './Toast';
 import { useI18n } from '../i18n';
 import { useTheme } from '../lib/useTheme';
 import { useAccount } from '../lib/useAccount';
@@ -45,7 +46,9 @@ export default function SettingsDialog({
   open,
   onClose,
   onChanged,
+  toast,
 }: {
+  toast: ToastState;
   open: boolean;
   onClose: () => void;
   /** 设置内发生需刷新主页的数据变更（如增删自定义 agent）时回调，触发「我的 Skill」重扫。 */
@@ -103,7 +106,7 @@ export default function SettingsDialog({
             {section === 'appearance' && <AppearanceSection />}
             {section === 'language' && <LanguageSection />}
             {section === 'space' && <SkillSpaceSection onChanged={onChanged} />}
-            {section === 'sync' && <SyncSection onChanged={onChanged} />}
+            {section === 'sync' && <SyncSection onChanged={onChanged} toast={toast} />}
             {section === 'updates' && <UpdatesSection />}
             {section === 'about' && <AboutSection />}
           </div>
@@ -551,7 +554,7 @@ function SkillSpaceSection({ onChanged }: { onChanged?: () => void }) {
 const GH_PAT_DOC =
   'https://docs.github.com/zh/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens';
 
-function SyncSection({ onChanged }: { onChanged?: () => void }) {
+function SyncSection({ onChanged, toast }: { onChanged?: () => void; toast: ToastState }) {
   const { t, locale } = useI18n();
   const patDocUrl = locale === 'zh' ? GH_PAT_DOC : GH_PAT_DOC.replace('/zh/', '/');
   const [status, setStatus] = useState<SyncStatusInfo | null>(null);
@@ -569,9 +572,15 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
   const [busy, setBusy] = useState<null | 'test' | 'save' | 'now' | 'restore'>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
+  function report(result: { ok: boolean; text: string } | null) {
+    const feedback = result ? { ...result, text: result.text || t('sync.failed') } : null;
+    setMessage(feedback);
+    if (feedback) toast.show(feedback.text, feedback.ok ? 'success' : 'error', feedback.ok ? 4000 : 6000);
+  }
+
   /** 认证类失败（主进程 classifyGitError 单点生成，前缀固定「认证失败」）→ 展开 PAT 输入兜底。 */
   function isAuthError(e?: string | null): boolean {
-    return !!e && e.startsWith('认证失败');
+    return !!e && /认证失败|无权访问/.test(e);
   }
 
   async function refresh() {
@@ -606,15 +615,15 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
   async function onTest() {
     if (!repoUrl.trim()) return;
     setBusy('test');
-    setMessage(null);
+    report(null);
     try {
       const r = await window.skillkit.testSyncRemote(repoUrl.trim(), token.trim() || undefined);
-      setMessage(
+      report(
         r.ok ? { ok: true, text: t('sync.testOk') } : { ok: false, text: t('sync.testFail', { error: r.error || '' }) },
       );
       if (!r.ok && isAuthError(r.error)) setTokenOpen(true);
     } catch (err: any) {
-      setMessage({ ok: false, text: t('sync.testFail', { error: err?.message ?? String(err) }) });
+      report({ ok: false, text: t('sync.testFail', { error: err?.message ?? String(err) }) });
     } finally {
       setBusy(null);
     }
@@ -628,7 +637,7 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
     }
     setIdError(false);
     setBusy('save');
-    setMessage(null);
+    report(null);
     try {
       const r = await window.skillkit.configureSync({
         repoUrl: repoUrl.trim(),
@@ -638,7 +647,7 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
         name: idOpen ? idName : undefined,
         email: idOpen ? idEmail : undefined,
       });
-      setMessage(
+      report(
         r.ok
           ? { ok: true, text: t('sync.saved') }
           : { ok: false, text: r.error || '' },
@@ -646,7 +655,7 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
       setToken(''); // 保存后清空候选输入，回到「已保存」占位态
       await refresh();
     } catch (err: any) {
-      setMessage({ ok: false, text: err?.message ?? String(err) });
+      report({ ok: false, text: err?.message ?? String(err) });
     } finally {
       setBusy(null);
     }
@@ -655,16 +664,18 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
   /** 清除已存 PAT（token:''），不触发推送。 */
   async function onClearToken() {
     setBusy('save');
-    setMessage(null);
+    report(null);
     try {
       const r = await window.skillkit.configureSync({
         repoUrl: status?.config.repoUrl || '', auto: status?.config.auto || false, token: '',
       });
-      if (!r.ok) setMessage({ ok: false, text: r.error || '' });
+      report(r.ok
+        ? { ok: true, text: t('sync.tokenCleared') }
+        : { ok: false, text: r.error || t('sync.failed') });
       setToken('');
       await refresh();
     } catch (err: any) {
-      setMessage({ ok: false, text: err?.message ?? String(err) });
+      report({ ok: false, text: err?.message ?? String(err) });
     } finally {
       setBusy(null);
     }
@@ -672,18 +683,18 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
 
   async function onSyncNow() {
     setBusy('now');
-    setMessage(null);
+    report(null);
     try {
       const r = await window.skillkit.syncNow();
-      setMessage(
+      report(
         r.ok
-          ? { ok: true, text: r.pushed ? `${t('sync.ok')}${r.summary ? ` · ${r.summary}` : ''}` : t('sync.noChange') }
+          ? { ok: true, text: r.pushed ? `${t('sync.pushDone')}${r.summary ? ` · ${r.summary}` : ''}` : t('sync.noChange') }
           : { ok: false, text: r.error || '' },
       );
       if (!r.ok && isAuthError(r.error)) setTokenOpen(true);
       await refresh();
     } catch (err: any) {
-      setMessage({ ok: false, text: err?.message ?? String(err) });
+      report({ ok: false, text: err?.message ?? String(err) });
     } finally {
       setBusy(null);
     }
@@ -692,17 +703,17 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
   async function onRestore() {
     if (!confirm(t('sync.confirmRestore'))) return;
     setBusy('restore');
-    setMessage(null);
+    report(null);
     try {
       const r = await window.skillkit.restoreFromSyncRemote();
-      setMessage(r.ok
-        ? { ok: !r.warnings?.length, text: [t('sync.restoreDone'), ...(r.warnings || [])].join('\n') }
+      report(r.ok
+        ? { ok: !r.warnings?.length, text: [t('sync.restoreDone', { count: r.restored ?? 0 }), ...(r.warnings || [])].join('\n') }
         : { ok: false, text: r.error || '' });
       if (!r.ok && isAuthError(r.error)) setTokenOpen(true);
       await refresh();
       onChanged?.(); // 恢复改变了全局仓内容，让「我的 Skill」重扫
     } catch (err: any) {
-      setMessage({ ok: false, text: err?.message ?? String(err) });
+      report({ ok: false, text: err?.message ?? String(err) });
     } finally {
       setBusy(null);
     }
@@ -833,7 +844,7 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
 
       {message &&
         (message.ok ? (
-          <p className="settings-hint">{message.text}</p>
+          <p role="status" className="whitespace-pre-wrap font-medium" style={{ color: 'var(--success-ink)' }}>{message.text}</p>
         ) : (
           <FieldError>{message.text}</FieldError>
         ))}
@@ -842,7 +853,7 @@ function SyncSection({ onChanged }: { onChanged?: () => void }) {
         <div className="kv-label">{t('sync.lastSync')}</div>
         <div className="kv-value">
           {status?.lastTime ? formatTime(status.lastTime) : t('sync.never')}
-          {status?.lastOk === true && status.lastSummary ? ` · ${status.lastSummary}` : ''}
+          {status?.lastOk === true ? ` · ${t('sync.ok')}${status.lastSummary ? ` · ${status.lastSummary}` : ''}` : ''}
           {status?.lastOk === false ? ` · ${t('sync.failed')}` : ''}
         </div>
         {status?.lastOk === false && status.lastError && (

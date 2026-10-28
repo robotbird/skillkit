@@ -7,6 +7,7 @@ import { metaGet, metaSet } from './db.js';
 import { scanGlobalRepo, globalRepoRoot } from './global-repo.js';
 import { scanTool } from './scan.js';
 import { allToolIds, getToolConfig, isGlobalAgentsOnlyTool, listCustomToolsMeta } from './tools.js';
+import { credentialErrorMessage, githubCredentialFallback } from './sync-auth.js';
 import { writeSnapshot, restoreSnapshot, type SyncSource } from './sync-files.js';
 import { SETTING_KEYS } from '../shared/types.js';
 import type { SyncActionResult, SyncConfigureInput, SyncConfig, SyncStatusInfo } from '../shared/types.js';
@@ -68,13 +69,10 @@ class GitError extends Error {
 }
 
 /** 常见 git 网络类错误 → 中文摘要；未命中返回 null（调用方回落截断的原始输出）。 */
-function classifyGitError(raw: string): string | null {
-  if (/Authentication failed|could not read Username|Permission denied|publickey|403/i.test(raw)) {
-    return '认证失败：请检查 PAT 权限（需 repo 写权限）或系统 git 凭据；SSH 地址请确认密钥可用';
-  }
-  if (/Repository not found|does not exist|404/i.test(raw)) {
-    return '仓库不存在或无权访问：请核对地址';
-  }
+function classifyGitError(raw: string, opts: GitOpts, args: string[]): string | null {
+  const authError = credentialErrorMessage(raw, opts.url, !!opts.token, args.includes('push'));
+  if (authError) return authError;
+  if (/does not exist/i.test(raw)) return '仓库不存在：请核对地址';
   if (/Could not resolve|timed out|Connection|SSL|dial tcp/i.test(raw)) {
     return '网络错误：无法连接远程仓库';
   }
@@ -127,11 +125,11 @@ async function runGit(args: string[], opts: GitOpts = {}): Promise<string> {
     const basic = Buffer.from(`x-access-token:${opts.token}`).toString('base64');
     const index = Number(env.GIT_CONFIG_COUNT || 0);
     env.GIT_CONFIG_COUNT = String(index + 1);
-    env[`GIT_CONFIG_KEY_${index}`] = `http.${scope}extraheader`;
+    env[`GIT_CONFIG_KEY_${index}`] = `http.${scope}.extraheader`;
     env[`GIT_CONFIG_VALUE_${index}`] = `AUTHORIZATION: basic ${basic}`;
   }
-  try {
-    const { stdout } = await execFileAsync('git', finalArgs, {
+  const execute = async (commandArgs: string[]) => {
+    const { stdout } = await execFileAsync('git', commandArgs, {
       cwd: opts.cwd,
       timeout: opts.timeoutMs ?? GIT_TIMEOUT_MS,
       maxBuffer: MAX_BUFFER,
@@ -139,9 +137,21 @@ async function runGit(args: string[], opts: GitOpts = {}): Promise<string> {
       env,
     });
     return stdout;
-  } catch (err: any) {
-    const raw = `${err?.stderr || ''}\n${err?.stdout || ''}\n${err?.message || ''}`;
-    throw new GitError(classifyGitError(raw) ?? truncate(raw), raw);
+  };
+  const errorOutput = (err: any) => `${err?.stderr || ''}\n${err?.stdout || ''}\n${err?.message || ''}`;
+  try {
+    return await execute(finalArgs);
+  } catch (err) {
+    let raw = errorOutput(err);
+    const fallback = githubCredentialFallback(opts.url, !!opts.token, raw);
+    if (fallback) {
+      try {
+        return await execute([...fallback, ...finalArgs]);
+      } catch (retryError) {
+        raw = errorOutput(retryError);
+      }
+    }
+    throw new GitError(classifyGitError(raw, opts, args) ?? truncate(raw), raw);
   }
 }
 
@@ -442,7 +452,8 @@ export async function restoreFromRemote(): Promise<SyncActionResult> {
 export async function testRemote(url: string, token?: string): Promise<SyncActionResult> {
   if (!(await gitAvailable())) return { ok: false, error: '未检测到系统 git，请先安装 git' };
   if (!validRepoUrl(url)) return { ok: false, error: '地址格式不支持：请填 https:// 或 git@ 开头的仓库地址' };
-  const useToken = token && token.length > 0 ? token : loadConfig().token;
+  const saved = loadConfig();
+  const useToken = token?.trim() || (httpScopeOf(url) === httpScopeOf(saved.repoUrl) ? saved.token : null);
   try {
     // ls-remote 直接带 URL（不依赖 origin），在任何目录下可执行
     await runGit(['ls-remote', url, 'HEAD'], { token: useToken, url, timeoutMs: GIT_NETWORK_TIMEOUT_MS });

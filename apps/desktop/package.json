@@ -1,6 +1,6 @@
 {
   "name": "desktop",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "productName": "Skillkit",
   "private": true,
   "description": "Skillkit 桌面端 — 跨 Claude Code / Codex / Cursor / Trae / Workbuddy 的 skill 管理",
@@ -15,7 +15,9 @@
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
-    "logo:mark": "node scripts/extract-logo-mark.mjs"
+    "logo:mark": "node scripts/extract-logo-mark.mjs",
+    "dmg:background": "swift scripts/create-dmg-background.swift",
+    "dist:mac": "npm run build && electron-builder --mac --publish never"
   },
   "dependencies": {
     "@skillkit/types": "workspace:*",
@@ -91,6 +93,30 @@
           }
         ]
       }
+    },
+    "dmg": {
+      "title": "${productName} ${version}",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "background": "build/dmg-background.png",
+      "iconSize": 100,
+      "iconTextSize": 16,
+      "window": {
+        "width": 660,
+        "height": 420
+      },
+      "contents": [
+        {
+          "x": 170,
+          "y": 170,
+          "type": "file"
+        },
+        {
+          "x": 490,
+          "y": 170,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     },
     "win": {
       "icon": "build/icon.png",

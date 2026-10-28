@@ -54,6 +54,8 @@ Skillkit 读写以下工具的 skill 目录:
 | **macOS**(Intel) | `.dmg` / `.zip` |
 | **Windows** | `.exe`(NSIS 安装器) |
 
+macOS 安装：双击打开 `.dmg`，按照窗口中的箭头将左侧 **Skillkit** 拖到右侧 **Applications（应用程序）** 文件夹，然后从「应用程序」打开 Skillkit，最后推出安装磁盘。
+
 > ⚠️ **macOS 务必执行以下操作 —— 安装包未签名。** 把 **Skillkit** 拖进 `/Applications` 后,若系统提示「已损坏 / 无法验证开发者」,请打开**终端**执行:
 >
 > ```bash
@@ -120,7 +122,10 @@ SKILLKIT_SHARE_BASE_URL=http://127.0.0.1:3000 pnpm --filter desktop dev
 ```bash
 pnpm --filter desktop build     # 类型检查(tsc,两个 tsconfig)+ vite build
 pnpm --filter desktop dist      # → release/(mac dmg/zip,win nsis)
+pnpm --filter desktop dist:mac  # → release/Skillkit-<版本>-<架构>.dmg + 自动更新用 zip
 ```
+
+DMG 包含拖拽安装界面及中英文说明，支持 Retina 屏幕。背景资源已提交到 `apps/desktop/build/`，正常打包无需额外生成；修改背景后，可在 macOS 上运行 `pnpm --filter desktop dmg:background` 重新生成。`dist:mac` 默认构建当前机器架构，也可追加 `--arm64` 或 `--x64`（原生依赖需匹配目标架构）。
 
 CI(`.github/workflows/build.yml`)在 push main 时打包 mac + win;`workflow_dispatch` 触发 GitHub Release,`electron-updater` 据此推送更新。
 

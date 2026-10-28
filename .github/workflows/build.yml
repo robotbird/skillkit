@@ -63,6 +63,9 @@ jobs:
       - name: Rebuild native modules (better-sqlite3)
         run: pnpm run rebuild
 
+      - name: Test Skill sync (real Git and authenticated HTTP)
+        run: pnpm run test:sync
+
       - name: Build (tsc + vite)
         run: pnpm run build
 
@@ -150,10 +153,11 @@ jobs:
           body: |
             ## ✨ 本次更新
 
-            - **修复新机器同步失败**：未配置 git 用户名/邮箱的电脑（常见于新装的 Windows）同步时不再报 `Committer identity unknown`，自动用内置署名兜底；上次推送失败的提交也会在下次同步时自动补推。
-            - **提交身份设置**：Git 备份设置新增可选「提交身份」（用户名 / 邮箱），邮箱与 GitHub 账号一致时备份提交计入你的贡献图；新机器会自动提示填写。
-            - **操作更直白**：「保存并同步 / 从远程恢复」更名为「推送到仓库 / 拉取最新」；拉取仍以远程为准整量覆盖（保留确认弹窗）。
-            - **PAT 创建教程**：PAT 输入框下新增所需权限说明（经典令牌勾 repo / 细粒度给 Contents 读写）与 GitHub 官方教程链接。
+            - **修复 PAT 认证同步失败**：修正 Git Authorization 配置键，解决保存令牌后出现 `invalid key`、无法测试连接或拉取的问题。
+            - **跨电脑完整同步**：备份 Skill 文档、脚本与资源，新电脑拉取后按对应 agent 目录恢复；软链导出为实际文件。
+            - **明确的同步反馈**：推送成功、无变更、拉取分发数量和失败原因均有弹出提示，设置页保留结果详情。
+            - **私有仓库认证引导**：区分读取与写入权限；系统凭据失败时支持复用本机已登录的 GitHub CLI，PAT 不随 Skill 备份同步。
+            - **macOS 安装体验**：DMG 新增中英文拖拽安装说明及 Retina 背景。
 
             ## 📥 安装 / 升级
 
