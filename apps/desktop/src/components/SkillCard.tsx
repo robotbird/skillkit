@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { SkillGroup } from '../lib/groupSkills';
 import type { SkillUpdateStatus } from '@shared/types';
 import { emojiFor, formatSize, formatTime } from '../lib/format';
@@ -9,6 +10,7 @@ import { useI18n } from '../i18n';
 interface Props {
   group: SkillGroup;
   mode: 'grid' | 'list';
+  selection?: ReactNode;
   /** 该 skill 的更新状态（来自 skill_update_state）。update_available 时显示「可更新」徽章。 */
   updateStatus?: SkillUpdateStatus;
   onUninstall?: (group: SkillGroup) => void;
@@ -21,7 +23,7 @@ interface Props {
 }
 
 /** 「全部」/ 单工具视图的 skill 卡片：把 SkillGroup 映射进 SkillCardShell（布局与 kebab 在壳里，与全局仓共用一套）。 */
-export default function SkillCard({ group, mode, updateStatus, onUninstall, onReveal, onShare, onCopyTo, onUpdate, onOpenDetail }: Props) {
+export default function SkillCard({ group, mode, selection, updateStatus, onUninstall, onReveal, onShare, onCopyTo, onUpdate, onOpenDetail }: Props) {
   const { t } = useI18n();
   const { primary, tools } = group;
   const builtinTools = tools.filter((tool) => group.byTool[tool]?.isBuiltin);
@@ -58,6 +60,7 @@ export default function SkillCard({ group, mode, updateStatus, onUninstall, onRe
   return (
     <SkillCardShell
       mode={mode}
+      selection={selection}
       name={group.name}
       description={primary.description || t('skill.noDesc')}
       icon={emojiFor(group.name)}

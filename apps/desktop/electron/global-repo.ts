@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { getToolConfig, allToolIds } from './tools.js';
+import { listInstalled } from './db.js';
 import { readSkillMd } from './skill-md.js';
 import { copyDir, rmDir, dirSize, safeExists, isWindowsSymlinkError } from './fs-util.js';
 import { GLOBAL_TOOL } from '../shared/types.js';
@@ -59,16 +60,37 @@ interface CanonicalWrite {
   name?: string;
   path?: string;
   error?: string;
+  conflict?: boolean;
+}
+
+function copyToNewDirectory(src: string, dst: string): void {
+  fs.mkdirSync(dst);
+  try {
+    copyDir(src, dst);
+  } catch (error) {
+    rmDir(dst);
+    throw error;
+  }
 }
 
 /** 把 skill 源目录写入规范副本 ~/.agents/skills/<name>（备份 + 回滚，镜像 installSourceToTool 语义）。 */
-export function writeToCanonical(srcDir: string, _sourceTag: string): CanonicalWrite {
+export function writeToCanonical(srcDir: string, _sourceTag: string, preserveExisting = false): CanonicalWrite {
   const md = readSkillMd(srcDir);
   if (!md) return { ok: false, error: 'SKILL.md 缺失或不可解析' };
   const name = (md.name?.trim() || path.basename(srcDir)).replace(/[^A-Za-z0-9_.-]/g, '-');
   const root = globalRepoRoot();
   fs.mkdirSync(root, { recursive: true });
   const dst = path.join(root, name);
+
+  if (preserveExisting) {
+    try {
+      copyToNewDirectory(srcDir, dst);
+      return { ok: true, name, path: dst };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') return { ok: false, conflict: true };
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
 
   let backup: string | null = null;
   if (safeExists(dst)) {
@@ -101,11 +123,34 @@ export function linkOrCopyFromCanonical(
   tool: Tool,
   method: 'symlink' | 'copy',
   name: string,
+  preserveExisting = false,
 ): InstallResult {
   const cfg = getToolConfig(tool);
   if (!cfg) return { tool, ok: false, error: '未知工具' };
   fs.mkdirSync(cfg.installRoot, { recursive: true });
   const dst = path.join(cfg.installRoot, name);
+
+  if (preserveExisting) {
+    try {
+      if (method === 'copy') {
+        copyToNewDirectory(canonPath, dst);
+      } else {
+        try {
+          fs.symlinkSync(canonPath, dst, 'dir');
+        } catch (error) {
+          if (!isWindowsSymlinkError(error) || safeExists(dst)) throw error;
+          copyToNewDirectory(canonPath, dst);
+          return { tool, ok: true, path: dst, warn: 'Windows 软链不可用，已退回拷贝' };
+        }
+      }
+      return { tool, ok: true, path: dst };
+    } catch (error) {
+      const message = (error as NodeJS.ErrnoException).code === 'EEXIST'
+        ? '目标目录已存在'
+        : error instanceof Error ? error.message : String(error);
+      return { tool, ok: false, error: message };
+    }
+  }
 
   let backup: string | null = null;
   if (safeExists(dst)) {
@@ -218,6 +263,7 @@ export function installGlobalToTools(
   name: string,
   targets: Tool[],
   method: 'symlink' | 'copy',
+  preserveExisting = false,
 ): InstallResult[] {
   // 防御：GLOBAL_TOOL 伪目标在此场景自指（skill 已在全局仓），静默忽略
   const realTargets = targets.filter((t) => t !== GLOBAL_TOOL);
@@ -225,5 +271,10 @@ export function installGlobalToTools(
   if (!canon) {
     return realTargets.map((t) => ({ tool: t, ok: false, error: `全局仓库未找到 ${name}` }));
   }
-  return realTargets.map((t) => linkOrCopyFromCanonical(canon, t, method, name));
+  return realTargets.map((tool) => {
+    if (preserveExisting && listInstalled({ tool }).some((skill) => skill.name === name)) {
+      return { tool, ok: false, error: '目标工具已安装同名 skill' };
+    }
+    return linkOrCopyFromCanonical(canon, tool, method, name, preserveExisting);
+  });
 }

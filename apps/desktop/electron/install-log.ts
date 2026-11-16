@@ -17,6 +17,8 @@ import type {
 /** 报错分类优先级（数字越大越"严重"），用于从多个失败工具里 reduce 出整条记录的 errorType。 */
 const ERROR_TYPE_RANK: Record<InstallErrorType, number> = {
   network: 3,
+  rate_limited: 3,
+  access_denied: 3,
   filesystem: 2,
   not_found: 1,
   unknown: 0,
@@ -29,6 +31,9 @@ const ERROR_TYPE_RANK: Record<InstallErrorType, number> = {
 export function classifyInstallError(msg: string | undefined | null): InstallErrorType {
   const s = (msg ?? '').toLowerCase();
   if (!s) return 'unknown';
+  if (/\bhttp\s+429\b|\brate limit(?:ed)?\b|请求限流/.test(s)) return 'rate_limited';
+  if (/\bhttp\s+(?:401|403)\b/.test(s)) return 'access_denied';
+  if (/\bhttp\s+404\b/.test(s)) return 'not_found';
   if (/网络|超时|timeout|timed out|abort|econnreset|etimedout|enetunreach|enotfound|fetch|socket|ssl|tls|cert/.test(s))
     return 'network';
   if (/eacces|eperm|enospc|权限|空间不足|symlink|read-only|只读|enoent|ebusy/.test(s)) return 'filesystem';

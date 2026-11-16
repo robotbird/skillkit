@@ -78,7 +78,7 @@ function logScanFailure(channel: InstallRecordChannel, label: string, error: str
   notifyRecordsChanged();
 }
 
-/** 记录落库后通知渲染层（安装页「安装记录」列表实时刷新，含本页之外的更新等动作）。 */
+/** 记录落库后通知渲染层（安装页「安装/更新记录」列表实时刷新，含本页之外的更新等动作）。 */
 function notifyRecordsChanged(): void {
   for (const w of BrowserWindow.getAllWindows()) {
     if (!w.isDestroyed()) w.webContents.send('install:records:changed');
@@ -135,10 +135,10 @@ export function registerIpc() {
 
   ipcMain.handle(
     'installed:copyToTools',
-    async (_e, sourceTool: Tool, name: string, targets: Tool[]) => {
+    async (_e, sourceTool: Tool, name: string, targets: Tool[], preserveExisting?: boolean) => {
       let r: InstallResult[];
       try {
-        r = copyInstalledToTools(sourceTool, name, targets);
+        r = copyInstalledToTools(sourceTool, name, targets, preserveExisting === true);
       } catch (err: any) {
         r = failAll(targets, err);
       }
@@ -271,10 +271,10 @@ export function registerIpc() {
   });
   ipcMain.handle(
     'globalRepo:installToTools',
-    async (_e, name: string, targets: Tool[], method: 'symlink' | 'copy') => {
+    async (_e, name: string, targets: Tool[], method: 'symlink' | 'copy', preserveExisting?: boolean) => {
       let r: InstallResult[];
       try {
-        r = installGlobalToTools(name, targets, method);
+        r = installGlobalToTools(name, targets, method, preserveExisting === true);
       } catch (err: any) {
         r = failAll(targets, err);
       }
@@ -312,8 +312,11 @@ export function registerIpc() {
     let r: InstallResult[];
     try {
       r = await applySkillUpdate(tool, name);
-    } catch (err: any) {
-      r = [{ tool, ok: false, error: err?.message || String(err) }];
+      if (r.length === 0) {
+        r = [{ tool, ok: false, error: '没有可执行更新的安装目标（No eligible update targets）' }];
+      }
+    } catch (err) {
+      r = failAll([tool], err);
     }
     logInstall('update', src ?? `${tool}/${name}`, r, name);
     scanAllAndSync();

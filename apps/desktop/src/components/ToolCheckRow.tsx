@@ -6,7 +6,7 @@ interface Props {
   checked: boolean;
   multiple?: boolean; // true=checkbox（多选），false=radio（单选）
   disabled?: boolean; // 置灰不可勾选（如内置不可卸载）
-  note?: string; // 置灰时的说明，如「内置·不可卸载」
+  note?: string;
   onToggle: (tool: Tool) => void;
   parentBusy?: boolean; // 父级 busy 时整体禁用
 }
@@ -32,7 +32,7 @@ export default function ToolCheckRow({
       />
       <img className="opt-ico" src={toolIcon(tool)} alt="" draggable={false} />
       <span className="tool-name">{toolLabel(tool)}</span>
-      {disabled && note && <span className="opt-note">{note}</span>}
+      {note && <span className="opt-note">{note}</span>}
     </label>
   );
 }

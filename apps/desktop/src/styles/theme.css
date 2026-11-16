@@ -751,7 +751,7 @@ html, body, #root {
   padding-right: 12px;
 }
 
-/* 搜索：默认仅放大镜图标，点击聚焦后展开为输入框（有内容/聚焦时保持展开） */
+/* 搜索：圆形入口，展开后显示输入框和高级筛选。 */
 .search-toggle {
   -webkit-app-region: no-drag;
   display: inline-flex;
@@ -761,7 +761,6 @@ html, body, #root {
   border-radius: 999px;
   background: var(--pill-bg);
   color: var(--ink-soft);
-  cursor: text;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .search-toggle:hover {
@@ -781,6 +780,7 @@ html, body, #root {
   width: 34px;
   height: 34px;
   flex: 0 0 34px;
+  border-radius: inherit;
 }
 .search-toggle input {
   width: 0;
@@ -796,12 +796,10 @@ html, body, #root {
   transition: width 0.2s ease, padding 0.2s ease;
 }
 .search-toggle input::placeholder { color: var(--ink-mute); }
-.search-toggle:focus-within input,
-.search-toggle input:not(:placeholder-shown) {
+.search-toggle[data-expanded="true"] input {
   width: 150px;
-  padding: 0 12px 0 2px;
+  padding: 0 2px;
 }
-
 /* chips —— 工具栏下方的分类栏（scope bar），单行 + 左右滚动 */
 .chips-bar {
   display: flex;

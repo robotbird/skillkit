@@ -991,6 +991,7 @@ export function copyInstalledToTools(
   sourceTool: Tool,
   name: string,
   targets: Tool[],
+  preserveExisting = false,
 ): InstallResult[] {
   const srcDir = findInstalledSkillDir(sourceTool, name);
   if (!srcDir) {
@@ -999,6 +1000,12 @@ export function copyInstalledToTools(
   // 目标目录沿用源目录名（而非展示名），避免把 "股票价值投资分析 (valuation-analysis)"
   // 这类 name 洗成全短横的乱码目录；跨工具身份仍由 frontmatter name 决定，分组不受影响。
   const destName = path.basename(srcDir);
+  const existing = preserveExisting
+    ? targets.filter((tool) => tool !== sourceTool && findInstalledSkillDir(tool, name))
+    : [];
+  const conflicts = existing.map((tool) => ({ tool, ok: false, error: '目标工具已安装同名 skill' }));
+  const destinations = targets.filter((tool) => tool !== sourceTool && !existing.includes(tool));
+  if (!destinations.length && preserveExisting) return conflicts;
   // 来源沿用：若源 skill 是 GitHub 安装的，复制到其它工具后仍保留 github 来源（仍可走链接型分享）；
   // 否则标记 copy:<源工具>/<name>。
   const srcSource = listInstalled({ tool: sourceTool }).find((s) => s.name === name)?.source ?? null;
@@ -1006,6 +1013,7 @@ export function copyInstalledToTools(
 
   // 决定快捷方式指向何处（canonPath）：源已是软链则复用其目标；真实目录先同步进全局仓库。
   let canonPath: string;
+  let method: 'symlink' | 'copy' = 'symlink';
   try {
     if (fs.lstatSync(srcDir).isSymbolicLink()) {
       // 源已是快捷方式 → 复用其目标（通常即全局仓库规范副本），目标工具软链到同一处。
@@ -1013,39 +1021,46 @@ export function copyInstalledToTools(
       canonPath = path.isAbsolute(tgt) ? tgt : path.resolve(path.dirname(srcDir), tgt);
     } else {
       // 源是真实目录 → 同步进全局仓库规范副本，再从那里软链出去（单一数据源，改一处全更新）。
-      const canon = writeToCanonical(srcDir, sourceTag);
-      if (!canon.ok || !canon.path) {
-        return targets.map((t) => ({ tool: t, ok: false, error: canon.error ?? '同步全局仓库失败' }));
+      const canon = writeToCanonical(srcDir, sourceTag, preserveExisting);
+      if (canon.conflict) {
+        // 批量复制遇到已存在的全局副本时，从当前来源创建独立副本，保留全局内容。
+        canonPath = srcDir;
+        method = 'copy';
+      } else if (canon.ok && canon.path) {
+        canonPath = canon.path;
+      } else {
+        const failed = preserveExisting ? destinations : targets;
+        return [...conflicts, ...failed.map((tool) => ({ tool, ok: false, error: canon.error ?? '同步全局仓库失败' }))];
       }
-      canonPath = canon.path;
     }
   } catch (err: any) {
-    return targets.map((t) => ({ tool: t, ok: false, error: err?.message || String(err) }));
+    const failed = preserveExisting ? destinations : targets;
+    return [...conflicts, ...failed.map((tool) => ({ tool, ok: false, error: err?.message || String(err) }))];
   }
 
   // DB 的 name 用规范副本 frontmatter 名（与 scanAll 的 (tool,name) 键一致）；目录名仍用 destName。
   const canonMd = readSkillMd(canonPath);
   const dbName = canonMd?.name?.trim() || name;
 
-  return targets
-    .filter((t) => t !== sourceTool)
-    .map((t) => {
-      const r = linkOrCopyFromCanonical(canonPath, t, 'symlink', destName);
-      if (r.ok && r.path) {
-        upsertInstalled({
-          tool: t,
-          name: dbName,
-          description: canonMd?.description ?? null,
-          path: r.path,
-          isBuiltin: false,
-          sizeBytes: null,
-          mtime: Date.now(),
-          source: sourceTag,
-          installedAt: Date.now(),
-        });
-      }
-      return r;
-    });
+  const results: InstallResult[] = [...conflicts];
+  for (const tool of destinations) {
+    const result = linkOrCopyFromCanonical(canonPath, tool, method, destName, preserveExisting);
+    if (result.ok && result.path) {
+      upsertInstalled({
+        tool,
+        name: dbName,
+        description: canonMd?.description ?? null,
+        path: result.path,
+        isBuiltin: false,
+        sizeBytes: null,
+        mtime: Date.now(),
+        source: sourceTag,
+        installedAt: Date.now(),
+      });
+    }
+    results.push(result);
+  }
+  return results;
 }
 
 /** 卸载：删除目录 */

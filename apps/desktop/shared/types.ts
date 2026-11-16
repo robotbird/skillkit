@@ -79,7 +79,7 @@ export type InstallRecordStatus = 'success' | 'partial' | 'failed';
 /** 安装入口渠道。区分一条记录来自哪种安装方式（update = skill 版本更新重装）。 */
 export type InstallRecordChannel = 'market' | 'github' | 'zip' | 'share' | 'copy' | 'global' | 'update';
 /** 报错分类（读时由 classifyInstallError 对失败项派生）。 */
-export type InstallErrorType = 'network' | 'not_found' | 'filesystem' | 'unknown';
+export type InstallErrorType = 'network' | 'rate_limited' | 'access_denied' | 'not_found' | 'filesystem' | 'unknown';
 
 /** 安装记录里每个目标工具的明细（详情弹窗逐行展示）。 */
 export interface InstallRecordTarget {
@@ -331,7 +331,7 @@ export interface SkillkitApi {
   readSkillMd(skillDir: string): Promise<SkillDoc | null>;
   /** 在系统文件管理器中打开目录（shell.openPath）。 */
   openPath(absPath: string): Promise<void>;
-  copyToTools(sourceTool: Tool, name: string, targets: Tool[]): Promise<InstallResult[]>;
+  copyToTools(sourceTool: Tool, name: string, targets: Tool[], preserveExisting?: boolean): Promise<InstallResult[]>;
 
   marketRefresh(force?: boolean): Promise<MarketRefreshResult>;
   marketList(query?: MarketListQuery): Promise<MarketListResult>;
@@ -381,6 +381,7 @@ export interface SkillkitApi {
     name: string,
     targets: Tool[],
     method: 'symlink' | 'copy',
+    preserveExisting?: boolean,
   ): Promise<InstallResult[]>;
 
   // 分享页深链（skillkit://share/<id>）唤起应用时，主进程通过它把 share id 推给渲染进程

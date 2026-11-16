@@ -13,6 +13,7 @@ interface Props {
   headerExtras?: ReactNode;
   /** list 模式第一行、名称之后的内容（如 ToolStack / 徽章） */
   rowExtras?: ReactNode;
+  selection?: ReactNode;
   /** list 模式底部元信息行内容（大小/时间/路径等 span） */
   meta?: ReactNode;
   kebabItems: KebabItem[];
@@ -31,6 +32,7 @@ export default function SkillCardShell({
   icon,
   headerExtras,
   rowExtras,
+  selection,
   meta,
   kebabItems,
   onOpenDetail,
@@ -38,13 +40,13 @@ export default function SkillCardShell({
   // 点卡片打开详情；忽略点 kebab 菜单 / 按钮 / 链接，避免误触
   const onCardClick = onOpenDetail
     ? (e: React.MouseEvent<HTMLElement>) => {
-        if ((e.target as HTMLElement).closest('button, .kebab, a')) return;
+        if ((e.target as HTMLElement).closest('button, input, .kebab, a')) return;
         onOpenDetail();
       }
     : undefined;
   const onCardKey = onOpenDetail
     ? (e: React.KeyboardEvent<HTMLElement>) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
           e.preventDefault();
           onOpenDetail();
         }
@@ -83,6 +85,7 @@ export default function SkillCardShell({
       role={onOpenDetail ? 'button' : undefined}
       tabIndex={onOpenDetail ? 0 : undefined}
     >
+      {selection}
       <div className="skill-ico">{icon}</div>
       <div className="skill-body">
         <div className="skill-row1">

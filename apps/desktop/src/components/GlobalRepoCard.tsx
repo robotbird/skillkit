@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { GlobalRepoSkill } from '@shared/types';
 import { emojiFor, formatSize, formatTime } from '../lib/format';
 import SkillCardShell from './SkillCardShell';
@@ -7,6 +8,7 @@ import { useI18n } from '../i18n';
 interface Props {
   skill: GlobalRepoSkill;
   mode: 'grid' | 'list';
+  selection?: ReactNode;
   onReveal?: (skill: GlobalRepoSkill) => void;
   onRemove?: (skill: GlobalRepoSkill) => void;
   onCopyTo?: (skill: GlobalRepoSkill) => void;
@@ -15,7 +17,7 @@ interface Props {
 }
 
 /** 全局仓库（~/.agents/skills）skill 卡片：把 GlobalRepoSkill 映射进 SkillCardShell，与「全部」视图同一套布局与 kebab。 */
-export default function GlobalRepoCard({ skill, mode, onReveal, onRemove, onCopyTo, onShare, onOpenDetail }: Props) {
+export default function GlobalRepoCard({ skill, mode, selection, onReveal, onRemove, onCopyTo, onShare, onOpenDetail }: Props) {
   const { t } = useI18n();
   const reveal = () => onReveal?.(skill);
   const copyTo = () => onCopyTo?.(skill);
@@ -33,6 +35,7 @@ export default function GlobalRepoCard({ skill, mode, onReveal, onRemove, onCopy
   return (
     <SkillCardShell
       mode={mode}
+      selection={selection}
       name={skill.name}
       description={skill.description || t('skill.noDesc')}
       icon={emojiFor(skill.name)}

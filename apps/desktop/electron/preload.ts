@@ -33,8 +33,8 @@ const api: SkillkitApi = {
   revealInFinder: (p: string) => ipcRenderer.invoke('installed:reveal', p),
   readSkillMd: (dir: string) => ipcRenderer.invoke('installed:readMd', dir),
   openPath: (p: string) => ipcRenderer.invoke('shell:openPath', p),
-  copyToTools: (sourceTool: Tool, name: string, targets: Tool[]) =>
-    ipcRenderer.invoke('installed:copyToTools', sourceTool, name, targets),
+  copyToTools: (sourceTool, name, targets, preserveExisting) =>
+    ipcRenderer.invoke('installed:copyToTools', sourceTool, name, targets, preserveExisting),
 
   marketRefresh: (force?: boolean) => ipcRenderer.invoke('market:refresh', !!force),
   marketList: (q?: MarketListQuery) => ipcRenderer.invoke('market:list', q),
@@ -78,8 +78,8 @@ const api: SkillkitApi = {
   // 全局仓库（~/.agents/skills）
   scanGlobalRepo: () => ipcRenderer.invoke('globalRepo:scan'),
   removeFromGlobalRepo: (name: string) => ipcRenderer.invoke('globalRepo:remove', name),
-  installGlobalToTools: (name: string, targets: Tool[], method: 'symlink' | 'copy') =>
-    ipcRenderer.invoke('globalRepo:installToTools', name, targets, method),
+  installGlobalToTools: (name, targets, method, preserveExisting) =>
+    ipcRenderer.invoke('globalRepo:installToTools', name, targets, method, preserveExisting),
 
     // 分享页「从 Skillkit 打开」唤起本应用时，主进程经此通道把 share id 推给渲染进程
   onDeepLink: (cb: (input: string) => void) => {

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { DropdownMenu } from 'radix-ui';
 import { type InstalledSkill, type Tool, type GlobalRepoSkill, type SkillUpdateState, type SkillUpdateSummary, GLOBAL_TOOL } from '@shared/types';
 import SkillCard from '../components/SkillCard';
 import GlobalRepoCard from '../components/GlobalRepoCard';
+import SkillBatchDialog, { planSkillBatch, type BatchAction, type BatchSkill } from '../components/SkillBatchDialog';
 import ShareDialog from '../components/ShareDialog';
 import SkillDetailModal, {
   skillDetailFromGroup,
@@ -15,10 +17,19 @@ import type { ToastState } from '../components/Toast';
 import { groupBySkill, type SkillGroup } from '../lib/groupSkills';
 import { useInstalledTools } from '../lib/useInstalledTools';
 import { useLocalTools } from '../lib/useLocalTools';
-import { useToolCatalog } from '../lib/toolCatalog';
+import { useCustomTools, useToolCatalog } from '../lib/toolCatalog';
+import { Button, buttonVariants } from '../components/ui/button';
+import { cn } from '../lib/utils';
 import { useI18n } from '../i18n';
 
 type ViewMode = 'grid' | 'list';
+
+const updateFilters = [
+  { value: 'all', label: 'my.filter.all' },
+  { value: 'update_available', label: 'my.filter.available' },
+  { value: 'up_to_date', label: 'my.filter.current' },
+] as const;
+type UpdateFilter = (typeof updateFilters)[number]['value'];
 
 export default function MySkillsView({
   toast,
@@ -33,8 +44,22 @@ export default function MySkillsView({
   // skill 更新状态（按 `${tool}|${name}` 索引）；与 items join 出每张卡片的「可更新」徽章
   const [updateMap, setUpdateMap] = useState<Record<string, SkillUpdateState> | null>(null);
   const [q, setQ] = useState('');
+  const [updateFilter, setUpdateFilter] = useState<UpdateFilter>('all');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const filterMenuRef = useRef<HTMLDivElement>(null);
+  const hasFilters = Boolean(q.trim()) || updateFilter !== 'all';
+  const searchExpanded = searchOpen || hasFilters;
   const [tool, setTool] = useState<Tool | 'all' | 'global'>('all');
   const [mode, setMode] = useState<ViewMode>('grid');
+  const [selection, setSelection] = useState<Set<string>>(() => new Set());
+  const [batch, setBatch] = useState<{
+    action: BatchAction;
+    jobs: ReturnType<typeof planSkillBatch>;
+  } | null>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
   const [scanning, setScanning] = useState(false);
   const [shareSkill, setShareSkill] = useState<InstalledSkill | null>(null);
   const [copyGroup, setCopyGroup] = useState<SkillGroup | null>(null);
@@ -51,7 +76,8 @@ export default function MySkillsView({
   // 展示「skill 根目录已存在」的已装工具 chip；skill 数可为 0（目录在就要能识别，不要求已有 skill）
   const { tools: installed, refresh: refreshInstalledTools } = useInstalledTools();
   // 复制/安装目标的候选：真身探测命中的本机工具（与安装页同一口径）
-  const { tools: localTools } = useLocalTools();
+  const { tools: localTools, ready: localReady } = useLocalTools();
+  const { customs } = useCustomTools();
 
   // 工具 chip 单行横向滚动
   const chipsRef = useRef<HTMLDivElement>(null);
@@ -152,19 +178,29 @@ export default function MySkillsView({
   const groups = useMemo(() => (items ? groupBySkill(items, allTools) : []), [items, allTools]);
 
   const filtered = useMemo(() => {
+    if (tool === 'global') return [];
     const text = q.trim().toLowerCase();
     return groups.filter((g) => {
-      if (tool !== 'all' && tool !== 'global' && !g.tools.includes(tool)) return false;
+      if (tool !== 'all' && !g.tools.includes(tool)) return false;
+      if (updateFilter !== 'all') {
+        const targets = tool === 'all' ? g.tools : [tool];
+        const statuses = targets.map((target) => updateMap?.[`${target}|${g.name}`]?.updateStatus);
+        const matches = updateFilter === 'update_available'
+          ? statuses.includes(updateFilter)
+          : statuses.every((status) => status === updateFilter);
+        if (!matches) return false;
+      }
       if (!text) return true;
       return (
         g.name.toLowerCase().includes(text) ||
         (g.primary.description ?? '').toLowerCase().includes(text)
       );
     });
-  }, [groups, q, tool]);
+  }, [groups, q, tool, updateFilter, updateMap]);
 
   // 全局仓库列表的文本筛选（独立于按工具的 filtered）
   const filteredGlobal = useMemo(() => {
+    if (updateFilter !== 'all') return [];
     const text = q.trim().toLowerCase();
     const all = globalSkills ?? [];
     if (!text) return all;
@@ -173,7 +209,7 @@ export default function MySkillsView({
         g.name.toLowerCase().includes(text) ||
         (g.description ?? '').toLowerCase().includes(text),
     );
-  }, [globalSkills, q]);
+  }, [globalSkills, q, updateFilter]);
 
   // 全局仓里「未被任何工具组覆盖」的 skill：同名已由工具组（SkillCard）代表，不再重复出一张全局仓卡。
   // 仅并入「全部」chip，让全局仓独有（未链接进任何工具）的 skill 也能被浏览/搜到。
@@ -184,6 +220,7 @@ export default function MySkillsView({
 
   // globalOnly 的文本筛选（与 filteredGlobal 同款 name/description 子串逻辑）
   const globalOnlyFiltered = useMemo(() => {
+    if (updateFilter !== 'all') return [];
     const text = q.trim().toLowerCase();
     if (!text) return globalOnly;
     return globalOnly.filter(
@@ -191,7 +228,80 @@ export default function MySkillsView({
         g.name.toLowerCase().includes(text) ||
         (g.description ?? '').toLowerCase().includes(text),
     );
-  }, [globalOnly, q]);
+  }, [globalOnly, q, updateFilter]);
+
+  const visibleGlobal = tool === 'global' ? filteredGlobal : tool === 'all' ? globalOnlyFiltered : [];
+  const rowIds = [
+    ...filtered.map((group) => `installed:${group.name}`),
+    ...visibleGlobal.map((skill) => `global:${skill.path}`),
+  ];
+  const selectedCount = rowIds.filter((id) => selection.has(id)).length;
+  const allSelected = rowIds.length > 0 && selectedCount === rowIds.length;
+
+  useEffect(() => {
+    setSelection(new Set());
+  }, [mode, q, tool, updateFilter]);
+
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = selectedCount > 0 && !allSelected;
+  }, [selectedCount, allSelected]);
+
+  const selectedSkills: BatchSkill[] = [];
+  if (selectedCount > 0) {
+    for (const group of filtered) {
+      if (selection.has(`installed:${group.name}`)) selectedSkills.push({ kind: 'installed', group });
+    }
+    for (const skill of visibleGlobal) {
+      if (!selection.has(`global:${skill.path}`)) continue;
+      const installedTools = groups
+        .filter((group) => group.name.toLowerCase() === skill.name.toLowerCase())
+        .flatMap((group) => group.tools);
+      selectedSkills.push({ kind: 'global', skill, installedTools });
+    }
+  }
+  const scope = tool === 'all' || tool === 'global' ? null : tool;
+  const copyTargets = allTools.filter((target) =>
+    !customs.some((custom) => custom.id === target && custom.kind === 'project') &&
+    (localTools.includes(target) || (localReady && localTools.length === 0)),
+  );
+  const copyJobs = planSkillBatch(selectedSkills, 'copy', scope, copyTargets);
+  const uninstallJobs = planSkillBatch(selectedSkills, 'uninstall', scope, []);
+
+  function rowSelection(id: string, name: string) {
+    if (mode !== 'list') return undefined;
+    return (
+      <input
+        type="checkbox"
+        className="size-4 shrink-0 cursor-pointer accent-[var(--accent)]"
+        aria-label={t('my.batch.selectSkill', { name })}
+        checked={selection.has(id)}
+        onChange={(e) => {
+          const checked = e.target.checked;
+          setSelection((previous) => {
+            const next = new Set(previous);
+            if (checked) next.add(id);
+            else next.delete(id);
+            return next;
+          });
+        }}
+      />
+    );
+  }
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    function closeSearchOutside(e: Event) {
+      if (!(e.target instanceof Node)) return;
+      if (searchRef.current?.contains(e.target) || filterMenuRef.current?.contains(e.target)) return;
+      setSearchOpen(false);
+    }
+    document.addEventListener('pointerdown', closeSearchOutside);
+    document.addEventListener('focusin', closeSearchOutside);
+    return () => {
+      document.removeEventListener('pointerdown', closeSearchOutside);
+      document.removeEventListener('focusin', closeSearchOutside);
+    };
+  }, [searchOpen]);
 
   // 每个 chip 的计数 = 包含该工具的「组」数（而非行数）
   const counts = useMemo(() => {
@@ -339,6 +449,7 @@ export default function MySkillsView({
       key={g.path}
       skill={g}
       mode={mode}
+      selection={rowSelection(`global:${g.path}`, g.name)}
       onReveal={(s) => void window.skillkit.revealInFinder(s.path)}
       onRemove={(s) => {
         if (confirm(t('my.confirm.removeGlobal', { name: s.name }))) {
@@ -367,18 +478,95 @@ export default function MySkillsView({
   // 顶部统一工具栏控件（搜索 / 视图切换 / 重新扫描）-> portal 进 TopBar 槽位
   const toolbar = (
     <>
-      <label className="search-toggle" title={t('my.searchTitle')}>
-        <span className="search-toggle-ico">
-          <svg viewBox="0 0 24 24" width="16" height="16">
+      <div
+        className="search-toggle"
+        data-expanded={searchExpanded}
+        ref={searchRef}
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape' || hasFilters || filterMenuRef.current?.contains(e.target as Node)) return;
+          searchButtonRef.current?.focus();
+          setSearchOpen(false);
+        }}
+      >
+        <button
+          type="button"
+          className="search-toggle-ico"
+          ref={searchButtonRef}
+          aria-label={t('my.searchTitle')}
+          aria-expanded={searchExpanded}
+          title={t('my.searchTitle')}
+          onClick={() => {
+            setSearchOpen(true);
+            searchInputRef.current?.focus();
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
             <path fill="currentColor" d="M10 4a6 6 0 014.47 9.97l4.78 4.78-1.5 1.5-4.78-4.78A6 6 0 1110 4zm0 2a4 4 0 100 8 4 4 0 000-8z"/>
           </svg>
-        </span>
+        </button>
         <input
+          ref={searchInputRef}
+          tabIndex={searchExpanded ? 0 : -1}
+          aria-hidden={!searchExpanded}
+          aria-label={t('my.searchTitle')}
           placeholder={t('my.searchPlaceholder')}
           value={q}
+          onFocus={() => setSearchOpen(true)}
           onChange={(e) => setQ(e.target.value)}
         />
-      </label>
+        {searchExpanded && (
+          <DropdownMenu.Root
+            modal={false}
+            onOpenChange={(open) => {
+              if (open) setSearchOpen(true);
+            }}
+          >
+            <DropdownMenu.Trigger
+              type="button"
+              className={cn(
+                buttonVariants({ variant: 'ghost', size: 'sm' }),
+                'mr-0.5 h-7 gap-1 rounded-full hover:bg-primary/10 hover:text-foreground dark:hover:bg-primary/10 data-[filtered=true]:text-accent data-[state=open]:bg-primary/10',
+              )}
+              aria-label={t('my.filter.title')}
+              title={t('my.filter.title')}
+              data-filtered={updateFilter !== 'all'}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <path d="M21 4h-7m-4 0H3m18 8h-9m-4 0H3m18 8h-5m-4 0H3M14 2v4M8 10v4m8 4v4" />
+              </svg>
+              <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                ref={filterMenuRef}
+                align="end"
+                sideOffset={6}
+                className="z-30 min-w-32 rounded-xl border border-solid border-border bg-popover p-1.5 text-sm text-popover-foreground shadow-md"
+              >
+                <DropdownMenu.RadioGroup value={updateFilter} aria-label={t('my.filter.title')}>
+                  {updateFilters.map(({ value, label }) => (
+                    <DropdownMenu.RadioItem
+                      key={value}
+                      value={value}
+                      onSelect={() => setUpdateFilter(value)}
+                      className="relative cursor-default rounded-md py-1.5 pr-3 pl-7 outline-none data-[state=checked]:bg-primary/10 data-[highlighted]:bg-primary/20"
+                    >
+                      <DropdownMenu.ItemIndicator className="absolute top-1/2 left-2 inline-flex -translate-y-1/2">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="m20 6-11 11-5-5" />
+                        </svg>
+                      </DropdownMenu.ItemIndicator>
+                      {t(label)}
+                    </DropdownMenu.RadioItem>
+                  ))}
+                </DropdownMenu.RadioGroup>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+        )}
+      </div>
       <div className="seg" role="group" aria-label={t('my.viewSwitch')}>
         <button
           className={`seg-btn${mode === 'grid' ? ' is-active' : ''}`}
@@ -473,13 +661,40 @@ export default function MySkillsView({
         </button>
       </div>
 
+      {mode === 'list' && rowIds.length > 0 && (
+        <div className="flex min-h-9 items-center gap-3 px-4 text-sm">
+          <label className="inline-flex cursor-pointer items-center gap-3">
+            <input
+              ref={selectAllRef}
+              type="checkbox"
+              className="size-4 shrink-0 cursor-pointer accent-[var(--accent)]"
+              aria-label={t('my.batch.selectAll')}
+              checked={allSelected}
+              onChange={() => setSelection(allSelected ? new Set() : new Set(rowIds))}
+            />
+            <span>{selectedCount ? t('my.batch.selected', { count: selectedCount }) : t('my.batch.selectAll')}</span>
+          </label>
+          {selectedCount > 0 && (
+            <div className="ml-auto flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={!copyJobs.length}
+                onClick={() => setBatch({ action: 'copy', jobs: copyJobs })}>
+                {t('my.batch.copy')}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" disabled={!uninstallJobs.length}
+                onClick={() => setBatch({ action: 'uninstall', jobs: uninstallJobs })}>
+                {t('my.batch.uninstall')}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
       <div className="skills" data-mode={mode}>
         {tool === 'global' ? (
           globalSkills == null ? (
             <div className="empty"><span className="spinner" /> {t('my.empty.scanningGlobal')}</div>
           ) : filteredGlobal.length === 0 ? (
             <div className="empty">
-              {q ? t('my.empty.noMatch') : t('my.empty.globalEmpty')}
+              {hasFilters ? t('my.empty.noMatch') : t('my.empty.globalEmpty')}
             </div>
           ) : (
             filteredGlobal.map(renderGlobalCard)
@@ -487,7 +702,7 @@ export default function MySkillsView({
         ) : items == null ? (
           <div className="empty"><span className="spinner" /> {t('my.empty.scanningTools')}</div>
         ) : filtered.length === 0 && (tool !== 'all' || globalOnlyFiltered.length === 0) ? (
-          <div className="empty">{q ? t('my.empty.noMatch') : t('my.empty.filteredEmpty')}</div>
+          <div className="empty">{hasFilters ? t('my.empty.noMatch') : t('my.empty.filteredEmpty')}</div>
         ) : (
           <>
             {filtered.map((g) => (
@@ -495,7 +710,8 @@ export default function MySkillsView({
                 key={g.name}
                 group={g}
                 mode={mode}
-                updateStatus={updateStatusOf(g)}
+                selection={rowSelection(`installed:${g.name}`, g.name)}
+                updateStatus={updateFilter === 'all' ? updateStatusOf(g) : updateFilter}
                 onUninstall={startUninstall}
                 onReveal={startReveal}
                 onShare={(grp) => setShareSkill(grp.primary)}
@@ -509,6 +725,18 @@ export default function MySkillsView({
           </>
         )}
       </div>
+
+      {batch && (
+        <SkillBatchDialog
+          action={batch.action}
+          jobs={batch.jobs}
+          onCancel={() => setBatch(null)}
+          onFinished={async () => {
+            setSelection(new Set());
+            await refresh();
+          }}
+        />
+      )}
 
       <ShareDialog
         open={!!shareSkill}

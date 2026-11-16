@@ -153,22 +153,17 @@ jobs:
           body: |
             ## ✨ 本次更新
 
-            - **改善大仓库下载**：推送与拉取时限从 3 分钟延长为 15 分钟；新电脑首次恢复只拉取当前快照，减少历史数据下载。
-            - **明确失败原因**：超时、进程终止等情况显示具体原因，避免只出现 `Command failed: git fetch origin main`；诊断信息自动隐藏令牌。
-            - **项目空间轻量提醒**：未配置的项目空间自动跳过，只提示跳过数量，不再标红或将整次同步显示为失败。
-            - **兼容历史状态**：旧版记录中“已恢复、部分项目未分发”的状态会正确显示为成功及轻量提醒。
+            - **高级筛选**：点击「我的 Skill」中的圆形搜索按钮，即可搜索并按「可更新」或「已是最新」筛选，支持与工具筛选叠加。
+            - **安装/更新记录**：更新失败或部分失败时，列表显示原因摘要，详情按工具显示完整错误。
+            - **列表批量操作**：勾选技能或全选当前结果后，可批量复制到其他工具或批量卸载。复制跳过已安装的同名技能，卸载保留内置技能和全局仓库副本。
+
+            反馈来源：[#29](https://github.com/robotbird/skillkit/issues/29)。
 
             ## 📥 安装 / 升级
 
-            **首次安装（macOS，自动清除 quarantine）：**
+            已安装旧版可在 Skillkit 内检查更新。首次安装请从下方 Assets 下载对应平台的安装包。
 
-            ```bash
-            curl -fsSL https://raw.githubusercontent.com/robotbird/skillkit/main/apps/desktop/scripts/install-macos.sh | bash
-            ```
-
-            **已安装老版本**：打开 Skillkit 按提示更新即可自动升级（Windows 同理）；也可从下方 Assets 手动下载安装包。
-
-            > ⚠️ macOS 版本使用 **ad-hoc 本地签名，尚未经过 Apple 开发者证书签名和公证**。若手动下载 dmg 安装，首次打开提示「已损坏 / 无法验证开发者」时，右键 App →「打开」，或在终端执行 `xattr -dr com.apple.quarantine /Applications/Skillkit.app`。
+            macOS 安装包使用 ad-hoc 签名。
           generate_release_notes: true
           make_latest: true
         env:

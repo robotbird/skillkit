@@ -30,6 +30,8 @@ const RECORD_STATUS_KEY: Record<InstallRecordStatus, MessageKey> = {
 };
 const RECORD_ERR_KEY: Record<InstallErrorType, MessageKey> = {
   network: 'inst.records.err.network',
+  rate_limited: 'inst.records.err.rate_limited',
+  access_denied: 'inst.records.err.access_denied',
   not_found: 'inst.records.err.not_found',
   filesystem: 'inst.records.err.filesystem',
   unknown: 'inst.records.err.unknown',
@@ -485,6 +487,17 @@ export default function InstallView({
                 <span className={`record-status is-${r.status}`} title={t(RECORD_STATUS_KEY[r.status])} aria-hidden>●</span>
                 <strong className="record-name">{r.skillName ?? r.label}</strong>
                 <span className="record-channel">{t(RECORD_CHANNEL_KEY[r.channel])}</span>
+                {r.channel === 'update' && r.status !== 'success' && (
+                  <>
+                    <span className="record-badge record-badge-err">
+                      {t(RECORD_STATUS_KEY[r.status])}
+                      {r.errorType && r.errorType !== 'unknown' && ` · ${t(RECORD_ERR_KEY[r.errorType])}`}
+                    </span>
+                    <span className="min-w-0 max-w-[45%] truncate" title={r.error ?? undefined}>
+                      {r.error ?? r.targets.find((target) => !target.ok && target.error)?.error ?? t('inst.records.missingError')}
+                    </span>
+                  </>
+                )}
                 <span className="record-time">{new Date(r.at).toLocaleString()}</span>
               </li>
             ))}
@@ -499,7 +512,7 @@ export default function InstallView({
             onMouseDown={(e) => { if (e.target === e.currentTarget) setDetailRecord(null); }}
           >
             <div className="modal log-modal" role="dialog" aria-modal="true">
-              <h3>{t('inst.records.detailTitle')}</h3>
+              <h3>{t(detailRecord.channel === 'update' ? 'inst.records.updateDetailTitle' : 'inst.records.detailTitle')}</h3>
               <div className="log-modal-sub">
                 <span className={`record-status is-${detailRecord.status}`} aria-hidden>●</span>
                 <strong className="log-modal-title-name">{detailRecord.skillName ?? detailRecord.label}</strong>
@@ -530,7 +543,7 @@ export default function InstallView({
                         {tg.ok ? (
                           <span className="log-target-detail" title={tg.path}>{tg.path}</span>
                         ) : (
-                          <span className="log-target-detail log-target-error">{tg.error}</span>
+                          <span className="log-target-detail log-target-error">{tg.error || t('inst.records.missingError')}</span>
                         )}
                       </li>
                     ))}
