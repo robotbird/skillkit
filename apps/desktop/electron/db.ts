@@ -212,8 +212,16 @@ export function upsertInstalled(s: InstalledSkill): void {
          is_builtin=excluded.is_builtin,
          size_bytes=excluded.size_bytes,
          mtime=excluded.mtime,
-         source=COALESCE(excluded.source, installed_skills.source),
-         installed_at=COALESCE(installed_skills.installed_at, excluded.installed_at),
+         source=CASE
+           WHEN installed_skills.path = excluded.path
+           THEN COALESCE(excluded.source, installed_skills.source)
+           ELSE excluded.source
+         END,
+         installed_at=CASE
+           WHEN installed_skills.path = excluded.path
+           THEN COALESCE(installed_skills.installed_at, excluded.installed_at)
+           ELSE excluded.installed_at
+         END,
          agent=excluded.agent`,
     )
     .run(

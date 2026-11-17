@@ -5,7 +5,7 @@ import type { Writable } from 'node:stream';
 import { app } from 'electron';
 import * as tar from 'tar';
 import AdmZip from 'adm-zip';
-import { getToolConfig } from './tools.js';
+import { getToolConfig, isGlobalAgentsOnlyTool, managedSkillPaths, skillDestinationError } from './tools.js';
 import { readSkillMd, parseFrontmatter, type SkillMd } from './skill-md.js';
 import { upsertInstalled, listInstalled } from './db.js';
 import { copyDir, rmDir, safeExists } from './fs-util.js';
@@ -264,8 +264,10 @@ function installSourceToTool(
   const name = rawName.replace(/[^A-Za-z0-9_.-]/g, '-');
   const cfg = getToolConfig(tool);
   if (!cfg) return { tool, ok: false, error: '未知工具' };
-  fs.mkdirSync(cfg.installRoot, { recursive: true });
   const dst = path.join(cfg.installRoot, name);
+  const error = skillDestinationError(tool, dst);
+  if (error) return { tool, ok: false, error };
+  fs.mkdirSync(cfg.installRoot, { recursive: true });
 
   // 已存在 → 备份再覆盖（dst 可能是软链，用 safeExists 不跟随，避免悬空软链漏判）
   let backup: string | null = null;
@@ -277,7 +279,7 @@ function installSourceToTool(
     copyDir(srcDir, dst);
     upsertInstalled({
       tool,
-      name,
+      name: md.name?.trim() || name,
       description: md.description ?? null,
       path: dst,
       isBuiltin: false,
@@ -316,23 +318,38 @@ function dispatchInstall(
 ): InstallResult[] {
   const wantsGlobal = targets.includes(GLOBAL_TOOL);
   const realTargets = targets.filter((t) => t !== GLOBAL_TOOL);
-  if (opts?.scope === 'global' || wantsGlobal) {
+  const directTargets = realTargets.filter((tool) => getToolConfig(tool)?.installDirectly);
+  const globalTargets = realTargets.filter((tool) => !directTargets.includes(tool));
+  const byTool = new Map<Tool, InstallResult>();
+  for (const tool of directTargets) {
+    byTool.set(tool, installSourceToTool(srcDir, tool, sourceTag));
+  }
+  if (wantsGlobal || (opts?.scope === 'global' && globalTargets.length)) {
+    const sharedTargets = globalTargets.filter((tool) => !isGlobalAgentsOnlyTool(tool));
+    for (const tool of globalTargets) {
+      if (isGlobalAgentsOnlyTool(tool)) {
+        byTool.set(tool, { tool, ok: false, error: '请使用全局仓库管理共享工具的技能' });
+      }
+    }
+    if (!wantsGlobal && sharedTargets.length === 0) return targets.map((tool) => byTool.get(tool)!);
     const method = opts?.method ?? 'symlink';
     const canon = writeToCanonical(srcDir, sourceTag);
     if (!canon.ok || !canon.path || !canon.name) {
-      return targets.map((t) => ({ tool: t, ok: false, error: canon.error }));
+      for (const tool of wantsGlobal ? [GLOBAL_TOOL, ...sharedTargets] : sharedTargets) {
+        byTool.set(tool, { tool, ok: false, error: canon.error });
+      }
+      return targets.map((tool) => byTool.get(tool)!);
     }
     // 全局安装也要写 installed_skills.source，否则扫描只写 null、GitHub 来源丢失。
     // name 取规范副本的 frontmatter 名（与 scanTool 同源），保证 (tool,name) 键一致，
     // 后续 scanAll 靠 upsertInstalled 的 COALESCE 保留 source。
     const canonMd = readSkillMd(canon.path);
     const name = canonMd?.name?.trim() || canon.name;
-    const results: InstallResult[] = [];
     if (wantsGlobal) {
       // 「全局」目标：规范副本即安装结果，不写 installed_skills（全局仓库 scan-only 约定）
-      results.push({ tool: GLOBAL_TOOL, ok: true, path: canon.path });
+      byTool.set(GLOBAL_TOOL, { tool: GLOBAL_TOOL, ok: true, path: canon.path });
     }
-    for (const t of realTargets) {
+    for (const t of sharedTargets) {
       const r = linkOrCopyFromCanonical(canon.path!, t, method, canon.name!);
       if (r.ok && r.path) {
         upsertInstalled({
@@ -347,11 +364,11 @@ function dispatchInstall(
           installedAt: Date.now(),
         });
       }
-      results.push(r);
+      byTool.set(t, r);
     }
-    return results;
+    return targets.map((tool) => byTool.get(tool)!);
   }
-  return realTargets.map((t) => installSourceToTool(srcDir, t, sourceTag));
+  return realTargets.map((tool) => byTool.get(tool) ?? installSourceToTool(srcDir, tool, sourceTag));
 }
 
 export async function installFromMarket(
@@ -1066,7 +1083,7 @@ export function copyInstalledToTools(
 /** 卸载：删除目录 */
 export function uninstall(tool: Tool, name: string): void {
   const cfg = getToolConfig(tool);
-  if (!cfg) return;
+  if (!cfg || isGlobalAgentsOnlyTool(tool)) return;
   const matched = new Set<string>();
   // 优先按 DB 记录的 path 删除：项目类型 skill 的真实路径嵌在 projectRoot/.<agent>/skills 下，
   // cfg.roots 偏高拼不出；agent 变体/内置也以 DB path 为准更稳。builtin 一律不动。
@@ -1090,5 +1107,8 @@ export function uninstall(tool: Tool, name: string): void {
       /* ignore */
     }
   }
-  for (const dir of matched) rmDir(dir);
+  const managed = cfg.protectUnmanaged ? managedSkillPaths(tool) : null;
+  for (const dir of matched) {
+    if ((!managed || managed.has(dir)) && !skillDestinationError(tool, dir)) rmDir(dir);
+  }
 }

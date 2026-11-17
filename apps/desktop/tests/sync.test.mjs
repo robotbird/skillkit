@@ -32,7 +32,7 @@ async function loadSync() {
       './db.js': 'export const metaGet = k => globalThis.__syncTest.meta.get(k); export const metaSet = (k,v) => globalThis.__syncTest.meta.set(k,v);',
       './global-repo.js': 'export const globalRepoRoot = () => globalThis.__syncTest.root; export const scanGlobalRepo = () => [];',
       './scan.js': 'export const scanTool = () => globalThis.__syncTest.scans;',
-      './tools.js': "export const allToolIds = () => ['codex']; export const getToolConfig = () => ({installRoot: globalThis.__syncTest.tools}); export const isGlobalAgentsOnlyTool = () => false; export const listCustomToolsMeta = () => [];",
+      './tools.js': "export const allToolIds = () => ['codex']; export const getToolConfig = () => ({installRoot: globalThis.__syncTest.tools}); export const isGlobalAgentsOnlyTool = () => false; export const listCustomToolsMeta = () => []; export const skillDestinationError = () => undefined;",
       '../shared/types.js': `export const SETTING_KEYS = ${JSON.stringify(keys)};`,
     };
     // Transpile first to remove type-only imports before replacing runtime dependencies.

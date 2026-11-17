@@ -19,6 +19,10 @@ import openclawIcon from '../assets/agents/openclaw.svg';
 import clineIcon from '../assets/agents/cline.svg';
 import warpIcon from '../assets/agents/warp.svg';
 import kimiIcon from '../assets/agents/kimi.svg';
+import doubaoIcon from '../assets/agents/doubao.svg';
+import qwenworkIcon from '../assets/agents/qwenwork.svg';
+import zcodeIcon from '../assets/agents/zcode.svg';
+import deepseekHarnessIcon from '../assets/agents/deepseek-harness.svg';
 import globalIcon from '../assets/agents/global.svg';
 
 /** 内置工具 → 图标；自定义 agent 的图标由 toolCatalog 用首字母兜底合成。 */
@@ -27,6 +31,10 @@ export const TOOL_ICON: Record<BuiltinTool, string> = {
   codex: codexIcon,
   cursor: cursorIcon,
   trae: traeIcon,
+  doubao: doubaoIcon,
+  qwenwork: qwenworkIcon,
+  zcode: zcodeIcon,
+  'deepseek-harness': deepseekHarnessIcon,
   workbuddy: workbuddyIcon,
   qoder: qoderIcon,
   grok: grokIcon,
@@ -49,7 +57,7 @@ export const TOOL_ICON: Record<BuiltinTool, string> = {
 export const GLOBAL_ICON = globalIcon;
 
 /**
- * 图标选择器数据源：复用系统现有 21 个品牌 SVG（按 ALL_TOOLS 顺序）。
+ * 图标选择器数据源：复用内置品牌 SVG（按 ALL_TOOLS 顺序）。
  * 自定义 Agent / 项目登记时从这里挑图标；不新增图标资源。
  */
 export const ICON_CHOICES: { key: BuiltinTool; label: string; url: string }[] = ALL_TOOLS.map(

@@ -1,3 +1,4 @@
+import { GLOBAL_ONLY_TOOLS } from '@shared/types';
 import { useEffect, useMemo, useState } from 'react';
 import { GLOBAL_TOOL, type Tool, type InstallOpts } from '@shared/types';
 import { useInstalledTools } from '../lib/useInstalledTools';
@@ -95,7 +96,7 @@ export default function ToolPicker({
   // 真身探测一个都没命中（刚装机/探测失败）→ 回退展示全部，避免空列表死弹窗（与安装页一致）
   const targetAllowAll = installTargets && localReady && local.length === 0;
   const isSelectable = (tool: Tool) =>
-    installTargets ? targetAllowAll || targetSet.has(tool) : availableSet.has(tool);
+    installTargets ? !GLOBAL_ONLY_TOOLS.includes(tool) && (targetAllowAll || targetSet.has(tool)) : availableSet.has(tool);
 
   // 「项目」类型是只读扫描来源（projectRoot 下多个 agent 子目录），不作安装/复制目标——选择器里隐藏。
   const { customs } = useCustomTools();

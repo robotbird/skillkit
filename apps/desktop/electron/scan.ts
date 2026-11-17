@@ -8,6 +8,7 @@ import {
   customKindOf,
   customSkillsRootOf,
   PROJECT_AGENT_DIRS,
+  managedSkillPaths,
 } from './tools.js';
 import { readSkillMd } from './skill-md.js';
 import {
@@ -23,6 +24,7 @@ export function scanTool(tool: Tool): InstalledSkill[] {
   const cfg = getToolConfig(tool);
   if (!cfg) return [];
   const out: InstalledSkill[] = [];
+  const managed = cfg.protectUnmanaged ? managedSkillPaths(tool) : null;
 
   // 最多扫描 2 级：兼容 hermes 中文版 skills/<分类>/<skill>/SKILL.md 这种多级布局——
   // 同一 root 下混着「一级 skill」(root/<skill>/SKILL.md) 与「分组目录 + 二级 skill」
@@ -61,7 +63,7 @@ export function scanTool(tool: Tool): InstalledSkill[] {
           name,
           description: md.description?.trim() || null,
           path: sub,
-          isBuiltin,
+          isBuiltin: isBuiltin || (managed != null && !managed.has(sub)),
           sizeBytes: dirSize(sub),
           mtime: st.mtimeMs,
           source: isBuiltin ? 'builtin' : null,
@@ -110,7 +112,7 @@ export function isToolInstalled(tool: Tool): boolean {
   // 完全沿用 ~/.agents/skills → 不单独显示/扫描为独立工具
   if (isGlobalAgentsOnlyTool(tool)) return false;
   // 自定义 agent：用户显式声明，恒视为已存在（目录可后由安装 mkdir -p 创建）。
-  if (isCustomTool(tool)) return true;
+  if (isCustomTool(tool)) return !!getToolConfig(tool);
 
   const cfg = getToolConfig(tool);
   if (!cfg) return false;

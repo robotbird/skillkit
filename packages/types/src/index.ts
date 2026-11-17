@@ -8,6 +8,10 @@ export type BuiltinTool =
   | 'codex'
   | 'cursor'
   | 'trae'
+  | 'doubao'
+  | 'qwenwork'
+  | 'zcode'
+  | 'deepseek-harness'
   | 'workbuddy'
   | 'qoder'
   | 'grok'
@@ -42,6 +46,10 @@ export const TOOL_LABELS: Record<BuiltinTool, string> = {
   codex: 'Codex',
   cursor: 'Cursor',
   trae: 'Trae',
+  doubao: '豆包工作',
+  qwenwork: '千问办公',
+  zcode: 'ZCode',
+  'deepseek-harness': 'DeepSeek Harness',
   workbuddy: 'Workbuddy',
   qoder: 'Qoder',
   grok: 'Grok',
@@ -66,6 +74,10 @@ export const ALL_TOOLS: BuiltinTool[] = [
   'codex',
   'cursor',
   'trae',
+  'doubao',
+  'qwenwork',
+  'zcode',
+  'deepseek-harness',
   'workbuddy',
   'qoder',
   'grok',

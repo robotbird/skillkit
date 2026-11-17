@@ -1,7 +1,7 @@
 import { ipcMain, dialog, shell, app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { scanAll, listInstalled, installedTools } from './scan.js';
-import { localTools } from './detect.js';
+import { installedGlobalRepoConsumers, localTools } from './detect.js';
 import { TOOLS, addCustomTool, updateCustomToolMeta, removeCustomTool, listCustomToolsMeta } from './tools.js';
 import { refreshMarket, listMarketSkills, fetchMarketDetail } from './market.js';
 import {
@@ -263,6 +263,7 @@ export function registerIpc() {
   );
 
   // 全局仓库（~/.agents/skills）
+  ipcMain.handle('globalRepo:consumers', () => installedGlobalRepoConsumers());
   ipcMain.handle('globalRepo:scan', async () => scanGlobalRepo());
   ipcMain.handle('globalRepo:remove', async (_e, name: string) => {
     const r = removeFromGlobalRepo(name);

@@ -109,6 +109,9 @@ export interface InstallOpts {
   method?: 'symlink' | 'copy'; // 仅 scope==='global' 有意义；默认 'symlink'
 }
 
+export const GLOBAL_REPO_CONSUMERS = ['zcode', 'deepseek-harness'] as const satisfies readonly BuiltinTool[];
+export const GLOBAL_ONLY_TOOLS: readonly Tool[] = ['cline', 'warp', 'kimi', 'deepseek-harness'];
+
 /**
  * 「全局」伪工具 id：代表全局仓库 ~/.agents/skills 本身，可混入安装 targets。
  * 只在安装链路（渲染层选择器 → IPC → installer.dispatchInstall）出现：
@@ -372,6 +375,7 @@ export interface SkillkitApi {
   installFromShare(input: string, targets: Tool[], opts?: InstallOpts): Promise<InstallResult[]>;
 
   // ===== 全局仓库（~/.agents/skills）=====
+  installedGlobalRepoConsumers(): Promise<BuiltinTool[]>;
   /** 扫描全局仓库下所有 skill（文件系统即真相，不读 DB）。 */
   scanGlobalRepo(): Promise<GlobalRepoSkill[]>;
   /** 从全局仓库移除：删规范副本 + 清来源匹配的工具软链；独立副本保留并在结果里列出。 */

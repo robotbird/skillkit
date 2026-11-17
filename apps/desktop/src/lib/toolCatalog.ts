@@ -106,6 +106,10 @@ const ICON_KEYWORDS: { key: BuiltinTool; words: string[] }[] = [
   { key: 'cline', words: ['cline'] },
   { key: 'warp', words: ['warp'] },
   { key: 'kimi', words: ['kimi'] },
+  { key: 'doubao', words: ['豆包', 'doubao'] },
+  { key: 'qwenwork', words: ['千问', 'qwenwork', 'qwen work'] },
+  { key: 'zcode', words: ['zcode'] },
+  { key: 'deepseek-harness', words: ['deepseek', 'deepseek harness'] },
   { key: 'workbuddy', words: ['workbuddy', 'work buddy'] },
 ];
 

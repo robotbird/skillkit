@@ -281,7 +281,7 @@ export default function InstallView({
     }
   }
 
-  // 真正执行安装：统一走软链（scope=global, method=symlink），不再弹接入方式选择框
+  // 真正执行安装：默认走全局软链，专用目录工具由主进程直接安装
   async function runInstall(
     targets: Tool[],
     kind: 'github-single' | 'share' | 'zip',

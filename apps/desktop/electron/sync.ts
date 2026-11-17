@@ -6,7 +6,7 @@ import { safeStorage } from 'electron';
 import { metaGet, metaSet } from './db.js';
 import { scanGlobalRepo, globalRepoRoot } from './global-repo.js';
 import { scanTool } from './scan.js';
-import { allToolIds, getToolConfig, isGlobalAgentsOnlyTool, listCustomToolsMeta } from './tools.js';
+import { allToolIds, getToolConfig, isGlobalAgentsOnlyTool, listCustomToolsMeta, skillDestinationError } from './tools.js';
 import { credentialErrorMessage, githubCredentialFallback, gitFailureDetails } from './sync-auth.js';
 import { writeSnapshot, restoreSnapshot, type SyncSource } from './sync-files.js';
 import { SETTING_KEYS } from '../shared/types.js';
@@ -260,7 +260,8 @@ function snapshotSkills(root: string): void {
   const custom = listCustomToolsMeta();
   for (const tool of allToolIds()) {
     if (isGlobalAgentsOnlyTool(tool)) continue;
-    const config = getToolConfig(tool)!;
+    const config = getToolConfig(tool);
+    if (!config) continue;
     const meta = custom.find((item) => item.id === tool);
     for (const skill of scanTool(tool)) {
       if (skill.isBuiltin) continue;
@@ -281,10 +282,15 @@ function distributeSnapshot(root: string): { restored: number; warnings: string[
   return restoreSnapshot(root, (entry) => {
     if (entry.tool === 'global') return root;
     if (entry.tool.startsWith('custom:')) {
-      return custom.find((item) => item.label === entry.label && item.kind === entry.kind)?.skillsRoot;
+      const match = custom.find((item) => item.label === entry.label && item.kind === entry.kind);
+      return match && getToolConfig(match.id)?.installRoot;
     }
     if (!allToolIds().includes(entry.tool)) return undefined;
-    return getToolConfig(entry.tool)?.installRoot;
+    const config = getToolConfig(entry.tool);
+    if (!config || isGlobalAgentsOnlyTool(entry.tool)) return undefined;
+    const destination = path.join(config.installRoot, entry.relative);
+    if (skillDestinationError(entry.tool, destination)) return undefined;
+    return config.installRoot;
   });
 }
 

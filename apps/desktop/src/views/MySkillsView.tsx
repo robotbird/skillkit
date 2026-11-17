@@ -1,7 +1,8 @@
+import { GLOBAL_ONLY_TOOLS } from '@shared/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DropdownMenu } from 'radix-ui';
-import { type InstalledSkill, type Tool, type GlobalRepoSkill, type SkillUpdateState, type SkillUpdateSummary, GLOBAL_TOOL } from '@shared/types';
+import { type BuiltinTool, type InstalledSkill, type Tool, type GlobalRepoSkill, type SkillUpdateState, type SkillUpdateSummary, GLOBAL_TOOL } from '@shared/types';
 import SkillCard from '../components/SkillCard';
 import GlobalRepoCard from '../components/GlobalRepoCard';
 import SkillBatchDialog, { planSkillBatch, type BatchAction, type BatchSkill } from '../components/SkillBatchDialog';
@@ -69,6 +70,15 @@ export default function MySkillsView({
   const [revealGroup, setRevealGroup] = useState<SkillGroup | null>(null);
   const [detail, setDetail] = useState<SkillDetail | null>(null);
   // 全局仓库（~/.agents/skills）
+  const [globalConsumers, setGlobalConsumers] = useState<BuiltinTool[]>([]);
+  useEffect(() => {
+    if (!window.skillkit) return;
+    let active = true;
+    void window.skillkit.installedGlobalRepoConsumers().then((tools) => {
+      if (active) setGlobalConsumers(tools);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
   const [globalSkills, setGlobalSkills] = useState<GlobalRepoSkill[] | null>(null);
   const [globalTarget, setGlobalTarget] = useState<GlobalRepoSkill | null>(null);
   const [installingGlobal, setInstallingGlobal] = useState(false);
@@ -261,6 +271,7 @@ export default function MySkillsView({
   }
   const scope = tool === 'all' || tool === 'global' ? null : tool;
   const copyTargets = allTools.filter((target) =>
+    !GLOBAL_ONLY_TOOLS.includes(target) &&
     !customs.some((custom) => custom.id === target && custom.kind === 'project') &&
     (localTools.includes(target) || (localReady && localTools.length === 0)),
   );
@@ -686,6 +697,17 @@ export default function MySkillsView({
               </Button>
             </div>
           )}
+        </div>
+      )}
+      {tool === 'global' && globalConsumers.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 px-1 pb-3 text-sm">
+          <span>{t('my.globalConsumers')}</span>
+          {globalConsumers.map((consumer) => (
+            <span key={consumer} className="inline-flex items-center gap-1">
+              <img src={icon(consumer)} alt="" width={16} height={16} />
+              {label(consumer)}
+            </span>
+          ))}
         </div>
       )}
       <div className="skills" data-mode={mode}>

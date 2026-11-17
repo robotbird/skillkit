@@ -1,7 +1,8 @@
 import path from 'node:path';
 import os from 'node:os';
+import fs from 'node:fs';
 import { ALL_TOOLS, CUSTOM_TOOL_PREFIX, type Tool, type BuiltinTool, type CustomTool, type CustomToolKind } from '../shared/types.js';
-import { listCustomTools, insertCustomTool, deleteCustomTool, updateCustomToolMeta as dbUpdateCustomToolMeta } from './db.js';
+import { listInstalled, listCustomTools, insertCustomTool, deleteCustomTool, updateCustomToolMeta as dbUpdateCustomToolMeta } from './db.js';
 
 export { ALL_TOOLS };
 
@@ -34,6 +35,10 @@ export interface ToolConfig {
   installRoot: string;
   // 哪个 root 下的 skill 标记为 builtin（不可卸载）
   builtinRoot?: string;
+  protectUnmanaged?: boolean;
+  installDirectly?: boolean;
+  requiredWorkspace?: string;
+  macOnly?: boolean;
   /**
    * 该工具的配置/数据目录，用于 scanAll 决定「扫描哪些目录找已装 skill」
    * （目录下有 skill 就扫，与产品是否真装无关）。
@@ -53,6 +58,12 @@ export interface ToolConfig {
  * - cline / warp / kimi 与全局仓共享 ~/.agents/skills（方案 A）
  * - 本阶段仅用户级；项目级目录不扫不装
  */
+const doubaoWorkspace = path.join(appDataDir(), 'Doubao', 'Default', '.doubao', 'agent_mode', 'workspace');
+const doubaoUserSkills = path.join(doubaoWorkspace, '.user_skills');
+const doubaoSystemSkills = path.join(doubaoWorkspace, '.skills');
+const qwenSkills = skillRoot('.qwenworkcn', 'skills');
+const zcodeSkills = skillRoot('.zcode', 'skills');
+
 export const TOOLS: Record<BuiltinTool, ToolConfig> = {
   claude: {
     label: 'Claude Code',
@@ -91,6 +102,44 @@ export const TOOLS: Record<BuiltinTool, ToolConfig> = {
     builtinRoot: skillRoot('.trae', 'builtin_skills'),
     detectRoots: [skillRoot('.trae')],
     appBundles: ['Trae.app'],
+  },
+  doubao: {
+    label: '豆包工作',
+    roots: [doubaoSystemSkills, doubaoUserSkills],
+    installRoot: doubaoUserSkills,
+    builtinRoot: doubaoSystemSkills,
+    detectRoots: [doubaoWorkspace],
+    requiredWorkspace: doubaoWorkspace,
+    appBundles: ['Doubao.app'],
+    installDirectly: true,
+    macOnly: true,
+  },
+  qwenwork: {
+    label: '千问办公',
+    roots: [qwenSkills],
+    installRoot: qwenSkills,
+    detectRoots: [skillRoot('.qwenworkcn')],
+    appBundles: ['QwenWorkCN.app'],
+    installDirectly: true,
+    protectUnmanaged: true,
+    macOnly: true,
+  },
+  zcode: {
+    label: 'ZCode',
+    roots: [zcodeSkills],
+    installRoot: zcodeSkills,
+    detectRoots: [skillRoot('.zcode')],
+    appBundles: ['ZCode.app'],
+    installDirectly: true,
+    macOnly: true,
+  },
+  'deepseek-harness': {
+    label: 'DeepSeek Harness',
+    roots: [globalAgentsSkillsRoot()],
+    installRoot: globalAgentsSkillsRoot(),
+    detectRoots: [],
+    appBundles: ['DeepSeek Harness.app'],
+    macOnly: true,
   },
   workbuddy: {
     label: 'Workbuddy',
@@ -309,8 +358,51 @@ export function isCustomTool(tool: Tool): boolean {
 export function getToolConfig(tool: Tool): ToolConfig | undefined {
   ensureCustomLoaded();
   const custom = customConfigMap.get(tool);
-  if (custom) return custom;
-  return TOOLS[tool as BuiltinTool];
+  if (custom) {
+    if (process.platform === 'darwin' && customKindOf(tool) === 'agent') {
+      const reserved = [doubaoUserSkills, doubaoSystemSkills, qwenSkills, zcodeSkills, globalAgentsSkillsRoot()];
+      if (reserved.some((root) => sameSkillPath(root, custom.installRoot))) return undefined;
+    }
+    return custom;
+  }
+  const config = TOOLS[tool as BuiltinTool];
+  return config?.macOnly && process.platform !== 'darwin' ? undefined : config;
+}
+
+export function sameSkillPath(a: string, b: string): boolean {
+  const resolve = (value: string) => {
+    try { return fs.realpathSync(value); } catch { return path.resolve(value); }
+  };
+  return resolve(a) === resolve(b);
+}
+
+export function managedSkillPaths(tool: Tool): Set<string> {
+  return new Set(listInstalled({ tool })
+    .filter((skill) => skill.installedAt != null)
+    .map((skill) => skill.path));
+}
+
+export function skillDestinationError(tool: Tool, destination: string): string | undefined {
+  const cfg = getToolConfig(tool);
+  if (!cfg) return '未知工具';
+  if (isGlobalAgentsOnlyTool(tool)) return '请使用全局仓库管理此工具的技能';
+  if (cfg.requiredWorkspace && !fs.existsSync(cfg.requiredWorkspace)) {
+    return '请先打开豆包工作，初始化工作区后再安装技能';
+  }
+  if (cfg.requiredWorkspace || cfg.protectUnmanaged) {
+    const relative = path.relative(cfg.installRoot, destination);
+    if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
+      return '目标不在用户技能目录内';
+    }
+  }
+  if (cfg.builtinRoot && sameSkillPath(cfg.installRoot, cfg.builtinRoot)) {
+    return '系统技能目录为只读';
+  }
+  if (cfg.protectUnmanaged && fs.lstatSync(destination, { throwIfNoEntry: false }) &&
+      !managedSkillPaths(tool).has(destination)) {
+    return '目标目录包含由应用管理的技能';
+  }
+  return undefined;
 }
 
 /** 全部工具 id（内置闭集 + 自定义），用于遍历扫描/全局仓清理等。 */

@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { getToolConfig, allToolIds } from './tools.js';
-import { listInstalled } from './db.js';
+import { getToolConfig, allToolIds, isGlobalAgentsOnlyTool, skillDestinationError } from './tools.js';
+import { listInstalled, upsertInstalled } from './db.js';
 import { readSkillMd } from './skill-md.js';
 import { copyDir, rmDir, dirSize, safeExists, isWindowsSymlinkError } from './fs-util.js';
 import { GLOBAL_TOOL } from '../shared/types.js';
@@ -127,8 +127,10 @@ export function linkOrCopyFromCanonical(
 ): InstallResult {
   const cfg = getToolConfig(tool);
   if (!cfg) return { tool, ok: false, error: '未知工具' };
-  fs.mkdirSync(cfg.installRoot, { recursive: true });
   const dst = path.join(cfg.installRoot, name);
+  const error = skillDestinationError(tool, dst);
+  if (error) return { tool, ok: false, error };
+  fs.mkdirSync(cfg.installRoot, { recursive: true });
 
   if (preserveExisting) {
     try {
@@ -235,8 +237,9 @@ export function removeFromGlobalRepo(name: string): GlobalRepoRemoveResult {
   const leftCopies: Tool[] = [];
   for (const t of allToolIds()) {
     const cfg = getToolConfig(t);
-    if (!cfg) continue;
+    if (!cfg || isGlobalAgentsOnlyTool(t)) continue;
     const dst = path.join(cfg.installRoot, name);
+    if (skillDestinationError(t, dst)) continue;
     const lst = fs.lstatSync(dst, { throwIfNoEntry: false });
     if (!lst) continue;
     if (lst.isSymbolicLink()) {
@@ -247,7 +250,7 @@ export function removeFromGlobalRepo(name: string): GlobalRepoRemoveResult {
         /* ignore */
       }
       const resolved = path.isAbsolute(tgt) ? tgt : path.resolve(path.dirname(dst), tgt);
-      if (resolved === canon || resolved.startsWith(root + path.sep)) {
+      if (resolved === canon) {
         fs.rmSync(dst, { force: true });
         removedLinks.push(t);
       }
@@ -275,6 +278,21 @@ export function installGlobalToTools(
     if (preserveExisting && listInstalled({ tool }).some((skill) => skill.name === name)) {
       return { tool, ok: false, error: '目标工具已安装同名 skill' };
     }
-    return linkOrCopyFromCanonical(canon, tool, method, name, preserveExisting);
+    const result = linkOrCopyFromCanonical(canon, tool, method, name, preserveExisting);
+    if (result.ok && result.path && getToolConfig(tool)?.protectUnmanaged) {
+      const skill = readSkillMd(canon);
+      upsertInstalled({
+        tool,
+        name: skill?.name?.trim() || name,
+        description: skill?.description ?? null,
+        path: result.path,
+        isBuiltin: false,
+        sizeBytes: null,
+        mtime: Date.now(),
+        source: null,
+        installedAt: Date.now(),
+      });
+    }
+    return result;
   });
 }

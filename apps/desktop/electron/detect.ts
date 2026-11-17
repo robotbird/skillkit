@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { TOOLS, ALL_TOOLS, getToolConfig, listCustomToolsMeta, isGlobalAgentsOnlyTool, appDataDir } from './tools.js';
+import { GLOBAL_REPO_CONSUMERS } from '../shared/types.js';
 import type { Tool, ToolDetection } from '../shared/types.js';
 
 /**
@@ -175,12 +176,9 @@ async function findCliBinary(bins: string[] | undefined): Promise<string | null>
  * 探测某工具是否真实安装（异步）：
  * - app 包（.app）或 CLI 可执行文件命中即为已安装。
  * - 目录存在不算（会被残留 / 嵌套 / 装技能建目录误报）。没有命中真身一律视为未安装。
- * - 全局共享型工具（cline/warp/kimi）恒为未安装，不单独探测。
+ * - 共享工具可以探测应用，但不作为独立安装目标。
  */
 export async function detectTool(tool: Tool): Promise<ToolDetection> {
-  if (isGlobalAgentsOnlyTool(tool)) {
-    return { tool, installed: false, via: null, detail: '' };
-  }
   const cfg = getToolConfig(tool);
   if (!cfg) return { tool, installed: false, via: null, detail: '' };
   const app = findAppBundle(cfg.appBundles);
@@ -202,17 +200,22 @@ export function detectAllTools(): Promise<ToolDetection[]> {
   return cache;
 }
 
+export async function installedGlobalRepoConsumers() {
+  const detected = await detectAllTools();
+  return GLOBAL_REPO_CONSUMERS.filter((tool) => detected.some((d) => d.tool === tool && d.installed));
+}
+
 /**
  * 安装页工具网格用：真身探测命中的工具（app 或 cli）。
  * 自定义 agent 无 app/cli 可探测，但用户已显式声明，故全部并入（作为合法安装目标）。
  */
 export async function localTools(): Promise<Tool[]> {
   const all = await detectAllTools();
-  const detected = all.filter((d) => d.installed).map((d) => d.tool);
+  const detected = all.filter((d) => d.installed && !isGlobalAgentsOnlyTool(d.tool)).map((d) => d.tool);
   // 自定义中只把 agent 变体并入安装目标；「项目」类型是只读扫描来源（projectRoot 下多个 agent
   // 子目录），installRoot 语义不明，不应作为安装目标。MySkills 筛选 chip 仍保留项目。
   const customs = listCustomToolsMeta()
-    .filter((c) => c.kind !== 'project')
+    .filter((c) => c.kind !== 'project' && getToolConfig(c.id))
     .map((c) => c.id)
     .filter((id) => !detected.includes(id));
   return [...detected, ...customs];

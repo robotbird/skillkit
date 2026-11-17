@@ -1,3 +1,4 @@
+import { GLOBAL_ONLY_TOOLS } from '@shared/types';
 import { GLOBAL_TOOL, type Tool } from '@shared/types';
 import { useLocalTools } from '../lib/useLocalTools';
 import { useToolCatalog } from '../lib/toolCatalog';
@@ -18,7 +19,7 @@ export default function InstallToolGrid({ selected, onChange, disabled = false }
   const { allTools, label, icon } = useToolCatalog();
   const selectedSet = new Set(selected);
   // 全局仓库恒在首位；其余默认列本机已检测工具，探测为空时回退全部（含自定义）
-  const visible = [GLOBAL_TOOL, ...(ready ? (local.length ? local : allTools) : [])];
+  const visible = [GLOBAL_TOOL, ...(ready ? (local.length ? local : allTools.filter((tool) => !GLOBAL_ONLY_TOOLS.includes(tool))) : [])];
 
   function toggle(tool: Tool) {
     if (disabled) return;

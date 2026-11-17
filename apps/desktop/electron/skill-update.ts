@@ -147,6 +147,7 @@ export async function checkSkillUpdatesInternal(
     }
     const plan: Plan[] = [];
     for (const s of all) {
+      if (s.isBuiltin) continue;
       const parsed = parseUpdateSource(s.source);
       if (!parsed) continue;
       const st = stateMap.get(`${s.tool}|${s.name}`);
@@ -233,7 +234,7 @@ export async function checkSkillUpdatesInternal(
 export async function applySkillUpdate(tool: Tool, name: string): Promise<InstallResult[]> {
   const all = listInstalled();
   const row = all.find((s) => s.tool === tool && s.name === name);
-  if (!row?.source) throw new Error('未找到该 skill 或其来源信息');
+  if (!row?.source || row.isBuiltin) throw new Error('未找到该 skill 或其来源信息');
   const parsed = parseUpdateSource(row.source);
   if (!parsed) throw new Error('该 skill 无可用的远端更新源（仅 GitHub / 市场源可更新）');
 
@@ -242,7 +243,7 @@ export async function applySkillUpdate(tool: Tool, name: string): Promise<Instal
   // 且项目 skill 多无 source、本就不可更新。
   const targets = Array.from(
     new Set(
-      all.filter((s) => s.name === name && customKindOf(s.tool) !== 'project').map((s) => s.tool),
+      all.filter((s) => s.name === name && !s.isBuiltin && customKindOf(s.tool) !== 'project').map((s) => s.tool),
     ),
   );
 
