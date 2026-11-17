@@ -36,8 +36,7 @@ export default function SkillUpdateButton({
       .getSkillUpdateMap()
       .then((m) => setAvailable(countAvailable(m)))
       .catch(() => {});
-    window.skillkit.onSkillUpdatesChecked((s: SkillUpdateSummary) => {
-      setChecking(false);
+    return window.skillkit.onSkillUpdatesChecked((s: SkillUpdateSummary) => {
       // 更新进行中不覆盖徽章（更新结束后会重拉状态表）
       if (!updatingRef.current) setAvailable(s.available);
     });
@@ -51,7 +50,7 @@ export default function SkillUpdateButton({
       const s = await window.skillkit.checkSkillUpdates(true);
       setAvailable(s.available);
     } catch {
-      // 忽略：检测失败不弹错（卡片上会标 error）
+      toast.show(t('my.toast.updateCheckFailed'), 'error');
     } finally {
       setChecking(false);
     }
@@ -117,7 +116,7 @@ export default function SkillUpdateButton({
       : t('skillUpdate.checking')
     : available > 0
       ? t('skillUpdate.availableCount', { count: available })
-      : t('skillUpdate.allUpToDate');
+      : t('skillUpdate.checkNow');
 
   return (
     <button

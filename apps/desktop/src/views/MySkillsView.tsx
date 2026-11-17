@@ -147,10 +147,16 @@ export default function MySkillsView({
   useEffect(() => {
     const off = window.skillkit.onSkillUpdatesChecked((s: SkillUpdateSummary) => {
       window.skillkit.getSkillUpdateMap().then(setUpdateMap).catch(() => {});
-      if (s.available > 0) {
+      if (s.triggeredBy === 'manual' && s.failed > 0) {
+        toast.show(
+          t('my.toast.updateCheckPartial', { failed: s.failed, available: s.available }),
+          'error',
+          6000,
+        );
+      } else if (s.available > 0) {
         toast.show(t('my.toast.updatesAvailable', { count: s.available }), 'info', 4000);
       } else if (s.triggeredBy === 'manual') {
-        toast.show(t('my.toast.allUpToDate'));
+        toast.show(t(s.checked === 0 ? 'my.toast.noCheckableSkills' : 'my.toast.noSkillUpdates'));
       }
     });
     return off;
